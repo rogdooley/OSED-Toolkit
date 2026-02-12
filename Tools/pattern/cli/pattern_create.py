@@ -3,8 +3,8 @@
 import argparse
 import sys
 
-from pattern.config import PatternConfig
-from pattern.generator import PatternGenerator
+from Tools.pattern.config import PatternConfig
+from Tools.pattern.generator import PatternGenerator
 
 
 def parse_args() -> argparse.Namespace:

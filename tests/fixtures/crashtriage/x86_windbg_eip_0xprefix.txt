@@ -1,0 +1,4 @@
+EXCEPTION_RECORD:  (.exr -1)
+ExceptionCode: c0000005 (Access violation)
+eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+eip=0x42306142 esp=0x0019f7ac ebp=0x0019f7f8

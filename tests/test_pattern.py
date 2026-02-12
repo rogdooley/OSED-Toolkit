@@ -52,7 +52,7 @@ def test_offset_raw_bytes():
 
     offset = resolver.find_offset(
         length=800,
-        query=b"B0aB",
+        query=b"Ba0B",
         raw=True,
     )
 

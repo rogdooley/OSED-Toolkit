@@ -1,0 +1,3 @@
+Access violation writing location 0x00000000
+eax=00000000 ebx=7c90e514 ecx=00000000 edx=7ffd9000
+esp=0019f7ac ebp=0019f7f8 eip=7c90e514
