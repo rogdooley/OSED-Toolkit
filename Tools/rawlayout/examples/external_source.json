@@ -1,0 +1,36 @@
+{
+  "external_commands": {
+    "emit_demo": [
+      "python3",
+      "-c",
+      "import sys; sys.stdout.buffer.write(b'DEMO_BYTES')"
+    ]
+  },
+  "external_validation": {
+    "assert_len_max": 64
+  },
+  "segments": [
+    {
+      "append": {
+        "name": "prefix",
+        "source": "text",
+        "value": "HDR:"
+      }
+    },
+    {
+      "append": {
+        "name": "generated",
+        "source": "external",
+        "command_ref": "emit_demo"
+      }
+    },
+    {
+      "append": {
+        "name": "suffix",
+        "source": "text",
+        "value": ":END"
+      }
+    }
+  ]
+}
+

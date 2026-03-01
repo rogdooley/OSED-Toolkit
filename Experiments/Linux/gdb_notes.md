@@ -14,3 +14,10 @@ info registers rip rsp
 x/8gx $rsp
 
 disassemble /m add1
+
+CALL:
+push next_instruction
+jump to function
+
+RET:
+pop into RIP

