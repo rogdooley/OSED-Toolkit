@@ -12,7 +12,7 @@ New flags are additive only:
     --badchars <hex>          Hex string of forbidden bytes (e.g. 000a0d).
 
 Example:
-    python -m exploit.cli --layout-spec layout.json --write-payload out.bin
+    python -m Tools.exploit.cli --layout-spec layout.json --write-payload out.bin
 """
 
 from __future__ import annotations
@@ -21,8 +21,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from exploit.layout_spec import LayoutSpecParser
-from exploit.payload_builder import BadcharError, PayloadBuildError, PayloadBuilder
+from Tools.exploit.layout_spec import LayoutSpecParser
+from Tools.exploit.payload_builder import (
+    BadcharError,
+    PayloadBuildError,
+    PayloadBuilder,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -89,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Override shellcode file if requested
     if args.shellcode_file:
-        from exploit.layout_spec import BytesFileSegment
+        from Tools.exploit.layout_spec import BytesFileSegment
         for seg in spec.segments:
             if isinstance(seg, BytesFileSegment) and seg.name == "shellcode":
                 seg.path = args.shellcode_file

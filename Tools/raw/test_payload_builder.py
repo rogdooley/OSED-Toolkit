@@ -25,15 +25,15 @@ import unittest
 from pathlib import Path
 
 # Make sure project root is on path when running directly.
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from exploit.computed_registry import (
+from Tools.exploit.computed_registry import (
     COMPUTED_REGISTRY,
     BuildContext,
     register,
     register_force,
 )
-from exploit.layout_spec import (
+from Tools.exploit.layout_spec import (
     AtOffsetSegment,
     BytesFileSegment,
     ComputedSegment,
@@ -44,7 +44,7 @@ from exploit.layout_spec import (
     RawBytesSegment,
     RepeatSegment,
 )
-from exploit.payload_builder import (
+from Tools.exploit.payload_builder import (
     BadcharError,
     OverlapError,
     PayloadBuildError,

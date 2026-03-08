@@ -11,7 +11,7 @@ The builder never generates shellcode internally. Bring your own `.bin` file:
 
 ```
 # Save raw shellcode bytes to a file however you like, then:
-python -m exploit.cli --layout-spec classic_32bit_bof.json \
+python -m Tools.exploit.cli --layout-spec classic_32bit_bof.json \
                       --shellcode-file my_sc.bin \
                       --write-payload out.bin \
                       --verbose
@@ -48,7 +48,7 @@ in the spec without editing the file.
 
 ```python
 # my_encoders.py — run this before the builder, or import it in your harness
-from exploit.computed_registry import register
+from Tools.exploit.computed_registry import register
 
 def alphanumeric_pad(args: dict) -> bytes:
     count = int(args["count"])

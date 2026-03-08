@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from exploit.computed_registry import BuildContext, call as registry_call
-from exploit.layout_spec import (
+from Tools.exploit.computed_registry import BuildContext, call as registry_call
+from Tools.exploit.layout_spec import (
     AtOffsetSegment,
     BytesFileSegment,
     ComputedSegment,
