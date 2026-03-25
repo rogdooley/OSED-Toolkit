@@ -10,7 +10,10 @@ esbuild
     format: "iife",
     globalName: "osed_bundle",
     footer: {
-      js: "if (typeof this !== 'undefined' && this.osed_bundle && this.osed_bundle.initializeScript) { this.initializeScript = this.osed_bundle.initializeScript; }",
+      js: [
+        "var __osed_global = (typeof globalThis !== 'undefined') ? globalThis : (typeof self !== 'undefined' ? self : (typeof this !== 'undefined' ? this : undefined));",
+        "if (__osed_global && __osed_global.osed_bundle && __osed_global.osed_bundle.initializeScript) { __osed_global.initializeScript = __osed_global.osed_bundle.initializeScript; }",
+      ].join("\n"),
     },
     sourcemap: false,
     external: [],
