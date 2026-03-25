@@ -56,7 +56,63 @@ function resolveTebAddress(): bigint {
     }
   }
 
+  const candidates = collectAddressCandidates(thread, 0, 2);
+  for (const candidate of candidates) {
+    if (looksLikeTeb32(candidate)) {
+      return candidate;
+    }
+  }
+
   return BigInt(0);
+}
+
+function collectAddressCandidates(value: unknown, depth: number, maxDepth: number): bigint[] {
+  if (depth > maxDepth || value === null || value === undefined) {
+    return [];
+  }
+
+  const found = new Set<bigint>();
+
+  const direct = toAddress(value);
+  if (direct !== BigInt(0)) {
+    found.add(direct);
+  }
+
+  if (typeof value !== "object") {
+    return [...found];
+  }
+
+  const objectValue = value as Record<string, unknown>;
+  for (const key of Object.keys(objectValue)) {
+    const nested = collectAddressCandidates(objectValue[key], depth + 1, maxDepth);
+    for (const entry of nested) {
+      found.add(entry);
+    }
+  }
+
+  return [...found];
+}
+
+function looksLikeTeb32(address: bigint): boolean {
+  try {
+    if (address < BigInt(0x1000)) {
+      return false;
+    }
+
+    const self = readPointer(address + BigInt(0x18), 4);
+    if (self !== address) {
+      return false;
+    }
+
+    const exceptionList = readPointer(address, 4);
+    if (exceptionList === BigInt(0) || exceptionList === BigInt(0xffffffff)) {
+      return false;
+    }
+
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }
 
 export function createSehCommand(): Command {
