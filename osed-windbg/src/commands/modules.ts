@@ -154,7 +154,7 @@ export function listModulesWithMitigations(filter?: string): ModuleMitigation[] 
           if (sig === 0x4550) {
             characteristics = readUint16LE(pe + BigInt(0x16));
             const optionalHeaderMagic = readUint16LE(pe + BigInt(0x18));
-            dllCharacteristics = readUint16LE(pe + BigInt(0x46));
+            dllCharacteristics = readUint16LE(pe + BigInt(0x5e));
 
             aslr = (dllCharacteristics & IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) !== 0 ? "enabled" : "disabled";
             dep = (dllCharacteristics & IMAGE_DLLCHARACTERISTICS_NX_COMPAT) !== 0 ? "enabled" : "disabled";
