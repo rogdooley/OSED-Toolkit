@@ -10,7 +10,7 @@ import { createHelpCommand } from "./commands/help";
 import { createReloadCommand } from "./commands/reload";
 
 type OsedApi = {
-  [name: string]: (options?: Record<string, unknown>) => unknown;
+  [name: string]: (...args: unknown[]) => unknown;
 };
 
 const registry = new CommandRegistry();
@@ -55,10 +55,82 @@ function bindApi(): OsedApi {
   const api: OsedApi = {};
 
   for (const command of registry.getAll()) {
-    api[command.name] = (options?: Record<string, unknown>) => registry.execute(command.name, options ?? {});
+    api[command.name] = (...args: unknown[]) => registry.execute(command.name, normalizeInvocation(command.name, args));
   }
 
   return api;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseHexByteList(value: unknown): number[] | unknown {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+  const tokens = value.split(/[,\s]+/).filter((token) => token.length > 0);
+  if (tokens.length === 0) {
+    return [];
+  }
+  const parsed: number[] = [];
+  for (const token of tokens) {
+    if (!/^[0-9a-fA-F]{1,2}$/.test(token)) {
+      return value;
+    }
+    parsed.push(parseInt(token, 16));
+  }
+  return parsed;
+}
+
+function normalizeInvocation(commandName: string, args: unknown[]): Record<string, unknown> {
+  if (args.length === 0 || (args.length === 1 && args[0] === undefined)) {
+    return {};
+  }
+
+  if (args.length === 1 && isPlainObject(args[0])) {
+    return args[0];
+  }
+
+  switch (commandName) {
+    case "help":
+      return { command: args[0] };
+    case "pattern_create":
+      return { length: args[0], type: args[1] };
+    case "pattern_offset":
+      return { value: args[0], type: args[1] };
+    case "badchars":
+      return { address: args[0], exclude: parseHexByteList(args[1]) };
+    case "egghunter":
+      return { tag: args[0], mode: args[1], wow64: args[2] };
+    case "modules":
+      return { filter: args[0] };
+    case "rop":
+    case "rop_suggest":
+    case "pivots":
+      return {
+        module: args[0],
+        maxResults: args[1],
+        executableOnly: args[2],
+        mode: args[3],
+      };
+    case "find_bytes":
+      return {
+        module: args[0],
+        bytes: parseHexByteList(args[1]),
+        maxResults: args[2],
+        executableOnly: args[3],
+        mode: args[4],
+      };
+    case "reload":
+    case "seh":
+      return {};
+    default:
+      return { value: args[0] };
+  }
 }
 
 function initialize(): void {
