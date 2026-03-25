@@ -46,13 +46,49 @@ function decodeAscii(bytes: Uint8Array): string {
   return result;
 }
 
+function parseBigIntString(value: string): bigint {
+  const text = value.trim();
+  if (/^0x[0-9a-fA-F]+$/.test(text)) {
+    return BigInt(text);
+  }
+  if (/^[0-9a-fA-F]+$/.test(text)) {
+    return BigInt(`0x${text}`);
+  }
+  if (/^[0-9]+$/.test(text)) {
+    return BigInt(text);
+  }
+  return BigInt(0);
+}
+
 function toBigInt(value: unknown): bigint {
   if (typeof value === "bigint") {
     return value;
   }
 
   if (typeof value === "number") {
-    return BigInt(value >>> 0);
+    return BigInt(Math.max(0, Math.trunc(value)));
+  }
+
+  if (typeof value === "string") {
+    return parseBigIntString(value);
+  }
+
+  if (value && typeof value === "object") {
+    const valueOf = (value as { valueOf?: () => unknown }).valueOf;
+    if (typeof valueOf === "function") {
+      const resolved = valueOf.call(value);
+      if (resolved !== value) {
+        const parsed = toBigInt(resolved);
+        if (parsed !== BigInt(0)) {
+          return parsed;
+        }
+      }
+    }
+
+    const asString = (value as { toString?: () => string }).toString;
+    if (typeof asString === "function") {
+      return parseBigIntString(asString.call(value));
+    }
   }
 
   return BigInt(0);
@@ -84,14 +120,25 @@ function getModules(): ModuleInfo[] {
         Name?: string;
         Path?: string;
         BaseAddress?: number | bigint;
+        Base?: number | bigint | string;
+        Address?: number | bigint | string;
         Size?: number | bigint;
+        Length?: number | bigint | string;
+        EndAddress?: number | bigint | string;
       };
+
+      const base = toBigInt(module.BaseAddress ?? module.Base ?? module.Address);
+      let size = toBigInt(module.Size ?? module.Length);
+      const end = toBigInt(module.EndAddress);
+      if (size === BigInt(0) && end > base) {
+        size = end - base;
+      }
 
       return {
         name: module.Name ?? "<unknown>",
         path: module.Path ?? module.Name ?? "<unknown>",
-        base: toBigInt(module.BaseAddress),
-        size: toBigInt(module.Size),
+        base,
+        size,
       };
     })
     .filter((module) => module.size > BigInt(0))

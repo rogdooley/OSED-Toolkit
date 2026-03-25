@@ -20,13 +20,49 @@ export type ModuleMitigation = {
 const IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = 0x0040;
 const IMAGE_DLLCHARACTERISTICS_NX_COMPAT = 0x0100;
 
+function parseBigIntString(value: string): bigint {
+  const text = value.trim();
+  if (/^0x[0-9a-fA-F]+$/.test(text)) {
+    return BigInt(text);
+  }
+  if (/^[0-9a-fA-F]+$/.test(text)) {
+    return BigInt(`0x${text}`);
+  }
+  if (/^[0-9]+$/.test(text)) {
+    return BigInt(text);
+  }
+  return BigInt(0);
+}
+
 function toBigInt(value: unknown): bigint {
   if (typeof value === "bigint") {
     return value;
   }
 
   if (typeof value === "number") {
-    return BigInt(value >>> 0);
+    return BigInt(Math.max(0, Math.trunc(value)));
+  }
+
+  if (typeof value === "string") {
+    return parseBigIntString(value);
+  }
+
+  if (value && typeof value === "object") {
+    const valueOf = (value as { valueOf?: () => unknown }).valueOf;
+    if (typeof valueOf === "function") {
+      const resolved = valueOf.call(value);
+      if (resolved !== value) {
+        const parsed = toBigInt(resolved);
+        if (parsed !== BigInt(0)) {
+          return parsed;
+        }
+      }
+    }
+
+    const asString = (value as { toString?: () => string }).toString;
+    if (typeof asString === "function") {
+      return parseBigIntString(asString.call(value));
+    }
   }
 
   return BigInt(0);
@@ -87,13 +123,21 @@ export function listModulesWithMitigations(filter?: string): ModuleMitigation[] 
         Name?: string;
         Path?: string;
         BaseAddress?: number | bigint;
+        Base?: number | bigint | string;
+        Address?: number | bigint | string;
         Size?: number | bigint;
+        Length?: number | bigint | string;
+        EndAddress?: number | bigint | string;
       };
 
       const name = module.Name ?? "<unknown>";
       const path = module.Path ?? name;
-      const base = toBigInt(module.BaseAddress);
-      const size = toBigInt(module.Size);
+      const base = toBigInt(module.BaseAddress ?? module.Base ?? module.Address);
+      let size = toBigInt(module.Size ?? module.Length);
+      const end = toBigInt(module.EndAddress);
+      if (size === BigInt(0) && end > base) {
+        size = end - base;
+      }
 
       let characteristics = 0;
       let dllCharacteristics = 0;
