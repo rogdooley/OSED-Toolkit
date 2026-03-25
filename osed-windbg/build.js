@@ -7,7 +7,7 @@ esbuild
     bundle: true,
     platform: "neutral",
     target: ["es2017"],
-    format: "cjs",
+    format: "iife",
     sourcemap: false,
     external: [],
     logLevel: "info",

@@ -54,7 +54,10 @@ function initialize(): void {
   osedApi = bindApi();
 }
 
-export function initializeScript(): { osed: OsedApi } {
+function initializeScript(): { osed: OsedApi } {
   initialize();
   return { osed: osedApi };
 }
+
+// WinDbg JS host discovers this entrypoint from global scope.
+(globalThis as unknown as { initializeScript: () => { osed: OsedApi } }).initializeScript = initializeScript;
