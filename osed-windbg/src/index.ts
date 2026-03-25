@@ -149,6 +149,7 @@ export function initializeScript(): unknown[] {
   const registrations: unknown[] = [];
   const hostAny = host as unknown as {
     apiVersionSupport?: new (major: number, minor: number) => unknown;
+    functionAlias?: new (fn: (...args: unknown[]) => unknown, aliasName: string) => unknown;
   };
 
   if (hostAny.apiVersionSupport) {
@@ -156,5 +157,10 @@ export function initializeScript(): unknown[] {
   }
 
   initialize();
+
+  if (hostAny.functionAlias) {
+    registrations.push(new hostAny.functionAlias(() => osed, "osed"));
+  }
+
   return registrations;
 }
