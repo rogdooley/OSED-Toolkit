@@ -1,0 +1,35 @@
+WinDbg snippets (x86)
+
+Core crash triage:
+  r
+  r eip
+  !analyze -v
+  k
+  kv
+  .exr -1
+  .ecxr
+
+Memory / stack:
+  dds esp L40
+  dd esp L40
+  db esp L80
+  dc esp L40
+
+Search for pattern fragments in memory (example needle):
+  s -b esp L400 41 61 30 41
+
+Breakpoints on common copy APIs (module varies):
+  bp kernel32!lstrcpyA
+  bp msvcrt!strcpy
+  bp ucrtbase!strcpy
+
+Print strings:
+  da <addr>
+
+Reload symbols (if you compiled with /Zi and have PDB nearby):
+  .symfix
+  .reload
+
+Quality-of-life:
+  .logopen /t crashlog.txt
+  .logclose

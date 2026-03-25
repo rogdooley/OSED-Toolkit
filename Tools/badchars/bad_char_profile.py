@@ -87,13 +87,13 @@ PROFILES: Mapping[str, BadCharProfile] = {
     "url_query": BadCharProfile(
         name="url_query",
         hard_forbidden=frozenset(set(range(0x00, 0x20)) | {0x7F}),
-        must_encode=frozenset(ord(c) for c in b" #%&+=?[]"),
+        must_encode=frozenset(c for c in b" #%&+=?[]"),
         encoder=_pct_encode_all_nonunreserved,
     ),
     "form_urlencoded": BadCharProfile(
         name="form_urlencoded",
         hard_forbidden=frozenset(set(range(0x00, 0x20)) | {0x7F}),
-        must_encode=frozenset(ord(c) for c in b"&=+%"),
+        must_encode=frozenset(c for c in b"&=+%"),
         encoder=_form_urlencode_value,
     ),
     "json_string": BadCharProfile(

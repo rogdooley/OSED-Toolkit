@@ -1,0 +1,33 @@
+WinDbg first-response (x86) checklist
+
+1) Prove it’s your crash:
+  !analyze -v
+  r
+
+2) Capture EIP + stack:
+  r eip
+  r esp
+  dds esp L40
+
+3) If you suspect your input is on stack:
+  db esp L100
+  da esp
+
+4) Exception context:
+  .exr -1
+  .ecxr
+
+5) Backtrace:
+  k
+  kv
+
+6) Log it:
+  .logopen /t crashlog.txt
+  !analyze -v
+  r
+  k
+  dds esp L40
+  .logclose
+
+Then run:
+  python -m Tools.crashtriage.cli.triage_crash -l <pattern_len> --input crashlog.txt

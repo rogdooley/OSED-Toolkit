@@ -1,0 +1,123 @@
+# Command Reference
+
+All commands are invoked via `dx @$osed.<command>(options)`.
+
+## help
+
+- Syntax: `dx @$osed.help({ command?: string })`
+- Flags/options:
+  - `command` (optional, string)
+- Description: Lists all commands or shows one command schema.
+- Example 1: `dx @$osed.help({})`
+  - Expected output: command table plus structured schemas in `CommandResult.findings`.
+- Example 2: `dx @$osed.help({ command: "badchars" })`
+  - Expected output: detailed usage/examples/schema for `badchars`.
+
+## reload
+
+- Syntax: `dx @$osed.reload({})`
+- Description: Clears and re-registers command registry.
+- Example 1: `dx @$osed.reload({})`
+  - Expected output: `Re-registered <N> commands`.
+- Example 2: `dx @$osed.reload({})`
+  - Expected output: same as above (idempotent).
+
+## pattern_create
+
+- Syntax: `dx @$osed.pattern_create({ length: number, type?: "msf"|"cyclic" })`
+- Defaults: `type="msf"`
+- Description: Generates copy-ready cyclic pattern text.
+- Example 1: `dx @$osed.pattern_create({ length: 300, type: "msf" })`
+  - Expected output: 300-byte Metasploit-compatible pattern.
+- Example 2: `dx @$osed.pattern_create({ length: 512, type: "cyclic" })`
+  - Expected output: De Bruijn-based cyclic pattern.
+
+## pattern_offset
+
+- Syntax: `dx @$osed.pattern_offset({ value: number|string, type?: "msf"|"cyclic" })`
+- Value rules:
+  - number: interpreted as little-endian crash value
+  - string: hex only
+- Description: Finds offset in selected pattern family.
+- Example 1: `dx @$osed.pattern_offset({ value: 0x39654138, type: "msf" })`
+  - Expected output: offset integer.
+- Example 2: `dx @$osed.pattern_offset({ value: "41326341", type: "cyclic" })`
+  - Expected output: offset integer or not-found message.
+
+## badchars
+
+- Syntax: `dx @$osed.badchars({ address: number|string, exclude?: number[] })`
+- Defaults: `exclude=[]`
+- Description: Compares memory bytes against expected 0x00..0xFF progression.
+- Notes:
+  - `exclude` normalized to unique sorted bytes.
+  - duplicate entries produce warning.
+- Example 1: `dx @$osed.badchars({ address: 0x00B8F900 })`
+  - Expected output: mismatch table and next expected byte if break detected.
+- Example 2: `dx @$osed.badchars({ address: "00B8F900", exclude: [0,10,13,0] })`
+  - Expected output: normalized exclude plus duplicate warning.
+
+## egghunter
+
+- Syntax: `dx @$osed.egghunter({ tag?: string, mode?: "ntaccess"|"seh", wow64?: boolean })`
+- Defaults: `tag="W00T"`, `mode="ntaccess"`, `wow64=false`
+- Description: Emits egghunter shellcode as hex and Python bytes.
+- Example 1: `dx @$osed.egghunter({})`
+  - Expected output: default x86 NtAccess variant.
+- Example 2: `dx @$osed.egghunter({ tag: "B33F", mode: "seh", wow64: true })`
+  - Expected output: WoW64/SEH-formatted hunter bytes.
+
+## seh
+
+- Syntax: `dx @$osed.seh({})`
+- Description: Walks x86 SEH chain from current TEB.
+- Example 1: `dx @$osed.seh({})`
+  - Expected output: node/handler/module table with flagged suspicious entries.
+- Example 2: `dx @$osed.seh({})`
+  - Expected output: warning on non-x86 contexts.
+
+## modules
+
+- Syntax: `dx @$osed.modules({ filter?: string })`
+- Description: Lists module base/size and mitigation tri-state.
+- Example 1: `dx @$osed.modules({})`
+  - Expected output: full module table.
+- Example 2: `dx @$osed.modules({ filter: "essfunc" })`
+  - Expected output: filtered module rows.
+
+## rop
+
+- Syntax: `dx @$osed.rop({ module?: string, executableOnly?: boolean, maxResults?: number, mode?: "fast"|"thorough" })`
+- Defaults: `executableOnly=true`, `maxResults=50`, `mode="fast"`
+- Description: Module-scope helper for subsequent gadget commands.
+- Example 1: `dx @$osed.rop({})`
+  - Expected output: module scope table.
+- Example 2: `dx @$osed.rop({ module: "essfunc" })`
+  - Expected output: filtered module view.
+
+## find_bytes
+
+- Syntax: `dx @$osed.find_bytes({ module: string, bytes: number[], executableOnly?: boolean, maxResults?: number, mode?: "fast"|"thorough" })`
+- Description: Bounded section-aware byte matching.
+- Example 1: `dx @$osed.find_bytes({ module: "essfunc", bytes: [0xFF,0xE4] })`
+  - Expected output: sorted hit addresses and python-ready values.
+- Example 2: `dx @$osed.find_bytes({ module: "essfunc", bytes: [0x58,0xC3], maxResults: 25 })`
+  - Expected output: up to 25 matches with scan stats.
+
+## rop_suggest
+
+- Syntax: `dx @$osed.rop_suggest({ module?: string, executableOnly?: boolean, maxResults?: number, mode?: "fast"|"thorough" })`
+- Description: Validated common gadget suggestions.
+- Example 1: `dx @$osed.rop_suggest({ module: "essfunc" })`
+  - Expected output: validated pop/push/xchg gadget candidates.
+- Example 2: `dx @$osed.rop_suggest({ mode: "thorough" })`
+  - Expected output: stricter scan with richer stats.
+
+## pivots
+
+- Syntax: `dx @$osed.pivots({ module?: string, executableOnly?: boolean, maxResults?: number, mode?: "fast"|"thorough" })`
+- Description: Finds validated stack pivot candidates.
+- Example 1: `dx @$osed.pivots({ module: "essfunc" })`
+  - Expected output: sorted pivot addresses and instruction sequences.
+- Example 2: `dx @$osed.pivots({ mode: "thorough", maxResults: 100 })`
+  - Expected output: bounded comprehensive pivot scan.
