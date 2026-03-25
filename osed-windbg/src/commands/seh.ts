@@ -3,6 +3,28 @@ import * as out from "../core/output";
 import { getPointerSize, readPointer } from "../core/memory";
 import { findModuleByAddress } from "./modules";
 
+function safeGet(objectValue: unknown, key: string): unknown {
+  if (!objectValue || typeof objectValue !== "object") {
+    return undefined;
+  }
+  try {
+    return (objectValue as Record<string, unknown>)[key];
+  } catch (_error) {
+    return undefined;
+  }
+}
+
+function safeKeys(objectValue: unknown): string[] {
+  if (!objectValue || typeof objectValue !== "object") {
+    return [];
+  }
+  try {
+    return Object.keys(objectValue as Record<string, unknown>);
+  } catch (_error) {
+    return [];
+  }
+}
+
 function toAddress(value: unknown): bigint {
   if (typeof value === "bigint") {
     return value;
@@ -27,10 +49,9 @@ function toAddress(value: unknown): bigint {
   }
 
   if (value && typeof value === "object") {
-    const modelObject = value as Record<string, unknown>;
     const pointerFields = ["targetLocation", "address", "Address", "Value", "value"];
     for (const field of pointerFields) {
-      const parsed = toAddress(modelObject[field]);
+      const parsed = toAddress(safeGet(value, field));
       if (parsed !== BigInt(0)) {
         return parsed;
       }
@@ -49,11 +70,11 @@ function resolveTebAddress(): bigint {
   }
 
   const directCandidates: unknown[] = [
-    thread.Teb,
-    thread.Teb32,
-    thread.TebAddress,
-    thread.Wow64Teb,
-    thread.Wow64Teb32,
+    safeGet(thread, "Teb"),
+    safeGet(thread, "Teb32"),
+    safeGet(thread, "TebAddress"),
+    safeGet(thread, "Wow64Teb"),
+    safeGet(thread, "Wow64Teb32"),
   ];
 
   for (const candidate of directCandidates) {
@@ -63,11 +84,11 @@ function resolveTebAddress(): bigint {
     }
   }
 
-  for (const key of Object.keys(thread)) {
+  for (const key of safeKeys(thread)) {
     if (!/teb/i.test(key)) {
       continue;
     }
-    const parsed = toAddress(thread[key]);
+    const parsed = toAddress(safeGet(thread, key));
     if (parsed !== BigInt(0)) {
       return parsed;
     }
@@ -84,28 +105,28 @@ function resolveTebAddress(): bigint {
 }
 
 function resolveFromEnvironmentBlock(thread: Record<string, unknown>): bigint {
-  const env = thread.Environment as Record<string, unknown> | undefined;
-  const nativeEnv = thread.NativeEnvironment as Record<string, unknown> | undefined;
-  const blocks = [env?.EnvironmentBlock, nativeEnv?.EnvironmentBlock];
+  const env = safeGet(thread, "Environment");
+  const nativeEnv = safeGet(thread, "NativeEnvironment");
+  const blocks = [safeGet(env, "EnvironmentBlock"), safeGet(nativeEnv, "EnvironmentBlock")];
 
   for (const block of blocks) {
     if (!block || typeof block !== "object") {
       continue;
     }
 
-    const obj = block as Record<string, unknown>;
-    const directSelf = toAddress(obj.Self);
+    const directSelf = toAddress(safeGet(block, "Self"));
     if (directSelf !== BigInt(0)) {
       return directSelf;
     }
 
-    const nestedSelf = toAddress((obj.NtTib as Record<string, unknown> | undefined)?.Self);
+    const ntTib = safeGet(block, "NtTib");
+    const nestedSelf = toAddress(safeGet(ntTib, "Self"));
     if (nestedSelf !== BigInt(0)) {
       return nestedSelf;
     }
 
-    const wowOffset = toSignedInteger(obj.WowTebOffset);
-    const nativeSelf = toAddress((obj.NtTib as Record<string, unknown> | undefined)?.Self);
+    const wowOffset = toSignedInteger(safeGet(block, "WowTebOffset"));
+    const nativeSelf = toAddress(safeGet(ntTib, "Self"));
     if (nativeSelf !== BigInt(0) && wowOffset !== 0) {
       const derived = nativeSelf + BigInt(wowOffset);
       if (derived > BigInt(0)) {
@@ -134,11 +155,31 @@ function toSignedInteger(value: unknown): number {
   }
 
   if (value && typeof value === "object") {
-    const parsed = toSignedInteger((value as Record<string, unknown>).valueOf?.() ?? undefined);
+    let valueOfResolved: unknown = undefined;
+    try {
+      const valueOf = (value as Record<string, unknown>).valueOf;
+      if (typeof valueOf === "function") {
+        valueOfResolved = valueOf.call(value);
+      }
+    } catch (_error) {
+      valueOfResolved = undefined;
+    }
+
+    const parsed = toSignedInteger(valueOfResolved);
     if (parsed !== 0) {
       return parsed;
     }
-    const text = (value as Record<string, unknown>).toString?.();
+
+    let text: unknown = undefined;
+    try {
+      const toStringFn = (value as Record<string, unknown>).toString;
+      if (typeof toStringFn === "function") {
+        text = toStringFn.call(value);
+      }
+    } catch (_error) {
+      text = undefined;
+    }
+
     if (typeof text === "string") {
       const match = text.match(/-?[0-9]+/);
       if (match) {
@@ -166,9 +207,8 @@ function collectAddressCandidates(value: unknown, depth: number, maxDepth: numbe
     return [...found];
   }
 
-  const objectValue = value as Record<string, unknown>;
-  for (const key of Object.keys(objectValue)) {
-    const nested = collectAddressCandidates(objectValue[key], depth + 1, maxDepth);
+  for (const key of safeKeys(value)) {
+    const nested = collectAddressCandidates(safeGet(value, key), depth + 1, maxDepth);
     for (const entry of nested) {
       found.add(entry);
     }
