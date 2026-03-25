@@ -14,7 +14,24 @@ type OsedApi = {
 };
 
 const registry = new CommandRegistry();
-let osedApi: OsedApi = {};
+let osed: OsedApi = {};
+
+function getGlobalObject(): Record<string, unknown> | undefined {
+  if (typeof globalThis !== "undefined") {
+    return globalThis as unknown as Record<string, unknown>;
+  }
+  if (typeof self !== "undefined") {
+    return self as unknown as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function publishOsed(): void {
+  const globalObject = getGlobalObject();
+  if (globalObject) {
+    globalObject.osed = osed;
+  }
+}
 
 function registerAll(): void {
   const commands: Command[] = [
@@ -47,14 +64,25 @@ function bindApi(): OsedApi {
 function initialize(): void {
   registry.setReloader(() => {
     registerAll();
-    osedApi = bindApi();
+    osed = bindApi();
+    publishOsed();
   });
 
   registerAll();
-  osedApi = bindApi();
+  osed = bindApi();
+  publishOsed();
 }
 
-export function initializeScript(): { osed: OsedApi } {
+export function initializeScript(): unknown[] {
+  const registrations: unknown[] = [];
+  const hostAny = host as unknown as {
+    apiVersionSupport?: new (major: number, minor: number) => unknown;
+  };
+
+  if (hostAny.apiVersionSupport) {
+    registrations.push(new hostAny.apiVersionSupport(1, 7));
+  }
+
   initialize();
-  return { osed: osedApi };
+  return registrations;
 }
