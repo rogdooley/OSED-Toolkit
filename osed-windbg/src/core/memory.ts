@@ -1,12 +1,24 @@
 import { formatAddress } from "./output";
 
 export function readMemory(address: bigint, length: number): Uint8Array {
-  try {
-    const values = host.memory.readMemoryValues(address, length, 1, false);
-    return Uint8Array.from(values.map((value) => value & 0xff));
-  } catch (_error) {
-    throw new Error(`Memory read failed at ${formatAddress(address, 8)}.`);
+  const attempts: (number | bigint)[] = [address];
+
+  if (address >= BigInt(0) && address <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    attempts.push(Number(address));
   }
+
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      const values = host.memory.readMemoryValues(attempt, length, 1, false);
+      return Uint8Array.from(values.map((value) => value & 0xff));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const suffix = lastError instanceof Error && lastError.message ? ` (${lastError.message})` : "";
+  throw new Error(`Memory read failed at ${formatAddress(address, 8)}${suffix}.`);
 }
 
 export function tryReadMemory(address: bigint, length: number): Uint8Array | undefined {
