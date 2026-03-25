@@ -56,6 +56,34 @@ function toAddress(value: unknown): bigint {
         return parsed;
       }
     }
+
+    try {
+      const valueOfFn = safeGet(value, "valueOf");
+      if (typeof valueOfFn === "function") {
+        const resolved = (valueOfFn as () => unknown).call(value);
+        if (resolved !== value) {
+          const parsed = toAddress(resolved);
+          if (parsed !== BigInt(0)) {
+            return parsed;
+          }
+        }
+      }
+    } catch (_error) {
+      // Fall through to toString parsing.
+    }
+
+    try {
+      const toStringFn = safeGet(value, "toString");
+      if (typeof toStringFn === "function") {
+        const text = (toStringFn as () => string).call(value);
+        const parsed = toAddress(text);
+        if (parsed !== BigInt(0)) {
+          return parsed;
+        }
+      }
+    } catch (_error) {
+      // Ignore and fall through.
+    }
   }
 
   return BigInt(0);
