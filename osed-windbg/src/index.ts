@@ -1,4 +1,4 @@
-import { Command, CommandRegistry } from "./core/registry";
+import { Command, CommandRegistry, CommandResult } from "./core/registry";
 import { createPatternCommands } from "./commands/pattern";
 import { createBadcharsCommand } from "./commands/badchars";
 import { createEgghunterCommand } from "./commands/egghunter";
@@ -15,6 +15,7 @@ type OsedApi = {
 
 const registry = new CommandRegistry();
 let osed: OsedApi = {};
+let lastResult: CommandResult | undefined;
 
 function getGlobalObject(): Record<string, unknown> | undefined {
   if (typeof globalThis !== "undefined") {
@@ -55,8 +56,36 @@ function bindApi(): OsedApi {
   const api: OsedApi = {};
 
   for (const command of registry.getAll()) {
-    api[command.name] = (...args: unknown[]) => registry.execute(command.name, normalizeInvocation(command.name, args));
+    api[command.name] = (...args: unknown[]) => {
+      const result = registry.execute(command.name, normalizeInvocation(command.name, args));
+      lastResult = result;
+      return result.success;
+    };
   }
+
+  api.last_result = () => lastResult;
+  api.last_summary = () => {
+    if (!lastResult) {
+      return {
+        success: false,
+        command: "",
+        warnings: 0,
+        errors: 0,
+        findings: 0,
+      };
+    }
+    return {
+      success: lastResult.success,
+      command: lastResult.command,
+      warnings: lastResult.warnings.length,
+      errors: lastResult.errors.length,
+      findings: lastResult.findings.length,
+    };
+  };
+  api.clear_last_result = () => {
+    lastResult = undefined;
+    return true;
+  };
 
   return api;
 }

@@ -3,8 +3,8 @@
 ## Registry Pattern
 
 - Each command is a `Command` object registered centrally.
-- `initializeScript()` builds registry and returns `{ osed }`.
-- `@$osed.<command>(options)` dispatches through `registry.execute`.
+- `initializeScript()` builds registry, publishes `osed`, and registers an alias so calls use `@$osed().<command>(...)`.
+- `@$osed().<command>(...)` dispatches through `registry.execute`.
 - Shared `validation.ts` enforces schema and unknown-key rejection.
 
 ## Add a New Command (<=10 steps)
@@ -24,8 +24,8 @@
 
 1. `npm run build`
 2. In WinDbg: `.scriptload <path>\\dist\\osed.js`
-3. Rebind in-session: `dx @$osed.reload({})`
-4. Verify command surface: `dx @$osed.help({})`
+3. Rebind in-session: `dx @$osed().reload()`
+4. Verify command surface: `dx @$osed().help()`
 
 ## host.* Typing Notes
 

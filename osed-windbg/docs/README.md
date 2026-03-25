@@ -21,9 +21,9 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 
 ## Quickstart
 
-- `dx @$osed.help({})`
-- `dx @$osed.pattern_create({ length: 300, type: "msf" })`
-- `dx @$osed.seh({})`
+- `dx @$osed().help()`
+- `dx @$osed().pattern_create(300, "msf")`
+- `dx @$osed().seh()`
 
 ## Troubleshooting
 
@@ -32,6 +32,8 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `@$osed` is missing:
   - Re-run `.scriptload` and confirm `initializeScript()` executed.
 - Command returns validation errors:
-  - Use `dx @$osed.help({ command: "<name>" })` and match schema exactly.
+  - Use `dx @$osed().help("<name>")` and match schema exactly.
 - Memory read failures:
   - Ensure target process is active and addresses are valid in current context.
+- `dx` result output is noisy:
+  - Command calls return `true/false`; inspect full structured output with `dx @$osed().last_result()`.
