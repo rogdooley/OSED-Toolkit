@@ -107,10 +107,21 @@ function parseHexByteList(value: unknown): number[] | unknown {
   }
   const parsed: number[] = [];
   for (const token of tokens) {
+    if (/^[0-9a-fA-F]{1,2}$/.test(token)) {
+      parsed.push(parseInt(token, 16));
+      continue;
+    }
+
+    if (/^[0-9a-fA-F]+$/.test(token) && token.length % 2 === 0) {
+      for (let i = 0; i < token.length; i += 2) {
+        parsed.push(parseInt(token.slice(i, i + 2), 16));
+      }
+      continue;
+    }
+
     if (!/^[0-9a-fA-F]{1,2}$/.test(token)) {
       return value;
     }
-    parsed.push(parseInt(token, 16));
   }
   return parsed;
 }

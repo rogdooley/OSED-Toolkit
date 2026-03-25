@@ -3,6 +3,62 @@ import * as out from "../core/output";
 import { getPointerSize, readPointer } from "../core/memory";
 import { findModuleByAddress } from "./modules";
 
+function toAddress(value: unknown): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return BigInt(Math.max(0, Math.trunc(value)));
+  }
+
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (/^0x[0-9a-fA-F]+$/.test(text)) {
+      return BigInt(text);
+    }
+    if (/^[0-9a-fA-F]+$/.test(text)) {
+      return BigInt(`0x${text}`);
+    }
+    if (/^[0-9]+$/.test(text)) {
+      return BigInt(text);
+    }
+  }
+
+  return BigInt(0);
+}
+
+function resolveTebAddress(): bigint {
+  const thread = host.currentThread as Record<string, unknown>;
+
+  const directCandidates: unknown[] = [
+    thread.Teb,
+    thread.Teb32,
+    thread.TebAddress,
+    thread.Wow64Teb,
+    thread.Wow64Teb32,
+  ];
+
+  for (const candidate of directCandidates) {
+    const parsed = toAddress(candidate);
+    if (parsed !== BigInt(0)) {
+      return parsed;
+    }
+  }
+
+  for (const key of Object.keys(thread)) {
+    if (!/teb/i.test(key)) {
+      continue;
+    }
+    const parsed = toAddress(thread[key]);
+    if (parsed !== BigInt(0)) {
+      return parsed;
+    }
+  }
+
+  return BigInt(0);
+}
+
 export function createSehCommand(): Command {
   return {
     name: "seh",
@@ -23,8 +79,7 @@ export function createSehCommand(): Command {
         };
       }
 
-      const thread = host.currentThread as unknown as { Teb?: number | bigint };
-      const teb = typeof thread.Teb === "bigint" ? thread.Teb : BigInt(thread.Teb ?? 0);
+      const teb = resolveTebAddress();
       if (teb === BigInt(0)) {
         throw new Error("Current thread TEB is unavailable.");
       }
