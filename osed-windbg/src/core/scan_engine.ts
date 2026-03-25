@@ -58,9 +58,25 @@ function toBigInt(value: unknown): bigint {
   return BigInt(0);
 }
 
+function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value && typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function") {
+    try {
+      return Array.from(value as Iterable<unknown>);
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  return [];
+}
+
 function getModules(): ModuleInfo[] {
-  const process = host.currentProcess as unknown as { Modules?: unknown[] };
-  const modules = Array.isArray(process?.Modules) ? process.Modules : [];
+  const process = host.currentProcess as unknown as { Modules?: unknown };
+  const modules = asArray(process?.Modules);
 
   return modules
     .map((entry) => {
