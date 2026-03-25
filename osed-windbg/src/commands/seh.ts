@@ -31,6 +31,11 @@ function toAddress(value: unknown): bigint {
 function resolveTebAddress(): bigint {
   const thread = host.currentThread as Record<string, unknown>;
 
+  const envTeb = resolveFromEnvironmentBlock(thread);
+  if (envTeb !== BigInt(0)) {
+    return envTeb;
+  }
+
   const directCandidates: unknown[] = [
     thread.Teb,
     thread.Teb32,
@@ -60,6 +65,31 @@ function resolveTebAddress(): bigint {
   for (const candidate of candidates) {
     if (looksLikeTeb32(candidate)) {
       return candidate;
+    }
+  }
+
+  return BigInt(0);
+}
+
+function resolveFromEnvironmentBlock(thread: Record<string, unknown>): bigint {
+  const env = thread.Environment as Record<string, unknown> | undefined;
+  const nativeEnv = thread.NativeEnvironment as Record<string, unknown> | undefined;
+  const blocks = [env?.EnvironmentBlock, nativeEnv?.EnvironmentBlock];
+
+  for (const block of blocks) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+
+    const obj = block as Record<string, unknown>;
+    const directSelf = toAddress(obj.Self);
+    if (directSelf !== BigInt(0)) {
+      return directSelf;
+    }
+
+    const nestedSelf = toAddress((obj.NtTib as Record<string, unknown> | undefined)?.Self);
+    if (nestedSelf !== BigInt(0)) {
+      return nestedSelf;
     }
   }
 
