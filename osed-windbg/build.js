@@ -8,6 +8,10 @@ esbuild
     platform: "neutral",
     target: ["es2017"],
     format: "iife",
+    globalName: "osed_bundle",
+    footer: {
+      js: "if (typeof this !== 'undefined' && this.osed_bundle && this.osed_bundle.initializeScript) { this.initializeScript = this.osed_bundle.initializeScript; }",
+    },
     sourcemap: false,
     external: [],
     logLevel: "info",
