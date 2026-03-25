@@ -14,14 +14,26 @@ function toAddress(value: unknown): bigint {
 
   if (typeof value === "string") {
     const text = value.trim();
-    if (/^0x[0-9a-fA-F]+$/.test(text)) {
-      return BigInt(text);
+    const embeddedHex = text.match(/0x[0-9a-fA-F]+/);
+    if (embeddedHex) {
+      return BigInt(embeddedHex[0]);
     }
     if (/^[0-9a-fA-F]+$/.test(text)) {
       return BigInt(`0x${text}`);
     }
     if (/^[0-9]+$/.test(text)) {
       return BigInt(text);
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const modelObject = value as Record<string, unknown>;
+    const pointerFields = ["targetLocation", "address", "Address", "Value", "value"];
+    for (const field of pointerFields) {
+      const parsed = toAddress(modelObject[field]);
+      if (parsed !== BigInt(0)) {
+        return parsed;
+      }
     }
   }
 
@@ -91,9 +103,51 @@ function resolveFromEnvironmentBlock(thread: Record<string, unknown>): bigint {
     if (nestedSelf !== BigInt(0)) {
       return nestedSelf;
     }
+
+    const wowOffset = toSignedInteger(obj.WowTebOffset);
+    const nativeSelf = toAddress((obj.NtTib as Record<string, unknown> | undefined)?.Self);
+    if (nativeSelf !== BigInt(0) && wowOffset !== 0) {
+      const derived = nativeSelf + BigInt(wowOffset);
+      if (derived > BigInt(0)) {
+        return derived;
+      }
+    }
   }
 
   return BigInt(0);
+}
+
+function toSignedInteger(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (/^-?[0-9]+$/.test(text)) {
+      return parseInt(text, 10);
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const parsed = toSignedInteger((value as Record<string, unknown>).valueOf?.() ?? undefined);
+    if (parsed !== 0) {
+      return parsed;
+    }
+    const text = (value as Record<string, unknown>).toString?.();
+    if (typeof text === "string") {
+      const match = text.match(/-?[0-9]+/);
+      if (match) {
+        return parseInt(match[0], 10);
+      }
+    }
+  }
+
+  return 0;
 }
 
 function collectAddressCandidates(value: unknown, depth: number, maxDepth: number): bigint[] {
