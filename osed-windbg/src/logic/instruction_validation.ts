@@ -16,18 +16,36 @@ const KNOWN_PATTERNS: GadgetPattern[] = [
   { name: "pop_ecx_ret", bytes: [0x59, 0xc3], mnemonic: "pop ecx ; ret" },
   { name: "pop_edx_ret", bytes: [0x5a, 0xc3], mnemonic: "pop edx ; ret" },
   { name: "pop_ebx_ret", bytes: [0x5b, 0xc3], mnemonic: "pop ebx ; ret" },
-  { name: "pop_eax_pop_eax_ret", bytes: [0x58, 0x58, 0xc3], mnemonic: "pop eax ; pop eax ; ret" },
-  { name: "pop_ecx_pop_ecx_ret", bytes: [0x59, 0x59, 0xc3], mnemonic: "pop ecx ; pop ecx ; ret" },
-  { name: "pop_edx_pop_edx_ret", bytes: [0x5a, 0x5a, 0xc3], mnemonic: "pop edx ; pop edx ; ret" },
-  { name: "pop_ebx_pop_ebx_ret", bytes: [0x5b, 0x5b, 0xc3], mnemonic: "pop ebx ; pop ebx ; ret" },
-  { name: "pop_ebp_pop_ebp_ret", bytes: [0x5d, 0x5d, 0xc3], mnemonic: "pop ebp ; pop ebp ; ret" },
-  { name: "pop_esi_pop_esi_ret", bytes: [0x5e, 0x5e, 0xc3], mnemonic: "pop esi ; pop esi ; ret" },
-  { name: "pop_edi_pop_edi_ret", bytes: [0x5f, 0x5f, 0xc3], mnemonic: "pop edi ; pop edi ; ret" },
-  { name: "pop_esi_pop_edi_ret", bytes: [0x5e, 0x5f, 0xc3], mnemonic: "pop esi ; pop edi ; ret" },
-  { name: "pop_edi_pop_esi_ret", bytes: [0x5f, 0x5e, 0xc3], mnemonic: "pop edi ; pop esi ; ret" },
   { name: "push_esp_ret", bytes: [0x54, 0xc3], mnemonic: "push esp ; ret" },
   { name: "xchg_eax_esp_ret", bytes: [0x94, 0xc3], mnemonic: "xchg eax, esp ; ret" },
 ];
+
+const POP_REGS: Array<{ code: number; name: string }> = [
+  { code: 0x58, name: "eax" },
+  { code: 0x59, name: "ecx" },
+  { code: 0x5a, name: "edx" },
+  { code: 0x5b, name: "ebx" },
+  { code: 0x5c, name: "esp" },
+  { code: 0x5d, name: "ebp" },
+  { code: 0x5e, name: "esi" },
+  { code: 0x5f, name: "edi" },
+];
+
+function buildPprPatterns(): GadgetPattern[] {
+  const patterns: GadgetPattern[] = [];
+  for (const first of POP_REGS) {
+    for (const second of POP_REGS) {
+      patterns.push({
+        name: `pop_${first.name}_pop_${second.name}_ret`,
+        bytes: [first.code, second.code, 0xc3],
+        mnemonic: `pop ${first.name} ; pop ${second.name} ; ret`,
+      });
+    }
+  }
+  return patterns;
+}
+
+const ALL_PATTERNS: GadgetPattern[] = [...KNOWN_PATTERNS, ...buildPprPatterns()];
 
 function sameBytes(left: Uint8Array, right: number[]): boolean {
   if (left.length !== right.length) {
@@ -44,7 +62,7 @@ function sameBytes(left: Uint8Array, right: number[]): boolean {
 }
 
 export function knownPatterns(): GadgetPattern[] {
-  return KNOWN_PATTERNS;
+  return ALL_PATTERNS;
 }
 
 export function validateInstructionCandidate(
@@ -52,7 +70,7 @@ export function validateInstructionCandidate(
   executable: boolean,
   moduleBacked: boolean,
 ): InstructionValidationResult {
-  const matched = KNOWN_PATTERNS.find((pattern) => sameBytes(candidateBytes, pattern.bytes));
+  const matched = ALL_PATTERNS.find((pattern) => sameBytes(candidateBytes, pattern.bytes));
 
   return {
     flags: {
