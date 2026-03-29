@@ -123,3 +123,13 @@ Use `dx @$osed().last_result()` to inspect the full structured `CommandResult`.
   - Expected output: sorted pivot addresses and instruction sequences.
 - Example 2: `dx @$osed().pivots(undefined, 100, true, "thorough")`
   - Expected output: bounded comprehensive pivot scan.
+
+## seh_ppr
+
+- Syntax: `dx @$osed().seh_ppr(module?, exclude?, maxResults?, executableOnly?, mode?)`
+- Defaults: `exclude=[]`, `maxResults=50`, `executableOnly=true`, `mode="fast"`
+- Description: Finds and ranks validated `pop ; pop ; ret` candidates for SEH workflows.
+- Example 1: `dx @$osed().seh_ppr("libspp.dll", "00 0A 0D", 50, true, "fast")`
+  - Expected output: ranked PPR table with badchar/aslr/safeseh scoring.
+- Example 2: `dx @$osed().seh_ppr(undefined, "", 100, true, "thorough")`
+  - Expected output: broader bounded search across loaded modules.

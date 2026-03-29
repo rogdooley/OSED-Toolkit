@@ -8,6 +8,7 @@ import { createRopCommands } from "./commands/rop";
 import { createPivotCommand } from "./commands/pivot";
 import { createHelpCommand } from "./commands/help";
 import { createReloadCommand } from "./commands/reload";
+import { createSehPprCommand } from "./commands/seh_ppr";
 
 type OsedApi = {
   [name: string]: (...args: unknown[]) => unknown;
@@ -43,6 +44,7 @@ function registerAll(): void {
     createModulesCommand(),
     ...createRopCommands(),
     createPivotCommand(),
+    createSehPprCommand(),
     createHelpCommand(registry),
     createReloadCommand(registry),
   ];
@@ -168,6 +170,14 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
     case "reload":
     case "seh":
       return {};
+    case "seh_ppr":
+      return {
+        module: args[0],
+        exclude: parseHexByteList(args[1]),
+        maxResults: args[2],
+        executableOnly: args[3],
+        mode: args[4],
+      };
     default:
       return { value: args[0] };
   }
