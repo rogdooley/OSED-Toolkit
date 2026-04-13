@@ -11,3 +11,6 @@ wheels/
 
 # course content
 Modules/*
+
+# macOS
+.DS_Store
