@@ -23,6 +23,7 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 
 - `dx @$osed().help()`
 - `dx @$osed().pattern_create(300, "msf")`
+- `dx @$osed().exploit("offset")`
 - `dx @$osed().seh()`
 
 ## Troubleshooting
