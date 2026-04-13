@@ -9,6 +9,7 @@ import { createPivotCommand } from "./commands/pivot";
 import { createHelpCommand } from "./commands/help";
 import { createReloadCommand } from "./commands/reload";
 import { createSehPprCommand } from "./commands/seh_ppr";
+import { createExploitCommand } from "./commands/exploit";
 
 type OsedApi = {
   [name: string]: (...args: unknown[]) => unknown;
@@ -45,6 +46,7 @@ function registerAll(): void {
     ...createRopCommands(),
     createPivotCommand(),
     createSehPprCommand(),
+    createExploitCommand(),
     createHelpCommand(registry),
     createReloadCommand(registry),
   ];
@@ -148,6 +150,8 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
       return { address: args[0], exclude: parseHexByteList(args[1]) };
     case "egghunter":
       return { tag: args[0], mode: args[1], wow64: args[2] };
+    case "exploit":
+      return { mode: args[0], tag: args[1], offset: args[2], address: args[3] };
     case "modules":
       return { filter: args[0] };
     case "rop":

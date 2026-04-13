@@ -69,6 +69,21 @@ Use `dx @$osed().last_result()` to inspect the full structured `CommandResult`.
 - Example 2: `dx @$osed().egghunter("B33F", "seh", true)`
   - Expected output: WoW64/SEH-formatted hunter bytes.
 
+## exploit
+
+- Syntax: `dx @$osed().exploit(mode, tag?, offset?, address?)`
+- Modes:
+  - `egghunter`: emits `egghunter` + `exploit_skeleton` command strings.
+  - `offset`: emits `pattern_create` + `pattern_offset` command strings.
+  - `badchars`: emits `badchars(address)` command string.
+- Description: Deterministic command workflow helper; returns command strings only.
+- Example 1: `dx @$osed().exploit("egghunter", "W00T", 260)`
+  - Expected output: ordered command strings for hunter + skeleton.
+- Example 2: `dx @$osed().exploit("offset")`
+  - Expected output: `pattern_create(300)` then `pattern_offset(<value>)`.
+- Example 3: `dx @$osed().exploit("badchars", undefined, undefined, 0x00B8F900)`
+  - Expected output: `badchars(0x00B8F900)` command string.
+
 ## seh
 
 - Syntax: `dx @$osed().seh()`
