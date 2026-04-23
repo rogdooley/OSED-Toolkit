@@ -88,3 +88,25 @@ Example (0x1C6):
 
     EIP → jmp edi
     EDI → w00tw00t
+
+
+### SEH egghunter concept
+
+Instead of checking memory:
+
+    trigger exception on invalid access
+
+Mechanism:
+
+    invalid memory → exception → custom SEH handler
+
+Handler:
+    - receives CONTEXT structure
+    - modifies EIP to skip bad page
+    - returns ExceptionContinueExecution
+
+Key instruction:
+    add [context + 0xb8], offset
+
+Result:
+    execution resumes safely on next page

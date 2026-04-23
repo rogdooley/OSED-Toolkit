@@ -29,3 +29,39 @@ Canonical implementation lives in:
 
 Optional example runner:
 - `emit_hunter.py`
+
+Unified Builder (new)
+
+```python
+from Tools.egghunter import EgghunterBuilder, EgghunterConfig
+
+builder = EgghunterBuilder(
+    EgghunterConfig(
+        tag=b"LOKI",
+        badchars=b"\x00\x0a\x0d",
+        debug=True,
+        output_asm=True,
+        target="win10_x86",
+    )
+)
+
+hunter = builder.build(strategy="seh_win10")
+# or: strategy="syscall" / "seh_classic" / "auto"
+```
+
+Notes:
+- `build(...)` always returns raw `bytes`.
+- Tag must be exactly 4 bytes, and egg marker is internally `tag * 2`.
+- Syscall strategy uses strict priority:
+  1. `syscall_id_override`
+  2. `resolve_syscall(target, ...)`
+  3. fail with exception
+
+CLI wrapper:
+
+```bash
+python -m Tools.egghunter.unified_builder_cli --strategy auto --tag W00T --badchars "\x00\x0a\x0d" --format python --print-egg
+```
+
+Production + CLI guide:
+- `PRODUCTION.md`

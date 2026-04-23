@@ -29,10 +29,13 @@ from .core import (
     validate_badchars,
     write_raw,
 )
+from .unified_builder import EgghunterBuilder, EgghunterConfig, Strategy, build_jump
 
 __all__ = [
     "BadCharError",
     "BuildResult",
+    "EgghunterBuilder",
+    "EgghunterConfig",
     "EgghunterError",
     "Egghunters",
     "HunterCandidate",
@@ -41,9 +44,11 @@ __all__ = [
     "SYSCALL_TABLE",
     "SPECS",
     "SelectionError",
+    "Strategy",
     "UnsupportedHunterError",
     "build",
     "build_egg",
+    "build_jump",
     "build_stage2",
     "choose_hunter",
     "debug_hunter_info",
