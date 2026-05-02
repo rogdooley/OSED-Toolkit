@@ -3,8 +3,11 @@ name = "osed-toolkit"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
+
+[project.scripts]
+shellforge = "shellforge.cli:main"
 
 [build-system]
 requires = ["setuptools"]
@@ -12,4 +15,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["Tools*"]
+include = ["Tools*", "shellforge*"]

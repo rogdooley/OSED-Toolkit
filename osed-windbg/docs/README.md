@@ -25,6 +25,12 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().pattern_create(300, "msf")`
 - `dx @$osed().exploit("offset")`
 - `dx @$osed().seh()`
+- `dx @$scriptContents.osed.sc.peb()`
+- `dx @$scriptContents.osed.sc.modules()`
+- `dx @$scriptContents.osed.sc.base("kernel")`
+- `dx @$scriptContents.osed.sc.hashes("kernel32", "crc32")`
+- `dx @$scriptContents.osed.sc.hash("WinExec", "ROR13")`
+- `dx @$scriptContents.osed.sc.algorithms()`
 
 ## Troubleshooting
 

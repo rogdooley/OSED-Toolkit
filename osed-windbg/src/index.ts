@@ -1,3 +1,16 @@
+/*
+Shellcode helper usage:
+dx @$scriptContents.osed.sc.peb()
+dx @$scriptContents.osed.sc.modules()
+dx @$scriptContents.osed.sc.base("kernel")
+dx @$scriptContents.osed.sc.exports("kernel32")
+dx @$scriptContents.osed.sc.resolve("kernel32","WinExec")
+dx @$scriptContents.osed.sc.hashes("kernel32")
+dx @$scriptContents.osed.sc.hashes("kernel32","crc32")
+dx @$scriptContents.osed.sc.hash("WinExec","ROR13")
+dx @$scriptContents.osed.sc.algorithms()
+*/
+
 import { Command, CommandRegistry, CommandResult } from "./core/registry";
 import { createPatternCommands } from "./commands/pattern";
 import { createBadcharsCommand } from "./commands/badchars";
@@ -10,9 +23,10 @@ import { createHelpCommand } from "./commands/help";
 import { createReloadCommand } from "./commands/reload";
 import { createSehPprCommand } from "./commands/seh_ppr";
 import { createExploitCommand } from "./commands/exploit";
+import { createShellcodeNamespace } from "./shellcode";
 
 type OsedApi = {
-  [name: string]: (...args: unknown[]) => unknown;
+  [name: string]: unknown;
 };
 
 const registry = new CommandRegistry();
@@ -90,6 +104,8 @@ function bindApi(): OsedApi {
     lastResult = undefined;
     return true;
   };
+
+  api.sc = createShellcodeNamespace();
 
   return api;
 }

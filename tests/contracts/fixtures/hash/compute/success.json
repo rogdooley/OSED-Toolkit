@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "hash.compute",
+  "ok": true,
+  "result": {
+    "algorithm": "ror13",
+    "symbol": "GetProcAddress",
+    "hash": {
+      "value": 2081291434,
+      "hex": "0x7c0dfcaa"
+    }
+  }
+}

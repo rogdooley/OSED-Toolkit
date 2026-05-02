@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "pe.list",
+  "ok": false,
+  "error": {
+    "code": "file_not_found",
+    "message": "<file not found>",
+    "details": {
+      "exception_type": "FileNotFoundError"
+    }
+  }
+}

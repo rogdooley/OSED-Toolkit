@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "check.badchars",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "badchars": ["0x00"],
+    "offsets": [1],
+    "match_count": 1,
+    "size": 3
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "pe.list",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "count": 1,
+    "machine": {
+      "value": 332,
+      "hex": "0x014c",
+      "name": "I386"
+    },
+    "format": "PE32",
+    "image_base": 4194304,
+    "image_base_hex": "0x400000",
+    "entrypoint_rva": 4096,
+    "entrypoint_rva_hex": "0x00001000",
+    "sections": [
+      {
+        "name": ".text",
+        "virtual_address": 4096,
+        "virtual_address_hex": "0x00001000",
+        "virtual_size": 4096,
+        "pointer_to_raw_data": 512,
+        "pointer_to_raw_data_hex": "0x00000200",
+        "size_of_raw_data": 512
+      }
+    ],
+    "exports": [
+      {
+        "ordinal": 1,
+        "name": "ExportA",
+        "rva": 4660,
+        "rva_hex": "0x00001234"
+      }
+    ]
+  }
+}

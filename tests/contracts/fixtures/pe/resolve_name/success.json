@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "pe.resolve_name",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "query": "ExportA",
+    "format": "PE32",
+    "result": {
+      "ordinal": 1,
+      "name": "ExportA",
+      "rva": 4660,
+      "rva_hex": "0x00001234"
+    }
+  }
+}
