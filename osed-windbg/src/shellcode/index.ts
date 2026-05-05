@@ -37,6 +37,19 @@ type ExportEntry = {
   name: string;
 };
 
+type IatEntry = {
+  ownerModule: string;
+  importDll: string;
+  symbol: string;
+  ordinal?: number;
+  slot: bigint;
+  target: bigint;
+  expectedModule?: ModuleInfo;
+  actualModule?: ModuleInfo;
+  nearest?: { name: string; offset: bigint };
+  status: string;
+};
+
 interface HashProvider {
   readonly algorithm: string;
   readonly aliases?: string[];
@@ -379,6 +392,244 @@ class ExportResolver {
   public getExports(module: ModuleInfo): ExportEntry[] {
     return this.parser.parseExports(module);
   }
+
+  public nearestSymbol(module: ModuleInfo, address: bigint): { name: string; offset: bigint } | undefined {
+    const exportsList = this.parser
+      .parseExports(module)
+      .filter((entry) => entry.name.length > 0)
+      .sort((a, b) => (a.va < b.va ? -1 : 1));
+
+    let nearest: ExportEntry | undefined;
+    for (const entry of exportsList) {
+      if (entry.va > address) {
+        break;
+      }
+      nearest = entry;
+    }
+    if (!nearest) {
+      return undefined;
+    }
+    return { name: nearest.name, offset: address - nearest.va };
+  }
+}
+
+class IATResolver {
+  private readonly pointerSize: 4 | 8;
+  private readonly parser: PEParser;
+  private readonly exportResolver: ExportResolver;
+  private readonly modulesProvider: () => ModuleInfo[];
+
+  public constructor(
+    pointerSize: 4 | 8,
+    parser: PEParser,
+    exportResolver: ExportResolver,
+    modulesProvider: () => ModuleInfo[],
+  ) {
+    this.pointerSize = pointerSize;
+    this.parser = parser;
+    this.exportResolver = exportResolver;
+    this.modulesProvider = modulesProvider;
+  }
+
+  public enumerateIat(owner: ModuleInfo): IatEntry[] {
+    const headers = this.parser.parseHeaders(owner);
+    const importDirRva = this.readImportDirectoryRva(owner, headers.optionalHeaderMagic, headers.ntHeader);
+    if (importDirRva === 0) {
+      return [];
+    }
+
+    const modules = this.modulesProvider();
+    const rows: IatEntry[] = [];
+    let descriptorAddress = owner.base + BigInt(importDirRva >>> 0);
+    const maxDescriptors = 4096;
+
+    for (let index = 0; index < maxDescriptors; index += 1) {
+      const originalFirstThunk = readUint32LE(descriptorAddress);
+      const _timeDateStamp = readUint32LE(descriptorAddress + BigInt(0x4));
+      const _forwarderChain = readUint32LE(descriptorAddress + BigInt(0x8));
+      const nameRva = readUint32LE(descriptorAddress + BigInt(0xc));
+      const firstThunk = readUint32LE(descriptorAddress + BigInt(0x10));
+
+      if (originalFirstThunk === 0 && nameRva === 0 && firstThunk === 0) {
+        break;
+      }
+
+      const dllName = nameRva === 0 ? "<unknown>" : readAsciiString(owner.base + BigInt(nameRva >>> 0), 260);
+      const expectedModule = this.findByDllName(modules, dllName);
+      const intBaseRva = originalFirstThunk !== 0 ? originalFirstThunk : firstThunk;
+
+      let intPtr = owner.base + BigInt(intBaseRva >>> 0);
+      let iatPtr = owner.base + BigInt(firstThunk >>> 0);
+      const maxThunks = 16384;
+
+      for (let thunkIndex = 0; thunkIndex < maxThunks; thunkIndex += 1) {
+        const intValue = this.readThunk(intPtr);
+        const iatValue = this.readThunk(iatPtr);
+        if (intValue === BigInt(0) && iatValue === BigInt(0)) {
+          break;
+        }
+
+        const imported = this.parseImportedName(owner, intValue);
+        const target = iatValue;
+        const actualModule = this.findContainingModule(modules, target);
+        const trampoline = this.resolveTrampoline(target);
+        const nearest = actualModule ? this.exportResolver.nearestSymbol(actualModule, trampoline.target) : undefined;
+
+        rows.push({
+          ownerModule: owner.name,
+          importDll: dllName,
+          symbol: imported.name,
+          ordinal: imported.ordinal,
+          slot: iatPtr,
+          target: trampoline.target,
+          expectedModule,
+          actualModule,
+          nearest,
+          status: this.classifyStatus(target, trampoline.target, expectedModule, actualModule),
+        });
+
+        intPtr += BigInt(this.pointerSize);
+        iatPtr += BigInt(this.pointerSize);
+      }
+
+      descriptorAddress += BigInt(0x14);
+    }
+
+    return rows;
+  }
+
+  private classifyStatus(target: bigint, resolvedTarget: bigint, expected?: ModuleInfo, actual?: ModuleInfo): string {
+    if (target === BigInt(0)) {
+      return "unresolved";
+    }
+    if (!this.isMapped(resolvedTarget)) {
+      return "unmapped";
+    }
+    if (!actual) {
+      return "unknown-module";
+    }
+    if (!this.isExecutable(actual, resolvedTarget)) {
+      return "non-exec";
+    }
+    if (expected && expected.name.toLowerCase() !== actual.name.toLowerCase()) {
+      return "outside-module";
+    }
+    return "ok";
+  }
+
+  private isMapped(address: bigint): boolean {
+    if (address === BigInt(0)) {
+      return false;
+    }
+    try {
+      readMemory(address, 1);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  private isExecutable(module: ModuleInfo, address: bigint): boolean {
+    try {
+      const headers = this.parser.parseHeaders(module);
+      const numberOfSections = readUint16LE(headers.ntHeader + BigInt(0x6));
+      const sizeOfOptionalHeader = readUint16LE(headers.ntHeader + BigInt(0x14));
+      let sectionHeader = headers.ntHeader + BigInt(0x18 + sizeOfOptionalHeader);
+      const rva = address - module.base;
+      const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+
+      for (let i = 0; i < numberOfSections; i += 1) {
+        const virtualSize = readUint32LE(sectionHeader + BigInt(0x8));
+        const virtualAddress = readUint32LE(sectionHeader + BigInt(0xc));
+        const characteristics = readUint32LE(sectionHeader + BigInt(0x24));
+        const start = BigInt(virtualAddress >>> 0);
+        const end = start + BigInt(Math.max(virtualSize, 1));
+        if (rva >= start && rva < end) {
+          return (characteristics & IMAGE_SCN_MEM_EXECUTE) !== 0;
+        }
+        sectionHeader += BigInt(0x28);
+      }
+    } catch (_error) {
+      return false;
+    }
+    return false;
+  }
+
+  private resolveTrampoline(address: bigint): { target: bigint; note: string } {
+    if (address === BigInt(0)) {
+      return { target: address, note: "" };
+    }
+    try {
+      const first = readMemory(address, 6);
+      const op = first[0];
+      if (op === 0xe9 && first.length >= 5) {
+        const imm = this.readInt32LE(address + BigInt(1));
+        const dest = address + BigInt(5) + BigInt(imm);
+        return { target: dest, note: "jmp-rel32" };
+      }
+      if (op === 0xeb && first.length >= 2) {
+        const rel8 = first[1] >= 0x80 ? first[1] - 0x100 : first[1];
+        const dest = address + BigInt(2) + BigInt(rel8);
+        return { target: dest, note: "jmp-rel8" };
+      }
+      if (this.pointerSize === 4 && op === 0xff && first[1] === 0x25) {
+        const memPtr = BigInt(readUint32LE(address + BigInt(2)) >>> 0);
+        const dest = readPointer(memPtr, this.pointerSize);
+        return { target: dest, note: "jmp-[imm]" };
+      }
+    } catch (_error) {
+      return { target: address, note: "" };
+    }
+    return { target: address, note: "" };
+  }
+
+  private readInt32LE(address: bigint): number {
+    const value = readUint32LE(address) >>> 0;
+    return value > 0x7fffffff ? value - 0x100000000 : value;
+  }
+
+  private readImportDirectoryRva(owner: ModuleInfo, optionalMagic: number, ntHeader: bigint): number {
+    const optionalHeader = ntHeader + BigInt(0x18);
+    const dataDirectoryOffset = optionalHeader + BigInt(optionalMagic === 0x20b ? 0x70 : 0x60);
+    try {
+      return readUint32LE(dataDirectoryOffset + BigInt(8));
+    } catch (_error) {
+      return 0;
+    }
+  }
+
+  private findContainingModule(modules: ModuleInfo[], address: bigint): ModuleInfo | undefined {
+    return modules.find((module) => address >= module.base && address < module.end);
+  }
+
+  private findByDllName(modules: ModuleInfo[], name: string): ModuleInfo | undefined {
+    const needle = name.trim().toLowerCase();
+    if (!needle) {
+      return undefined;
+    }
+    const noExt = needle.endsWith(".dll") ? needle.slice(0, -4) : needle;
+    return modules.find((module) => {
+      const lower = module.name.toLowerCase();
+      const lowerNoExt = lower.endsWith(".dll") ? lower.slice(0, -4) : lower;
+      return lower === needle || lowerNoExt === noExt;
+    });
+  }
+
+  private parseImportedName(owner: ModuleInfo, intValue: bigint): { name: string; ordinal?: number } {
+    if (intValue === BigInt(0)) {
+      return { name: "<null>" };
+    }
+    const ordinalFlag = this.pointerSize === 8 ? BigInt("0x8000000000000000") : BigInt("0x80000000");
+    if ((intValue & ordinalFlag) !== BigInt(0)) {
+      return { name: "<ordinal>", ordinal: Number(intValue & BigInt(0xffff)) };
+    }
+    const byName = owner.base + intValue + BigInt(2);
+    return { name: readAsciiString(byName, 512) };
+  }
+
+  private readThunk(address: bigint): bigint {
+    return this.pointerSize === 8 ? readPointer(address, 8) : BigInt(readUint32LE(address) >>> 0);
+  }
 }
 
 class ShellcodeHelper {
@@ -386,12 +637,14 @@ class ShellcodeHelper {
   private readonly parser: PEParser;
   private readonly exportResolver: ExportResolver;
   private readonly hashResolver: HashResolver;
+  private readonly iatResolver: IATResolver;
 
   public constructor() {
     this.pointerSize = getPointerSize();
     this.parser = new PEParser(this.pointerSize);
     this.exportResolver = new ExportResolver(this.parser);
     this.hashResolver = new HashResolver();
+    this.iatResolver = new IATResolver(this.pointerSize, this.parser, this.exportResolver, () => this.readModules());
   }
 
   public peb(): Array<Record<string, string>> {
@@ -527,6 +780,98 @@ class ShellcodeHelper {
     return this.hashResolver.listAlgorithms();
   }
 
+  public iat(moduleName?: string): Array<Record<string, string>> {
+    const lookup = moduleName ? this.findModule(moduleName) : this.findMainModule();
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+
+    try {
+      const rows = this.iatResolver.enumerateIat(lookup.module).map((entry) => ({
+        Owner: entry.ownerModule,
+        DLL: entry.importDll,
+        Symbol: entry.symbol,
+        Ordinal: entry.ordinal ? entry.ordinal.toString() : "",
+        Slot: toDmlAddress(entry.slot, "dps"),
+        Target: toDmlAddress(entry.target, "u"),
+        Module: entry.actualModule?.name ?? "unknown",
+        "Symbol+Offset": entry.nearest ? `${entry.nearest.name}+0x${entry.nearest.offset.toString(16).toUpperCase()}` : "",
+        Status: entry.status,
+      }));
+      if (rows.length === 0) {
+        return this.errorRows(`No IAT entries found for ${lookup.module.name}.`);
+      }
+      return rows;
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public iat_find(symbol: string): Array<Record<string, string>> {
+    const needle = symbol.trim().toLowerCase();
+    if (!needle) {
+      return this.errorRows("Symbol substring is required.");
+    }
+
+    const rows: Array<Record<string, string>> = [];
+    for (const module of this.readModules()) {
+      try {
+        const entries = this.iatResolver.enumerateIat(module);
+        for (const entry of entries) {
+          if (entry.symbol.toLowerCase().includes(needle)) {
+            rows.push({
+              Owner: entry.ownerModule,
+              DLL: entry.importDll,
+              Symbol: entry.symbol,
+              Slot: toDmlAddress(entry.slot, "dps"),
+              Target: toDmlAddress(entry.target, "u"),
+              Module: entry.actualModule?.name ?? "unknown",
+              Status: entry.status,
+            });
+          }
+        }
+      } catch (_error) {
+        // Continue scanning other modules.
+      }
+    }
+
+    if (rows.length === 0) {
+      return this.errorRows(`No IAT entries matched "${symbol}".`);
+    }
+    return rows;
+  }
+
+  public iat_ptr(moduleName: string, symbol: string): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    const needle = symbol.trim().toLowerCase();
+    if (!needle) {
+      return this.errorRows("Symbol is required.");
+    }
+
+    try {
+      const match = this.iatResolver
+        .enumerateIat(lookup.module)
+        .find((entry) => entry.symbol.toLowerCase() === needle || entry.symbol.toLowerCase().includes(needle));
+      if (!match) {
+        return this.errorRows(`No IAT slot found for "${symbol}" in ${lookup.module.name}.`);
+      }
+      return [
+        {
+          slot: formatAddress(match.slot, this.pointerSize),
+          target: formatAddress(match.target, this.pointerSize),
+          module: match.actualModule?.name ?? "unknown",
+          symbol: match.symbol,
+          status: match.status,
+        },
+      ];
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
   private findModule(name: string): LookupResult {
     const needle = normalizeNeedle(name);
     if (!needle) {
@@ -570,6 +915,41 @@ class ShellcodeHelper {
       return { kind: "ok", module: candidates[0] };
     }
     return { kind: "ambiguous", candidates };
+  }
+
+  private findMainModule(): LookupResult {
+    const modules = this.readModules();
+    if (modules.length === 0) {
+      return { kind: "not_found", name: "<main-executable>" };
+    }
+
+    const process = host as unknown as {
+      currentProcess?: {
+        ExecutablePath?: string;
+        Path?: string;
+        Name?: string;
+      };
+    };
+    const executablePath = (process.currentProcess?.ExecutablePath ?? process.currentProcess?.Path ?? "").toLowerCase();
+    const processName = (process.currentProcess?.Name ?? "").toLowerCase();
+
+    if (executablePath) {
+      const byPath = modules.find((module) => module.path.toLowerCase() === executablePath);
+      if (byPath) {
+        return { kind: "ok", module: byPath };
+      }
+    }
+
+    if (processName) {
+      const normalized = processName.endsWith(".exe") ? processName : `${processName}.exe`;
+      const byName = modules.find((module) => module.name.toLowerCase() === normalized);
+      if (byName) {
+        return { kind: "ok", module: byName };
+      }
+    }
+
+    // Fallback: first module by load address is typically the main image.
+    return { kind: "ok", module: modules[0] };
   }
 
   private getPebAddress(): bigint | undefined {
@@ -787,6 +1167,9 @@ export function createShellcodeNamespace(): {
   hashes: (module: string, algorithm?: string) => Array<Record<string, string>>;
   hash: (name: string, algorithm?: string) => Array<Record<string, string>>;
   algorithms: () => Array<Record<string, string>>;
+  iat: (module?: string) => Array<Record<string, string>>;
+  iat_find: (symbol: string) => Array<Record<string, string>>;
+  iat_ptr: (module: string, symbol: string) => Array<Record<string, string>>;
 } {
   const helper = new ShellcodeHelper();
   return {
@@ -799,5 +1182,8 @@ export function createShellcodeNamespace(): {
     hashes: (module: string, algorithm?: string) => helper.hashes(module, algorithm),
     hash: (name: string, algorithm?: string) => helper.hash(name, algorithm),
     algorithms: () => helper.algorithms(),
+    iat: (module?: string) => helper.iat(module),
+    iat_find: (symbol: string) => helper.iat_find(symbol),
+    iat_ptr: (module: string, symbol: string) => helper.iat_ptr(module, symbol),
   };
 }
