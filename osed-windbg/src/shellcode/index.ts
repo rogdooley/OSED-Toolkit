@@ -1158,32 +1158,49 @@ function formatError(error: unknown): string {
 }
 
 export function createShellcodeNamespace(): {
-  peb: () => Array<Record<string, string>>;
-  modules: () => Array<Record<string, string>>;
-  base: (name: string) => Array<Record<string, string>>;
-  pe: (name: string) => Array<Record<string, string>>;
-  exports: (name: string, filter?: string) => Array<Record<string, string>>;
-  resolve: (module: string, symbol: string) => Array<Record<string, string>>;
-  hashes: (module: string, algorithm?: string) => Array<Record<string, string>>;
-  hash: (name: string, algorithm?: string) => Array<Record<string, string>>;
-  algorithms: () => Array<Record<string, string>>;
-  iat: (module?: string) => Array<Record<string, string>>;
-  iat_find: (symbol: string) => Array<Record<string, string>>;
-  iat_ptr: (module: string, symbol: string) => Array<Record<string, string>>;
+  peb: () => unknown[];
+  modules: () => unknown[];
+  base: (name: string) => unknown[];
+  pe: (name: string) => unknown[];
+  exports: (name: string, filter?: string) => unknown[];
+  resolve: (module: string, symbol: string) => unknown[];
+  hashes: (module: string, algorithm?: string) => unknown[];
+  hash: (name: string, algorithm?: string) => unknown[];
+  algorithms: () => unknown[];
+  iat: (module?: string) => unknown[];
+  iat_find: (symbol: string) => unknown[];
+  iat_ptr: (module: string, symbol: string) => unknown[];
 } {
   const helper = new ShellcodeHelper();
   return {
-    peb: () => helper.peb(),
-    modules: () => helper.modules(),
-    base: (name: string) => helper.base(name),
-    pe: (name: string) => helper.pe(name),
-    exports: (name: string, filter?: string) => helper.exports(name, filter),
-    resolve: (module: string, symbol: string) => helper.resolve(module, symbol),
-    hashes: (module: string, algorithm?: string) => helper.hashes(module, algorithm),
-    hash: (name: string, algorithm?: string) => helper.hash(name, algorithm),
-    algorithms: () => helper.algorithms(),
-    iat: (module?: string) => helper.iat(module),
-    iat_find: (symbol: string) => helper.iat_find(symbol),
-    iat_ptr: (module: string, symbol: string) => helper.iat_ptr(module, symbol),
+    peb: () => toDxRows(helper.peb()),
+    modules: () => toDxRows(helper.modules()),
+    base: (name: string) => toDxRows(helper.base(name)),
+    pe: (name: string) => toDxRows(helper.pe(name)),
+    exports: (name: string, filter?: string) => toDxRows(helper.exports(name, filter)),
+    resolve: (module: string, symbol: string) => toDxRows(helper.resolve(module, symbol)),
+    hashes: (module: string, algorithm?: string) => toDxRows(helper.hashes(module, algorithm)),
+    hash: (name: string, algorithm?: string) => toDxRows(helper.hash(name, algorithm)),
+    algorithms: () => toDxRows(helper.algorithms()),
+    iat: (module?: string) => toDxRows(helper.iat(module)),
+    iat_find: (symbol: string) => toDxRows(helper.iat_find(symbol)),
+    iat_ptr: (module: string, symbol: string) => toDxRows(helper.iat_ptr(module, symbol)),
   };
+}
+
+class DxRow {
+  public constructor(values: Record<string, string>) {
+    for (const [key, value] of Object.entries(values)) {
+      (this as unknown as Record<string, string>)[key] = value;
+    }
+  }
+
+  public toString(): string {
+    const pairs = Object.entries(this as unknown as Record<string, string>).filter(([k]) => k !== "toString");
+    return pairs.map(([k, v]) => `${k}: ${v}`).join(" | ");
+  }
+}
+
+function toDxRows(rows: Array<Record<string, string>>): unknown[] {
+  return rows.map((row) => new DxRow(row));
 }

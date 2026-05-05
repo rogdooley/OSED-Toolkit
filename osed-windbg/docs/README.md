@@ -25,16 +25,16 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().pattern_create(300, "msf")`
 - `dx @$osed().exploit("offset")`
 - `dx @$osed().seh()`
-- `dx @$scriptContents.osed.sc.peb()`
-- `dx @$scriptContents.osed.sc.modules()`
-- `dx @$scriptContents.osed.sc.base("kernel")`
-- `dx @$scriptContents.osed.sc.hashes("kernel32", "crc32")`
-- `dx @$scriptContents.osed.sc.hash("WinExec", "ROR13")`
-- `dx @$scriptContents.osed.sc.algorithms()`
-- `dx @$scriptContents.osed.sc.iat()`
-- `dx @$scriptContents.osed.sc.iat("app.exe")`
-- `dx @$scriptContents.osed.sc.iat_find("VirtualAlloc")`
-- `dx @$scriptContents.osed.sc.iat_ptr("app.exe", "VirtualAlloc")`
+- `dx @$osed().sc.peb()`
+- `dx @$osed().sc.modules()`
+- `dx @$osed().sc.base("kernel")`
+- `dx @$osed().sc.hashes("kernel32", "crc32")`
+- `dx @$osed().sc.hash("WinExec", "ROR13")`
+- `dx @$osed().sc.algorithms()`
+- `dx @$osed().sc.iat()`
+- `dx @$osed().sc.iat("app.exe")`
+- `dx @$osed().sc.iat_find("VirtualAlloc")`
+- `dx @$osed().sc.iat_ptr("app.exe", "VirtualAlloc")`
 
 ## Troubleshooting
 
