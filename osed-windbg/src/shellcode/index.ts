@@ -37,6 +37,18 @@ type ExportEntry = {
   name: string;
 };
 
+type ExportDirectoryInfo = {
+  exportDirectoryRva: number;
+  exportDirectoryVa: bigint;
+  exportDirectorySize: number;
+  numberOfFunctions: number;
+  numberOfNames: number;
+  addressOfFunctionsRva: number;
+  addressOfNamesRva: number;
+  addressOfNameOrdinalsRva: number;
+  ordinalBase: number;
+};
+
 type IatEntry = {
   ownerModule: string;
   importDll: string;
@@ -288,30 +300,21 @@ class PEParser {
   }
 
   public parseExports(module: ModuleInfo): ExportEntry[] {
-    const headers = this.parseHeaders(module);
-    if (headers.exportDirectoryRva === 0 || headers.exportDirectorySize === 0) {
+    const exportInfo = this.parseExportDirectory(module);
+    if (!exportInfo) {
+      return [];
+    }
+    if (exportInfo.numberOfFunctions === 0 || exportInfo.addressOfFunctionsRva === 0) {
       return [];
     }
 
-    const exportDir = module.base + BigInt(headers.exportDirectoryRva >>> 0);
-    const ordinalBase = readUint32LE(exportDir + BigInt(0x10));
-    const numberOfFunctions = readUint32LE(exportDir + BigInt(0x14));
-    const numberOfNames = readUint32LE(exportDir + BigInt(0x18));
-    const addressOfFunctions = readUint32LE(exportDir + BigInt(0x1c));
-    const addressOfNames = readUint32LE(exportDir + BigInt(0x20));
-    const addressOfNameOrdinals = readUint32LE(exportDir + BigInt(0x24));
-
-    if (numberOfFunctions === 0 || addressOfFunctions === 0) {
-      return [];
-    }
-
-    const functionsVa = module.base + BigInt(addressOfFunctions >>> 0);
-    const namesVa = module.base + BigInt(addressOfNames >>> 0);
-    const ordinalsVa = module.base + BigInt(addressOfNameOrdinals >>> 0);
+    const functionsVa = module.base + BigInt(exportInfo.addressOfFunctionsRva >>> 0);
+    const namesVa = module.base + BigInt(exportInfo.addressOfNamesRva >>> 0);
+    const ordinalsVa = module.base + BigInt(exportInfo.addressOfNameOrdinalsRva >>> 0);
 
     const namesByIndex = new Map<number, string>();
 
-    for (let i = 0; i < numberOfNames; i += 1) {
+    for (let i = 0; i < exportInfo.numberOfNames; i += 1) {
       const nameRva = readUint32LE(namesVa + BigInt(i * 4));
       const ordinalIndex = readUint16LE(ordinalsVa + BigInt(i * 2));
       const nameAddress = module.base + BigInt(nameRva >>> 0);
@@ -319,10 +322,10 @@ class PEParser {
     }
 
     const entries: ExportEntry[] = [];
-    for (let index = 0; index < numberOfFunctions; index += 1) {
+    for (let index = 0; index < exportInfo.numberOfFunctions; index += 1) {
       const rva = readUint32LE(functionsVa + BigInt(index * 4));
       const va = module.base + BigInt(rva >>> 0);
-      const ordinal = ordinalBase + index;
+      const ordinal = exportInfo.ordinalBase + index;
       entries.push({
         ordinal,
         rva,
@@ -348,6 +351,25 @@ class PEParser {
       { Field: "ExportDir RVA", Value: `0x${headers.exportDirectoryRva.toString(16).toUpperCase()}` },
       { Field: "ExportDir VA", Value: toDmlAddress(headers.exportDirectoryVa, "db") },
     ];
+  }
+
+  public parseExportDirectory(module: ModuleInfo): ExportDirectoryInfo | undefined {
+    const headers = this.parseHeaders(module);
+    if (headers.exportDirectoryRva === 0 || headers.exportDirectorySize === 0) {
+      return undefined;
+    }
+    const exportDir = module.base + BigInt(headers.exportDirectoryRva >>> 0);
+    return {
+      exportDirectoryRva: headers.exportDirectoryRva,
+      exportDirectoryVa: headers.exportDirectoryVa,
+      exportDirectorySize: headers.exportDirectorySize,
+      ordinalBase: readUint32LE(exportDir + BigInt(0x10)),
+      numberOfFunctions: readUint32LE(exportDir + BigInt(0x14)),
+      numberOfNames: readUint32LE(exportDir + BigInt(0x18)),
+      addressOfFunctionsRva: readUint32LE(exportDir + BigInt(0x1c)),
+      addressOfNamesRva: readUint32LE(exportDir + BigInt(0x20)),
+      addressOfNameOrdinalsRva: readUint32LE(exportDir + BigInt(0x24)),
+    };
   }
 }
 
@@ -391,6 +413,38 @@ class ExportResolver {
 
   public getExports(module: ModuleInfo): ExportEntry[] {
     return this.parser.parseExports(module);
+  }
+
+  public getExportDirectory(module: ModuleInfo): ExportDirectoryInfo | undefined {
+    return this.parser.parseExportDirectory(module);
+  }
+
+  public findByOrdinalIndex(module: ModuleInfo, ordinalIndex: number): ExportEntry | undefined {
+    if (ordinalIndex < 0) {
+      return undefined;
+    }
+    const exportDir = this.parser.parseExportDirectory(module);
+    if (!exportDir) {
+      return undefined;
+    }
+    const targetOrdinal = exportDir.ordinalBase + ordinalIndex;
+    return this.parser.parseExports(module).find((entry) => entry.ordinal === targetOrdinal);
+  }
+
+  public isForwarded(module: ModuleInfo, entry: ExportEntry): { forwarded: boolean; target: string } {
+    const exportDir = this.parser.parseExportDirectory(module);
+    if (!exportDir) {
+      return { forwarded: false, target: "" };
+    }
+    const start = exportDir.exportDirectoryRva;
+    const end = start + exportDir.exportDirectorySize;
+    if (entry.rva >= start && entry.rva < end) {
+      return {
+        forwarded: true,
+        target: readAsciiString(module.base + BigInt(entry.rva >>> 0), 512),
+      };
+    }
+    return { forwarded: false, target: "" };
   }
 
   public nearestSymbol(module: ModuleInfo, address: bigint): { name: string; offset: bigint } | undefined {
@@ -759,6 +813,200 @@ class ShellcodeHelper {
         return this.errorRows("No named exports were found to hash.");
       }
       return rows;
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public hashresolve(moduleName: string, hashValue: string | number | bigint, algorithm = "ROR13"): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    const parsed = parseHashValue(hashValue);
+    if (parsed === undefined) {
+      return this.errorRows(`Invalid hash value "${String(hashValue)}".`);
+    }
+    try {
+      for (const entry of this.exportResolver.getExports(lookup.module)) {
+        if (!entry.name) {
+          continue;
+        }
+        const hashHex = this.hashResolver.hashValue(entry.name, algorithm).Hash;
+        const computed = parseInt(hashHex.replace(/^0x/i, ""), 16) >>> 0;
+        if (computed === parsed) {
+          return [
+            {
+              Module: lookup.module.name,
+              Algorithm: String(this.hashResolver.hashValue(entry.name, algorithm).Algorithm),
+              Hash: `0x${parsed.toString(16).toUpperCase().padStart(8, "0")}`,
+              Symbol: entry.name,
+              Address: toDmlAddress(entry.va, "u"),
+            },
+          ];
+        }
+      }
+      return this.errorRows(`No symbol matched hash 0x${parsed.toString(16).toUpperCase().padStart(8, "0")}.`);
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public exportdir(moduleName: string): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    try {
+      const info = this.exportResolver.getExportDirectory(lookup.module);
+      if (!info) {
+        return this.errorRows(`Module ${lookup.module.name} has no export directory.`);
+      }
+      return [
+        { Field: "Module", Value: lookup.module.name },
+        { Field: "Base", Value: toDmlAddress(lookup.module.base, "db") },
+        { Field: "Export RVA", Value: `0x${info.exportDirectoryRva.toString(16).toUpperCase()}` },
+        { Field: "Export VA", Value: toDmlAddress(info.exportDirectoryVa, "db") },
+        { Field: "NumberOfFunctions", Value: info.numberOfFunctions.toString() },
+        { Field: "NumberOfNames", Value: info.numberOfNames.toString() },
+        { Field: "AddressOfFunctions", Value: `0x${info.addressOfFunctionsRva.toString(16).toUpperCase()}` },
+        { Field: "AddressOfNames", Value: `0x${info.addressOfNamesRva.toString(16).toUpperCase()}` },
+        { Field: "AddressOfOrdinals", Value: `0x${info.addressOfNameOrdinalsRva.toString(16).toUpperCase()}` },
+      ];
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public export(moduleName: string, symbol: string): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    try {
+      const entry = this.exportResolver.resolve(lookup.module, symbol);
+      if (!entry) {
+        return this.errorRows(`Symbol "${symbol}" was not found in ${lookup.module.name}.`);
+      }
+      const exportDir = this.exportResolver.getExportDirectory(lookup.module);
+      if (!exportDir) {
+        return this.errorRows(`Module ${lookup.module.name} has no export directory.`);
+      }
+      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva >>> 0);
+      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva >>> 0);
+      let nameRva = 0;
+      let ordinalIndex = entry.ordinal - exportDir.ordinalBase;
+      for (let i = 0; i < exportDir.numberOfNames; i += 1) {
+        const candidateNameRva = readUint32LE(namesVa + BigInt(i * 4));
+        const candidateOrdinal = readUint16LE(ordinalsVa + BigInt(i * 2));
+        const candidate = readAsciiString(lookup.module.base + BigInt(candidateNameRva >>> 0), 512);
+        if (candidate.toLowerCase() === entry.name.toLowerCase()) {
+          nameRva = candidateNameRva;
+          ordinalIndex = candidateOrdinal;
+          break;
+        }
+      }
+      const forward = this.exportResolver.isForwarded(lookup.module, entry);
+      return [
+        { Property: "Name RVA", Value: `0x${nameRva.toString(16).toUpperCase()}` },
+        { Property: "Name VA", Value: toDmlAddress(lookup.module.base + BigInt(nameRva >>> 0), "db") },
+        { Property: "Ordinal Index", Value: ordinalIndex.toString() },
+        { Property: "Function RVA", Value: `0x${entry.rva.toString(16).toUpperCase()}` },
+        { Property: "Function VA", Value: toDmlAddress(entry.va, "u") },
+        { Property: "Forwarded", Value: forward.forwarded ? "true" : "false" },
+        { Property: "ForwardTo", Value: forward.target || "" },
+      ];
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public exportat(moduleName: string, ordinalIndex: number): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    try {
+      const entry = this.exportResolver.findByOrdinalIndex(lookup.module, ordinalIndex);
+      if (!entry) {
+        return this.errorRows(`Ordinal index ${ordinalIndex} not found in ${lookup.module.name}.`);
+      }
+      const forward = this.exportResolver.isForwarded(lookup.module, entry);
+      return [
+        {
+          Module: lookup.module.name,
+          OrdinalIndex: ordinalIndex.toString(),
+          Ordinal: entry.ordinal.toString(),
+          Name: entry.name || "<unnamed>",
+          RVA: `0x${entry.rva.toString(16).toUpperCase()}`,
+          VA: toDmlAddress(entry.va, "u"),
+          Forwarded: forward.forwarded ? "true" : "false",
+          ForwardTo: forward.target || "",
+        },
+      ];
+    } catch (error) {
+      return this.errorRows(formatError(error));
+    }
+  }
+
+  public exportwalk(moduleName: string, symbol = "GetProcAddress", verbose = false): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+    try {
+      const headers = this.parser.parseHeaders(lookup.module);
+      const exportDir = this.exportResolver.getExportDirectory(lookup.module);
+      if (!exportDir) {
+        return this.errorRows(`Module ${lookup.module.name} has no export directory.`);
+      }
+      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva >>> 0);
+      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva >>> 0);
+      const functionsVa = lookup.module.base + BigInt(exportDir.addressOfFunctionsRva >>> 0);
+      const rows: Array<Record<string, string>> = [];
+
+      let matchIndex = -1;
+      let matchName = "";
+      let ordinalIndex = -1;
+      let functionRva = 0;
+      for (let i = 0; i < exportDir.numberOfNames; i += 1) {
+        const nameRva = readUint32LE(namesVa + BigInt(i * 4));
+        const name = readAsciiString(lookup.module.base + BigInt(nameRva >>> 0), 512);
+        if (verbose) {
+          rows.push({ Step: "Walk", Value: `${i}: ${name}` });
+        }
+        if (name.toLowerCase() === symbol.trim().toLowerCase()) {
+          matchIndex = i;
+          matchName = name;
+          ordinalIndex = readUint16LE(ordinalsVa + BigInt(i * 2));
+          functionRva = readUint32LE(functionsVa + BigInt(ordinalIndex * 4));
+          break;
+        }
+      }
+
+      const summary: Array<Record<string, string>> = [
+        { Step: "Resolving", Value: symbol },
+        { Step: "[1] Module base", Value: toDmlAddress(lookup.module.base, "db") },
+        { Step: "[2] DOS.e_lfanew", Value: `0x${headers.eLfanew.toString(16).toUpperCase()}` },
+        { Step: "[3] NT header", Value: toDmlAddress(headers.ntHeader, "db") },
+        { Step: "[4] Export Directory RVA", Value: `0x${exportDir.exportDirectoryRva.toString(16).toUpperCase()}` },
+        { Step: "[5] AddressOfNames", Value: toDmlAddress(namesVa, "db") },
+      ];
+      if (matchIndex < 0) {
+        summary.push({ Step: "[6] Match", Value: "not found" });
+        return summary.concat(verbose ? rows : []);
+      }
+      const finalVa = lookup.module.base + BigInt(functionRva >>> 0);
+      const matchedEntry = this.exportResolver.resolve(lookup.module, matchName);
+      const forward = matchedEntry ? this.exportResolver.isForwarded(lookup.module, matchedEntry) : { forwarded: false, target: "" };
+      summary.push(
+        { Step: "[6] Match index", Value: `${matchIndex}: ${matchName}` },
+        { Step: "[7] Ordinal index", Value: ordinalIndex.toString() },
+        { Step: "[8] Function RVA", Value: `0x${functionRva.toString(16).toUpperCase()}` },
+        { Step: "[9] Final VA", Value: toDmlAddress(finalVa, "u") },
+        { Step: "[10] Forwarded", Value: forward.forwarded ? `true (${forward.target})` : "false" },
+      );
+      return summary.concat(verbose ? rows : []);
     } catch (error) {
       return this.errorRows(formatError(error));
     }
@@ -1157,6 +1405,24 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+function parseHashValue(value: string | number | bigint): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? (value >>> 0) : undefined;
+  }
+  if (typeof value === "bigint") {
+    return Number(value & BigInt(0xffffffff));
+  }
+  const text = value.trim().toLowerCase();
+  if (!text) {
+    return undefined;
+  }
+  const parsed = text.startsWith("0x") ? parseInt(text, 16) : parseInt(text, 10);
+  if (Number.isNaN(parsed)) {
+    return undefined;
+  }
+  return parsed >>> 0;
+}
+
 export function createShellcodeNamespace(): {
   peb: () => unknown[];
   modules: () => unknown[];
@@ -1166,7 +1432,12 @@ export function createShellcodeNamespace(): {
   resolve: (module: string, symbol: string) => unknown[];
   hashes: (module: string, algorithm?: string) => unknown[];
   hash: (name: string, algorithm?: string) => unknown[];
+  hashresolve: (module: string, hashValue: string | number | bigint, algorithm?: string) => unknown[];
   algorithms: () => unknown[];
+  exportdir: (module: string) => unknown[];
+  export: (module: string, symbol: string) => unknown[];
+  exportat: (module: string, ordinalIndex: number) => unknown[];
+  exportwalk: (module: string, symbol?: string, verbose?: boolean) => unknown[];
   iat: (module?: string) => unknown[];
   iat_find: (symbol: string) => unknown[];
   iat_ptr: (module: string, symbol: string) => unknown[];
@@ -1181,7 +1452,13 @@ export function createShellcodeNamespace(): {
     resolve: (module: string, symbol: string) => toDxRows(helper.resolve(module, symbol)),
     hashes: (module: string, algorithm?: string) => toDxRows(helper.hashes(module, algorithm)),
     hash: (name: string, algorithm?: string) => toDxRows(helper.hash(name, algorithm)),
+    hashresolve: (module: string, hashValue: string | number | bigint, algorithm?: string) =>
+      toDxRows(helper.hashresolve(module, hashValue, algorithm)),
     algorithms: () => toDxRows(helper.algorithms()),
+    exportdir: (module: string) => toDxRows(helper.exportdir(module)),
+    export: (module: string, symbol: string) => toDxRows(helper.export(module, symbol)),
+    exportat: (module: string, ordinalIndex: number) => toDxRows(helper.exportat(module, ordinalIndex)),
+    exportwalk: (module: string, symbol?: string, verbose?: boolean) => toDxRows(helper.exportwalk(module, symbol, verbose)),
     iat: (module?: string) => toDxRows(helper.iat(module)),
     iat_find: (symbol: string) => toDxRows(helper.iat_find(symbol)),
     iat_ptr: (module: string, symbol: string) => toDxRows(helper.iat_ptr(module, symbol)),

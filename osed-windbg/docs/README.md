@@ -30,7 +30,12 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().sc.base("kernel")`
 - `dx @$osed().sc.hashes("kernel32", "crc32")`
 - `dx @$osed().sc.hash("WinExec", "ROR13")`
+- `dx @$osed().sc.hashresolve("kernel32", 0x7c0dfcaa, "ROR13")`
 - `dx @$osed().sc.algorithms()`
+- `dx @$osed().sc.exportdir("kernel32")`
+- `dx @$osed().sc.export("kernel32", "GetProcAddress")`
+- `dx @$osed().sc.exportat("kernel32", 842)`
+- `dx @$osed().sc.exportwalk("kernel32", "GetProcAddress")`
 - `dx @$osed().sc.iat()`
 - `dx @$osed().sc.iat("app.exe")`
 - `dx @$osed().sc.iat_find("VirtualAlloc")`

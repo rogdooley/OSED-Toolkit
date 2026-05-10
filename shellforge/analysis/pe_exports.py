@@ -30,6 +30,16 @@ class PEExport:
 
 
 @dataclass(frozen=True, slots=True)
+class PEImport:
+    dll: str
+    name: str | None
+    ordinal: int | None
+    hint: int | None
+    thunk_rva: int
+    iat_rva: int
+
+
+@dataclass(frozen=True, slots=True)
 class PortableExecutable:
     machine: int
     machine_name: str
@@ -38,6 +48,7 @@ class PortableExecutable:
     entrypoint_rva: int
     sections: list[PESection]
     exports: list[PEExport]
+    imports: list[PEImport]
 
 
 def _read_struct(data: bytes, offset: int, fmt: str) -> tuple[int, ...]:
@@ -70,6 +81,39 @@ def _rva_to_offset(rva: int, sections: list[PESection]) -> int:
         ErrorCode.INVALID_RVA,
         f"RVA 0x{rva:08x} is outside mapped sections",
         details={"rva": f"0x{rva:08x}"},
+    )
+
+
+def find_section_for_rva(rva: int, sections: list[PESection]) -> PESection | None:
+    for section in sections:
+        start = section.virtual_address
+        end = start + max(section.virtual_size, section.size_of_raw_data)
+        if start <= rva < end:
+            return section
+    return None
+
+
+def rva_to_file_offset(rva: int, sections: list[PESection]) -> tuple[int, PESection | None]:
+    section = find_section_for_rva(rva, sections)
+    if section is None:
+        raise ShellforgeError(
+            ErrorCode.INVALID_RVA,
+            f"RVA 0x{rva:08x} is outside mapped sections",
+            details={"rva": f"0x{rva:08x}"},
+        )
+    return section.pointer_to_raw_data + (rva - section.virtual_address), section
+
+
+def file_offset_to_rva(offset: int, sections: list[PESection]) -> tuple[int, PESection | None]:
+    for section in sections:
+        start = section.pointer_to_raw_data
+        end = start + section.size_of_raw_data
+        if start <= offset < end:
+            return section.virtual_address + (offset - start), section
+    raise ShellforgeError(
+        ErrorCode.INVALID_RVA,
+        f"File offset 0x{offset:08x} is outside mapped sections",
+        details={"offset": f"0x{offset:08x}"},
     )
 
 
@@ -137,6 +181,76 @@ def _parse_exports(data: bytes, sections: list[PESection], export_rva: int, expo
     return sorted(exports, key=lambda item: item.ordinal)
 
 
+def _parse_imports(data: bytes, sections: list[PESection], import_rva: int, import_size: int, pointer_size: int) -> list[PEImport]:
+    if import_rva == 0 or import_size == 0:
+        return []
+
+    descriptor_offset = _rva_to_offset(import_rva, sections)
+    imports: list[PEImport] = []
+
+    for _index in range(4096):
+        (
+            original_first_thunk,
+            _time_date_stamp,
+            _forwarder_chain,
+            name_rva,
+            first_thunk,
+        ) = _read_struct(data, descriptor_offset, "<IIIII")
+
+        if original_first_thunk == 0 and name_rva == 0 and first_thunk == 0:
+            break
+
+        dll_name = _read_c_string(data, _rva_to_offset(name_rva, sections))
+        thunk_rva = original_first_thunk or first_thunk
+        thunk_offset = _rva_to_offset(thunk_rva, sections)
+        iat_offset = _rva_to_offset(first_thunk, sections)
+
+        for thunk_index in range(16384):
+            if pointer_size == 8:
+                thunk_value = _read_struct(data, thunk_offset + (thunk_index * 8), "<Q")[0]
+                iat_value = _read_struct(data, iat_offset + (thunk_index * 8), "<Q")[0]
+                ordinal_flag = 0x8000000000000000
+            else:
+                thunk_value = _read_struct(data, thunk_offset + (thunk_index * 4), "<I")[0]
+                iat_value = _read_struct(data, iat_offset + (thunk_index * 4), "<I")[0]
+                ordinal_flag = 0x80000000
+
+            if thunk_value == 0 and iat_value == 0:
+                break
+
+            if (thunk_value & ordinal_flag) != 0:
+                imports.append(
+                    PEImport(
+                        dll=dll_name,
+                        name=None,
+                        ordinal=thunk_value & 0xFFFF,
+                        hint=None,
+                        thunk_rva=thunk_rva + (thunk_index * pointer_size),
+                        iat_rva=first_thunk + (thunk_index * pointer_size),
+                    )
+                )
+                continue
+
+            import_by_name_rva = int(thunk_value)
+            import_by_name_offset = _rva_to_offset(import_by_name_rva, sections)
+            hint = _read_struct(data, import_by_name_offset, "<H")[0]
+            name = _read_c_string(data, import_by_name_offset + 2)
+            imports.append(
+                PEImport(
+                    dll=dll_name,
+                    name=name,
+                    ordinal=None,
+                    hint=hint,
+                    thunk_rva=thunk_rva + (thunk_index * pointer_size),
+                    iat_rva=first_thunk + (thunk_index * pointer_size),
+                )
+            )
+
+        descriptor_offset += 20
+
+    return imports
+
+
 def parse_portable_executable(data: bytes) -> PortableExecutable:
     e_magic = _read_struct(data, 0x00, "<H")[0]
     if e_magic != 0x5A4D:
@@ -174,6 +288,7 @@ def parse_portable_executable(data: bytes) -> PortableExecutable:
         image_base = _read_struct(data, optional_offset + 28, "<I")[0]
         number_of_rva_and_sizes = _read_struct(data, optional_offset + 92, "<I")[0]
         data_directory_offset = optional_offset + 96
+        pointer_size = 4
     elif optional_magic == 0x20B:
         if optional_header_size < 0x70:
             raise ShellforgeError(
@@ -186,6 +301,7 @@ def parse_portable_executable(data: bytes) -> PortableExecutable:
         image_base = _read_struct(data, optional_offset + 24, "<Q")[0]
         number_of_rva_and_sizes = _read_struct(data, optional_offset + 108, "<I")[0]
         data_directory_offset = optional_offset + 112
+        pointer_size = 8
     else:
         raise ShellforgeError(
             ErrorCode.UNSUPPORTED_PE_FORMAT,
@@ -198,10 +314,16 @@ def parse_portable_executable(data: bytes) -> PortableExecutable:
         export_size = 0
     else:
         export_rva, export_size = _read_struct(data, data_directory_offset, "<II")
+    if number_of_rva_and_sizes < 2:
+        import_rva = 0
+        import_size = 0
+    else:
+        import_rva, import_size = _read_struct(data, data_directory_offset + 8, "<II")
 
     section_offset = optional_offset + optional_header_size
     sections = _parse_sections(data, section_offset, number_of_sections)
     exports = _parse_exports(data, sections, export_rva, export_size)
+    imports = _parse_imports(data, sections, import_rva, import_size, pointer_size)
 
     return PortableExecutable(
         machine=machine,
@@ -211,6 +333,7 @@ def parse_portable_executable(data: bytes) -> PortableExecutable:
         entrypoint_rva=entrypoint_rva,
         sections=sections,
         exports=exports,
+        imports=imports,
     )
 
 

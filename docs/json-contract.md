@@ -77,6 +77,13 @@ Rules:
 | `pe.list` | enumerate PE sections and exports | `PeListResult` |
 | `pe.resolve_name` | resolve an export by symbol name | `ResolveResult` |
 | `pe.resolve_hash` | resolve an export by hash algorithm/value | `ResolveResult` |
+| `pe.imports` | enumerate PE import descriptors/thunks | `PeImportsResult` |
+| `pe.rva_to_file` | map RVA to file offset | `PeAddressMapResult` |
+| `pe.file_to_rva` | map file offset to RVA | `PeAddressMapResult` |
+| `pe.rva_to_va` | map RVA to virtual address | `PeAddressMapResult` |
+| `pe.va_to_rva` | map virtual address to RVA | `PeAddressMapResult` |
+| `disasm.analyze` | offline disassembly analysis of raw bytes | `DisasmResult` |
+| `analyze.static` | static shellcode-oriented signature analysis | `AnalyzeResult` |
 | `cli.parse` | parser-level CLI failures before command dispatch | `ErrorEnvelope` |
 
 ### `hash`
@@ -162,6 +169,118 @@ Export object keys:
 - `format`
 - `result` (export object)
 
+### `pe.imports`
+`result` keys:
+- `file`
+- `format`
+- `count`
+- `imports[]`
+
+Import object keys:
+- `dll`
+- `name` (nullable for ordinal-only import)
+- `ordinal` (nullable for name import)
+- `hint` (nullable for ordinal import)
+- `thunk_rva`, `thunk_rva_hex`
+- `iat_rva`, `iat_rva_hex`
+
+### `pe.rva_to_file`
+`result` keys:
+- `file`
+- `rva`, `rva_hex`
+- `file_offset`, `file_offset_hex`
+- `section` (nullable)
+
+### `pe.file_to_rva`
+`result` keys:
+- `file`
+- `file_offset`, `file_offset_hex`
+- `rva`, `rva_hex`
+- `section` (nullable)
+
+### `pe.rva_to_va`
+`result` keys:
+- `file`
+- `image_base`, `image_base_hex`
+- `rva`, `rva_hex`
+- `va`, `va_hex`
+- `section` (nullable)
+
+### `pe.va_to_rva`
+`result` keys:
+- `file`
+- `image_base`, `image_base_hex`
+- `va`, `va_hex`
+- `rva`, `rva_hex`
+- `section` (nullable)
+
+### `disasm.analyze`
+`result` keys:
+- `file`
+- `arch` (`x86` or `x64`)
+- `base`, `base_hex`
+- `instruction_count`
+- `metadata`
+- `instructions[]`
+
+Metadata keys:
+- `entropy`
+- `printable_ratio`
+- `null_byte_count`
+- `size`
+
+Instruction object keys:
+- `address`, `address_hex`
+- `bytes`
+- `mnemonic`
+- `operands`
+
+### `analyze.static`
+`result` keys:
+- `file`
+- `detected_arch` (`x86` or `x64`)
+- `detection_confidence` (`0.0..1.0`)
+- `size`
+- `metadata` (`entropy`, `printable_ratio`, `null_byte_count`)
+- `heuristics[]` (`name`, `matched`, `confidence`, `offsets`)
+- `peb_walk_signatures[]`
+- `segment_access_signatures[]`
+- `egg_markers[]`
+- `nop_regions[]`
+- `decoder_loop_signatures[]`
+- `hash_candidates[]`
+- `entropy_profile[]` (`offset`, `size`, `entropy`)
+- `strings[]`
+- `strings_min_len`
+- `max_strings`
+- `strings_truncated`
+- `max_hits`
+- `summary_only` (full mode always false)
+
+Heuristic object keys:
+- `name`
+- `matched`
+- `confidence`
+- `offsets` (capped by `max_hits`)
+- `total_hits`
+- `truncated`
+
+Summary-only mode (`--summary-only`) emits a compact `result`:
+- `file`
+- `size`
+- `detected_arch`
+- `detection_confidence`
+- `entropy`
+- `printable_ratio`
+- `null_byte_count`
+- `heuristic_hits`
+- `likely_decoder`
+
+Signature object keys:
+- `offset`
+- `kind`
+- `detail`
+
 ## 5. Error-code matrix
 
 | code | meaning | exception_type |
@@ -225,7 +344,7 @@ Export object keys:
 - Existing keys and semantic meaning are stable.
 - `schema_version` increments only for breaking changes.
 - Consumers should branch on `ok` and then read either `result` or `error`.
-- Command identifiers are namespaced and dotted (examples: `build.demo`, `hash.compute`, `hash.resolve`, `check.badchars`, `encode.xor`, `encode.decode`, `pe.list`, `pe.resolve_name`, `pe.resolve_hash`).
+- Command identifiers are namespaced and dotted (examples: `build.demo`, `hash.compute`, `hash.resolve`, `check.badchars`, `encode.xor`, `encode.decode`, `pe.list`, `pe.resolve_name`, `pe.resolve_hash`, `pe.imports`, `pe.rva_to_file`, `pe.file_to_rva`, `pe.rva_to_va`, `pe.va_to_rva`, `disasm.analyze`, `analyze.static`).
 - Top-level envelope keys are strict:
   - success: `schema_version`, `tool_version`, `generated_at`, `request_id`, `command`, `ok`, `result`
   - failure: `schema_version`, `tool_version`, `generated_at`, `request_id`, `command`, `ok`, `error`

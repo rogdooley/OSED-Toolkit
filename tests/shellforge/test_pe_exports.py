@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 from shellforge.analysis.pe_exports import (
+    file_offset_to_rva,
+    rva_to_file_offset,
     parse_portable_executable,
     parse_pe32_exports,
     resolve_export_by_hash,
     resolve_export_by_name,
 )
 from shellforge.hashes.ror13 import ROR13HashProvider
-from tests.shellforge.pe_fixture import build_minimal_pe32_plus_with_export, build_minimal_pe32_with_export
+from tests.shellforge.pe_fixture import (
+    build_minimal_pe32_plus_with_export,
+    build_minimal_pe32_with_export,
+    build_minimal_pe32_with_imports,
+)
 
 
 def test_parse_pe32_exports_enumerates_named_exports() -> None:
@@ -45,3 +51,31 @@ def test_parse_portable_executable_supports_pe32_plus() -> None:
     assert len(parsed.sections) == 1
     assert parsed.exports[0].name == "Export64"
     assert parsed.exports[0].rva == 0x2200
+
+
+def test_parse_portable_executable_parses_imports() -> None:
+    parsed = parse_portable_executable(build_minimal_pe32_with_imports())
+    assert parsed.format == "PE32"
+    assert len(parsed.imports) == 2
+    first = parsed.imports[0]
+    assert first.dll == "KERNEL32.dll"
+    assert first.name == "VirtualAlloc"
+    assert first.ordinal is None
+    assert first.hint == 7
+    assert first.thunk_rva == 0x1130
+    assert first.iat_rva == 0x1140
+    second = parsed.imports[1]
+    assert second.name is None
+    assert second.ordinal == 2
+
+
+def test_rva_file_offset_roundtrip() -> None:
+    parsed = parse_portable_executable(build_minimal_pe32_with_imports())
+    file_offset, section = rva_to_file_offset(0x1170, parsed.sections)
+    assert file_offset == 0x370
+    assert section is not None
+    assert section.name == ".text"
+    rva, back_section = file_offset_to_rva(file_offset, parsed.sections)
+    assert rva == 0x1170
+    assert back_section is not None
+    assert back_section.name == ".text"

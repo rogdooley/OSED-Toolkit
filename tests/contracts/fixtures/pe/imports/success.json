@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "pe.imports",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "format": "PE32",
+    "count": 2,
+    "imports": [
+      {
+        "dll": "KERNEL32.dll",
+        "name": "VirtualAlloc",
+        "ordinal": null,
+        "hint": 7,
+        "thunk_rva": 4400,
+        "thunk_rva_hex": "0x00001130",
+        "iat_rva": 4416,
+        "iat_rva_hex": "0x00001140"
+      },
+      {
+        "dll": "KERNEL32.dll",
+        "name": null,
+        "ordinal": 2,
+        "hint": null,
+        "thunk_rva": 4404,
+        "thunk_rva_hex": "0x00001134",
+        "iat_rva": 4420,
+        "iat_rva_hex": "0x00001144"
+      }
+    ]
+  }
+}

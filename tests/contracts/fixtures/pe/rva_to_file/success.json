@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "pe.rva_to_file",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "rva": 4464,
+    "rva_hex": "0x00001170",
+    "file_offset": 880,
+    "file_offset_hex": "0x00000370",
+    "section": ".text"
+  }
+}

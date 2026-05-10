@@ -124,3 +124,62 @@ def build_minimal_pe32_plus_with_export(*, export_name: str = "DemoExport64", ex
         export_name=export_name,
         export_rva=export_rva,
     )
+
+
+def build_minimal_pe32_with_imports() -> bytes:
+    image = bytearray(0x800)
+    image[0:2] = b"MZ"
+    struct.pack_into("<I", image, 0x3C, 0x80)
+
+    pe_offset = 0x80
+    image[pe_offset : pe_offset + 4] = b"PE\x00\x00"
+    coff_offset = pe_offset + 4
+    struct.pack_into("<HHIIIHH", image, coff_offset, 0x014C, 1, 0, 0, 0, 0xE0, 0x210E)
+
+    optional_offset = coff_offset + 20
+    struct.pack_into("<H", image, optional_offset, 0x10B)
+    struct.pack_into("<I", image, optional_offset + 16, 0x1000)  # entrypoint
+    struct.pack_into("<I", image, optional_offset + 20, 0x1000)  # base of code
+    struct.pack_into("<I", image, optional_offset + 24, 0x1000)  # base of data
+    struct.pack_into("<I", image, optional_offset + 28, 0x400000)  # image base
+    struct.pack_into("<I", image, optional_offset + 32, 0x1000)  # section alignment
+    struct.pack_into("<I", image, optional_offset + 36, 0x200)  # file alignment
+    struct.pack_into("<I", image, optional_offset + 56, 0x3000)  # size of image
+    struct.pack_into("<I", image, optional_offset + 60, 0x200)  # size of headers
+    struct.pack_into("<H", image, optional_offset + 68, 3)  # subsystem
+    struct.pack_into("<I", image, optional_offset + 92, 16)  # NumberOfRvaAndSizes
+    struct.pack_into("<II", image, optional_offset + 96, 0, 0)  # export directory
+    struct.pack_into("<II", image, optional_offset + 104, 0x1100, 0x100)  # import directory
+
+    section_offset = optional_offset + 0xE0
+    image[section_offset : section_offset + 8] = b".text\x00\x00\x00"
+    struct.pack_into("<I", image, section_offset + 8, 0x2000)  # virtual size
+    struct.pack_into("<I", image, section_offset + 12, 0x1000)  # virtual address
+    struct.pack_into("<I", image, section_offset + 16, 0x600)  # raw size
+    struct.pack_into("<I", image, section_offset + 20, 0x200)  # raw ptr
+    struct.pack_into("<I", image, section_offset + 36, 0x60000020)
+
+    def rva_to_offset(rva: int) -> int:
+        return 0x200 + (rva - 0x1000)
+
+    # IMAGE_IMPORT_DESCRIPTOR[0]
+    import_desc = rva_to_offset(0x1100)
+    struct.pack_into("<IIIII", image, import_desc, 0x1130, 0, 0, 0x1160, 0x1140)
+    struct.pack_into("<IIIII", image, import_desc + 20, 0, 0, 0, 0, 0)  # null terminator descriptor
+
+    # INT (OriginalFirstThunk)
+    struct.pack_into("<I", image, rva_to_offset(0x1130), 0x1170)
+    struct.pack_into("<I", image, rva_to_offset(0x1134), 0x80000002)  # ordinal import
+    struct.pack_into("<I", image, rva_to_offset(0x1138), 0)
+
+    # IAT (FirstThunk)
+    struct.pack_into("<I", image, rva_to_offset(0x1140), 0x1170)
+    struct.pack_into("<I", image, rva_to_offset(0x1144), 0x80000002)
+    struct.pack_into("<I", image, rva_to_offset(0x1148), 0)
+
+    image[rva_to_offset(0x1160) : rva_to_offset(0x1160) + 13] = b"KERNEL32.dll\x00"
+
+    # IMAGE_IMPORT_BY_NAME
+    struct.pack_into("<H", image, rva_to_offset(0x1170), 7)  # hint
+    image[rva_to_offset(0x1172) : rva_to_offset(0x1172) + len("VirtualAlloc") + 1] = b"VirtualAlloc\x00"
+    return bytes(image)

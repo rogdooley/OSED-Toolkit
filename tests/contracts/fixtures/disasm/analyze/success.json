@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "tool_version": "<version>",
+  "generated_at": "<timestamp>",
+  "request_id": "<request_id>",
+  "command": "disasm.analyze",
+  "ok": true,
+  "result": {
+    "file": "<path>",
+    "arch": "x86",
+    "base": 4096,
+    "base_hex": "0x1000",
+    "instruction_count": 2,
+    "metadata": {
+      "entropy": 1.0,
+      "printable_ratio": 0.0,
+      "null_byte_count": 0,
+      "size": 2
+    },
+    "instructions": [
+      {
+        "address": 4096,
+        "address_hex": "0x1000",
+        "bytes": "90",
+        "mnemonic": "nop",
+        "operands": ""
+      },
+      {
+        "address": 4097,
+        "address_hex": "0x1001",
+        "bytes": "c3",
+        "mnemonic": "ret",
+        "operands": ""
+      }
+    ]
+  }
+}

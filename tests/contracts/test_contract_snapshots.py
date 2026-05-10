@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from shellforge.cli import main
-from tests.shellforge.pe_fixture import build_minimal_pe32_with_export
+from tests.shellforge.pe_fixture import build_minimal_pe32_with_export, build_minimal_pe32_with_imports
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -78,3 +78,31 @@ def test_pe_list_error_snapshot(capsys) -> None:
     assert code == 3
     body = _normalize(_load_stdout_json(capsys))
     assert body == _read_json_fixture("pe/list/error.json")
+
+
+def test_pe_imports_success_snapshot(tmp_path, capsys) -> None:
+    pe_file = tmp_path / "imports.dll"
+    pe_file.write_bytes(build_minimal_pe32_with_imports())
+    code = main(["pe", "imports", str(pe_file), "--json"])
+    assert code == 0
+    body = _normalize(_load_stdout_json(capsys))
+    assert body == _read_json_fixture("pe/imports/success.json")
+
+
+def test_pe_rva_to_file_success_snapshot(tmp_path, capsys) -> None:
+    pe_file = tmp_path / "imports.dll"
+    pe_file.write_bytes(build_minimal_pe32_with_imports())
+    code = main(["pe", "rva-to-file", str(pe_file), "0x1170", "--json"])
+    assert code == 0
+    body = _normalize(_load_stdout_json(capsys))
+    assert body == _read_json_fixture("pe/rva_to_file/success.json")
+
+
+def test_disasm_success_snapshot(tmp_path, capsys) -> None:
+    sample = tmp_path / "code.bin"
+    sample.write_bytes(b"\x90\xc3")
+    code = main(["disasm", "--arch", "x86", "--base", "0x1000", str(sample), "--json"])
+    assert code == 0
+    body = _normalize(_load_stdout_json(capsys))
+    assert body == _read_json_fixture("disasm/analyze/success.json")
+
