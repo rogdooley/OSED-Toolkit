@@ -31,6 +31,10 @@ CODE = (
     "mov ecx, [eax+0x18]   ;"  # ECX = NumberOfNames
     "mov edi, [eax+0x20]   ;"  # EDI = AddressOfNames RVA
     "add edi, ebx          ;"  # EDI = AddressOfNames VA
+    "xor esi, esi          ;"
+    "next_name:"
+    "mov eax, [edi + esi*4];"  # name RVA
+    "add eax, ebx          ;"  # name VA
     "loop_here:"
     "jmp loop_here;"
 )
