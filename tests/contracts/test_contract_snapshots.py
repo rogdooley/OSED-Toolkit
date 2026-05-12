@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
 
 from shellforge.cli import main
@@ -106,3 +107,13 @@ def test_disasm_success_snapshot(tmp_path, capsys) -> None:
     body = _normalize(_load_stdout_json(capsys))
     assert body == _read_json_fixture("disasm/analyze/success.json")
 
+
+def test_trace_success_snapshot(tmp_path, capsys) -> None:
+    if importlib.util.find_spec("unicorn") is None:
+        return
+    sample = tmp_path / "trace.bin"
+    sample.write_bytes(b"\x90\xc3")
+    code = main(["trace", "--arch", "x86", "--base", "0x1000", "--steps", "10", str(sample), "--json"])
+    assert code == 0
+    body = _normalize(_load_stdout_json(capsys))
+    assert body == _read_json_fixture("trace/analyze/success.json")

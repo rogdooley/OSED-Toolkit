@@ -20,3 +20,4 @@ class CommandId(StrEnum):
     PE_VA_TO_RVA = "pe.va_to_rva"
     DISASM_ANALYZE = "disasm.analyze"
     ANALYZE_STATIC = "analyze.static"
+    TRACE_ANALYZE = "trace.analyze"

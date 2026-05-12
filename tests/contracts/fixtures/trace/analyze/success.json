@@ -1,0 +1,89 @@
+{
+  "command": "trace.analyze",
+  "generated_at": "<timestamp>",
+  "ok": true,
+  "request_id": "<request_id>",
+  "result": {
+    "arch": "x86",
+    "base": 4096,
+    "base_hex": "0x1000",
+    "file": "<path>",
+    "final_registers": {
+      "eax": "0x11110000",
+      "ebp": "0x11110006",
+      "ebx": "0x11110001",
+      "ecx": "0x11110002",
+      "edi": "0x11110005",
+      "edx": "0x11110003",
+      "eip": "0x0",
+      "esi": "0x11110004",
+      "esp": "0x7000ff04"
+    },
+    "stack_window_slots": 0,
+    "steps_executed": 2,
+    "steps_requested": 10,
+    "stopped_reason": "ret_unmapped_target",
+    "trace": [
+      {
+        "address": 4096,
+        "address_hex": "0x1000",
+        "annotations": [],
+        "bytes": "90",
+        "call_depth": 0,
+        "index": 0,
+        "mnemonic": "nop",
+        "notes": [],
+        "operands": "",
+        "register_diff": {
+          "eip": {
+            "after": "0x1001",
+            "before": "0x1000"
+          }
+        },
+        "stack_delta": 0,
+        "stack_pointer_after": 1879113472,
+        "stack_pointer_after_hex": "0x7000ff00",
+        "stack_pointer_before": 1879113472,
+        "stack_pointer_before_hex": "0x7000ff00",
+        "stack_window": [],
+        "watched_registers": {},
+        "writes": []
+      },
+      {
+        "address": 4097,
+        "address_hex": "0x1001",
+        "annotations": [],
+        "bytes": "c3",
+        "call_depth": 0,
+        "index": 1,
+        "mnemonic": "ret",
+        "notes": [
+          "ret_unmapped_target"
+        ],
+        "operands": "",
+        "register_diff": {},
+        "stack_delta": 4,
+        "stack_pointer_after": 1879113476,
+        "stack_pointer_after_hex": "0x7000ff04",
+        "stack_pointer_before": 1879113472,
+        "stack_pointer_before_hex": "0x7000ff00",
+        "stack_window": [],
+        "watched_registers": {},
+        "writes": []
+      }
+    ],
+    "watched_registers": [],
+    "write_summary": {
+      "by_class": {
+        "blob": 0,
+        "code": 0,
+        "stack": 0,
+        "unmapped": 0
+      },
+      "self_modifying_writes": 0,
+      "total_writes": 0
+    }
+  },
+  "schema_version": 1,
+  "tool_version": "<version>"
+}

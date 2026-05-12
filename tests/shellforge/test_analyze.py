@@ -16,10 +16,12 @@ def test_analyze_detects_requested_signatures() -> None:
     assert report.detected_arch == "x86"
     assert report.size == len(blob)
     assert len(report.peb_walk_signatures) >= 1
+    assert len(report.architecture_fingerprints) >= 1
     assert len(report.segment_access_signatures) >= 1
     assert len(report.nop_sleds) >= 1
     assert len(report.egg_markers) >= 1
     assert len(report.api_hash_constants) >= 1
+    assert isinstance(report.suspicious_entropy_windows, list)
     assert any("STRING_ONE" in item for item in report.printable_strings)
     assert report.strings_truncated is False
     assert any(item["name"] == "peb_walk" and item["matched"] for item in report.heuristics)
@@ -77,3 +79,34 @@ def test_analyze_hash_cross_reference_matches_known_constant() -> None:
     row = report.api_hash_cross_references[0]
     assert row["hash_value"] == value
     assert "kernel32.dll!GetProcAddress" in row["matches"]
+
+
+def test_analyze_detects_xor_additive_and_api_hash_loops() -> None:
+    blob = (
+        b"\x31\xc9"  # xor ecx, ecx
+        b"\x31\xc0"  # xor eax, eax
+        b"\x80\x36\xaa"  # xor byte ptr [esi], 0xaa
+        b"\x46"  # inc esi
+        b"\xe2\xfb"  # loop back
+        b"\x80\x06\x01"  # add byte ptr [esi], 1
+        b"\x46"  # inc esi
+        b"\x49"  # dec ecx
+        b"\x75\xf9"  # jnz back
+        b"\xac"  # lodsb
+        b"\xc1\xc8\x0d"  # ror eax, 0xd
+        b"\x01\xc8"  # add eax, ecx
+        b"\x75\xf9"  # jnz back
+    )
+    report = analyze_bytes(blob, arch="x86")
+    assert len(report.xor_decoder_loop_signatures) >= 1
+    assert len(report.additive_decoder_loop_signatures) >= 1
+    assert len(report.api_hash_loop_signatures) >= 1
+
+
+def test_analyze_flags_suspicious_entropy_windows_and_resolver_stub() -> None:
+    high_entropy = bytes(range(256)) * 2
+    resolver = b"\x64\xa1\x30\x00\x00\x00" + b"\xaa\xfc\x0d\x7c"
+    blob = resolver + high_entropy
+    report = analyze_bytes(blob, arch="x86", window=64, step=16)
+    assert len(report.suspicious_entropy_windows) >= 1
+    assert len(report.likely_resolver_stubs) >= 1

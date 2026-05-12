@@ -33,6 +33,7 @@ import { createHelpCommand } from "./commands/help";
 import { createReloadCommand } from "./commands/reload";
 import { createSehPprCommand } from "./commands/seh_ppr";
 import { createExploitCommand } from "./commands/exploit";
+import { createTriageCommand } from "./commands/triage";
 import { createShellcodeNamespace } from "./shellcode";
 
 type OsedApi = {
@@ -70,6 +71,7 @@ function registerAll(): void {
     ...createRopCommands(),
     createPivotCommand(),
     createSehPprCommand(),
+    createTriageCommand(),
     createExploitCommand(),
     createHelpCommand(registry),
     createReloadCommand(registry),
@@ -82,14 +84,25 @@ function registerAll(): void {
 
 function bindApi(): OsedApi {
   const api: OsedApi = {};
+  const invoke = (commandName: string, args: unknown[]) => {
+    const result = registry.execute(commandName, normalizeInvocation(commandName, args));
+    lastResult = result;
+    return result.success;
+  };
 
   for (const command of registry.getAll()) {
     api[command.name] = (...args: unknown[]) => {
-      const result = registry.execute(command.name, normalizeInvocation(command.name, args));
-      lastResult = result;
-      return result.success;
+      return invoke(command.name, args);
     };
   }
+
+  api.pattern = {
+    create: (...args: unknown[]) => invoke("pattern_create", args),
+    offset: (...args: unknown[]) => invoke("pattern_offset", args),
+  };
+  api.seh = {
+    visualize: (...args: unknown[]) => invoke("seh", args),
+  };
 
   api.last_result = () => lastResult;
   api.last_summary = () => {
@@ -207,6 +220,13 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
         maxResults: args[2],
         executableOnly: args[3],
         mode: args[4],
+      };
+    case "triage":
+      return {
+        patternLength: args[0],
+        badchars: parseHexByteList(args[1]),
+        module: args[2],
+        stackBytes: args[3],
       };
     default:
       return { value: args[0] };

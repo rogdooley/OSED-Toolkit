@@ -17,3 +17,12 @@ def test_disasm_human_output_table(tmp_path, capsys) -> None:
     assert "mnemonic" in out
     assert "0x00001000" in out
     assert "nop" in out
+
+
+def test_disasm_human_limit_shows_truncated_notice(tmp_path, capsys) -> None:
+    sample = tmp_path / "code_limit.bin"
+    sample.write_bytes(b"\x90\x90\x90\xc3")
+    code = main(["disasm", "--arch", "x86", "--base", "0x1000", "--limit", "2", str(sample)])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "Showing 2/4 instructions (truncated)" in out

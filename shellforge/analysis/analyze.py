@@ -37,6 +37,7 @@ class AnalyzeMatch:
 class AnalyzeResult:
     detected_arch: str
     detection_confidence: float
+    architecture_fingerprints: list[AnalyzeMatch]
     size: int
     entropy: float
     printable_ratio: float
@@ -46,11 +47,16 @@ class AnalyzeResult:
     egg_markers: list[AnalyzeMatch]
     nop_sleds: list[AnalyzeMatch]
     decoder_loop_signatures: list[AnalyzeMatch]
+    xor_decoder_loop_signatures: list[AnalyzeMatch]
+    additive_decoder_loop_signatures: list[AnalyzeMatch]
     api_hash_constants: list[AnalyzeMatch]
+    api_hash_loop_signatures: list[AnalyzeMatch]
     api_hash_cross_references: list[dict[str, object]]
     entropy_windows: list[dict[str, float | int]]
+    suspicious_entropy_windows: list[dict[str, float | int | str]]
     printable_strings: list[str]
     strings_truncated: bool
+    likely_resolver_stubs: list[AnalyzeMatch]
     heuristics: list[dict[str, object]]
 
 
@@ -66,19 +72,38 @@ def analyze_bytes(
     hash_cross_reference: dict[int, list[str]] | None = None,
 ) -> AnalyzeResult:
     selected_arch, arch_confidence = _select_arch(data, arch)
+    arch_fingerprints = _find_architecture_fingerprints(data)
     peb = _find_peb_walk_signatures(data)
     seg = _find_segment_access_signatures(data)
     eggs = _find_egg_markers(data)
     nops = _find_nop_sleds(data)
-    decoders = _find_decoder_loop_signatures(data, selected_arch)
+    xor_decoders, add_decoders = _find_decoder_loop_signatures(data, selected_arch)
+    decoders = sorted(xor_decoders + add_decoders, key=lambda item: (item.offset, item.detail))
     hash_candidates = _find_api_hash_constants(data)
+    api_hash_loops = _find_api_hash_loop_signatures(data, selected_arch)
     hash_xrefs = _cross_reference_hash_constants(hash_candidates, hash_cross_reference)
+    entropy_profile = _sliding_entropy(data, window=window, step=step)
+    suspicious_entropy = _find_suspicious_entropy_windows(entropy_profile)
     strings, strings_truncated = _extract_printable_strings(data, min_len=strings_min_len, max_count=max_strings)
-    heuristics = _heuristics_summary(peb, seg, eggs, nops, decoders, hash_candidates, max_hits=max_hits)
+    resolver_stubs = _find_likely_resolver_stubs(peb, seg, api_hash_loops, hash_candidates)
+    heuristics = _heuristics_summary(
+        peb,
+        seg,
+        eggs,
+        nops,
+        xor_decoders,
+        add_decoders,
+        hash_candidates,
+        api_hash_loops,
+        suspicious_entropy,
+        resolver_stubs,
+        max_hits=max_hits,
+    )
 
     return AnalyzeResult(
         detected_arch=selected_arch,
         detection_confidence=arch_confidence,
+        architecture_fingerprints=arch_fingerprints,
         size=len(data),
         entropy=shannon_entropy(data),
         printable_ratio=printable_ratio(data),
@@ -88,13 +113,35 @@ def analyze_bytes(
         egg_markers=eggs,
         nop_sleds=nops,
         decoder_loop_signatures=decoders,
+        xor_decoder_loop_signatures=xor_decoders,
+        additive_decoder_loop_signatures=add_decoders,
         api_hash_constants=hash_candidates,
+        api_hash_loop_signatures=api_hash_loops,
         api_hash_cross_references=hash_xrefs,
-        entropy_windows=_sliding_entropy(data, window=window, step=step),
+        entropy_windows=entropy_profile,
+        suspicious_entropy_windows=suspicious_entropy,
         printable_strings=strings,
         strings_truncated=strings_truncated,
+        likely_resolver_stubs=resolver_stubs,
         heuristics=heuristics,
     )
+
+
+def _find_architecture_fingerprints(data: bytes) -> list[AnalyzeMatch]:
+    matches: list[AnalyzeMatch] = []
+    for token, detail in (
+        (b"\x64\xa1\x30\x00\x00\x00", "x86 fs:[0x30]"),
+        (b"\x65\x48\x8b\x04\x25\x60\x00\x00\x00", "x64 gs:[0x60]"),
+        (b"\x48\x83\xec\x28", "x64 shadow space prologue"),
+    ):
+        start = 0
+        while True:
+            index = data.find(token, start)
+            if index < 0:
+                break
+            matches.append(AnalyzeMatch(offset=index, kind="arch_fingerprint", detail=detail))
+            start = index + 1
+    return matches
 
 
 def _select_arch(data: bytes, arch: str) -> tuple[str, float]:
@@ -228,22 +275,55 @@ def _find_nop_sleds(data: bytes, minimum: int = 8) -> list[AnalyzeMatch]:
     return matches
 
 
-def _find_decoder_loop_signatures(data: bytes, arch: str) -> list[AnalyzeMatch]:
-    matches: list[AnalyzeMatch] = []
+def _find_decoder_loop_signatures(data: bytes, arch: str) -> tuple[list[AnalyzeMatch], list[AnalyzeMatch]]:
+    xor_matches: list[AnalyzeMatch] = []
+    add_matches: list[AnalyzeMatch] = []
     disasm = disassemble_bytes(data, arch=arch, base=0)
     inst = disasm.instructions
     for i in range(len(inst)):
         window = inst[i : i + 8]
         if len(window) < 4:
             continue
-        arith = sum(1 for item in window if item.mnemonic in {"xor", "add", "sub"})
+        xor_ops = sum(1 for item in window if item.mnemonic == "xor")
+        add_ops = sum(1 for item in window if item.mnemonic in {"add", "sub", "inc", "dec"})
         loops = sum(1 for item in window if item.mnemonic in {"loop", "jnz", "jmp"})
-        if arith >= 3 and loops >= 1:
+        if xor_ops >= 2 and loops >= 1:
+            xor_matches.append(
+                AnalyzeMatch(
+                    offset=window[0].address,
+                    kind="xor_decoder_loop",
+                    detail=f"xor_ops={xor_ops}, loop_ops={loops}",
+                )
+            )
+        if add_ops >= 2 and loops >= 1:
+            add_matches.append(
+                AnalyzeMatch(
+                    offset=window[0].address,
+                    kind="additive_decoder_loop",
+                    detail=f"arith_ops={add_ops}, loop_ops={loops}",
+                )
+            )
+    return xor_matches, add_matches
+
+
+def _find_api_hash_loop_signatures(data: bytes, arch: str) -> list[AnalyzeMatch]:
+    matches: list[AnalyzeMatch] = []
+    disasm = disassemble_bytes(data, arch=arch, base=0)
+    inst = disasm.instructions
+    for i in range(len(inst)):
+        window = inst[i : i + 12]
+        if len(window) < 5:
+            continue
+        rotates = sum(1 for item in window if item.mnemonic in {"ror", "rol"})
+        mix_ops = sum(1 for item in window if item.mnemonic in {"add", "xor"})
+        loop_ops = sum(1 for item in window if item.mnemonic in {"jnz", "loop", "jmp"})
+        byte_walk = any(item.mnemonic in {"lodsb", "movzx"} for item in window)
+        if rotates >= 1 and mix_ops >= 1 and loop_ops >= 1 and byte_walk:
             matches.append(
                 AnalyzeMatch(
                     offset=window[0].address,
-                    kind="decoder_loop",
-                    detail=f"arith_ops={arith}, loop_ops={loops}",
+                    kind="api_hash_loop",
+                    detail=f"rotates={rotates}, mix_ops={mix_ops}, loop_ops={loop_ops}",
                 )
             )
     return matches
@@ -334,6 +414,25 @@ def _sliding_entropy(data: bytes, window: int, step: int) -> list[dict[str, floa
     return rows
 
 
+def _find_suspicious_entropy_windows(
+    rows: list[dict[str, float | int]], *, high_threshold: float = 5.8
+) -> list[dict[str, float | int | str]]:
+    suspicious: list[dict[str, float | int | str]] = []
+    for row in rows:
+        entropy = float(row["entropy"])
+        if entropy < high_threshold:
+            continue
+        suspicious.append(
+            {
+                "offset": int(row["offset"]),
+                "size": int(row["size"]),
+                "entropy": entropy,
+                "label": "high_entropy",
+            }
+        )
+    return suspicious
+
+
 def _extract_printable_strings(data: bytes, min_len: int = 4, max_count: int = 50) -> tuple[list[str], bool]:
     strings: list[str] = []
     current: list[int] = []
@@ -360,8 +459,12 @@ def _heuristics_summary(
     seg: list[AnalyzeMatch],
     eggs: list[AnalyzeMatch],
     nops: list[AnalyzeMatch],
-    decoders: list[AnalyzeMatch],
+    xor_decoders: list[AnalyzeMatch],
+    add_decoders: list[AnalyzeMatch],
     hashes: list[AnalyzeMatch],
+    hash_loops: list[AnalyzeMatch],
+    suspicious_entropy: list[dict[str, float | int | str]],
+    resolver_stubs: list[AnalyzeMatch],
     *,
     max_hits: int,
 ) -> list[dict[str, object]]:
@@ -383,8 +486,35 @@ def _heuristics_summary(
         row("segment_access", seg, 0.85),
         row("egg_marker", eggs, 0.75),
         row("nop_sled", nops, 0.8),
-        row("decoder_loop", decoders, 0.7),
+        row("xor_decoder_loop", xor_decoders, 0.72),
+        row("additive_decoder_loop", add_decoders, 0.7),
         row("api_hash_constant", hashes, 0.65),
+        row("api_hash_loop", hash_loops, 0.77),
+        row("suspicious_entropy_window", [AnalyzeMatch(offset=int(item["offset"]), kind="entropy", detail=str(item["label"])) for item in suspicious_entropy], 0.68),
+        row("likely_resolver_stub", resolver_stubs, 0.83),
     ]
     rows.sort(key=lambda item: (not bool(item["matched"]), -float(item["confidence"]), str(item["name"])))
     return rows
+
+
+def _find_likely_resolver_stubs(
+    peb: list[AnalyzeMatch],
+    seg: list[AnalyzeMatch],
+    hash_loops: list[AnalyzeMatch],
+    hash_constants: list[AnalyzeMatch],
+) -> list[AnalyzeMatch]:
+    if not peb and not seg:
+        return []
+    if not hash_loops and not hash_constants:
+        return []
+    anchor = min([item.offset for item in (peb + seg + hash_loops + hash_constants)])
+    return [
+        AnalyzeMatch(
+            offset=anchor,
+            kind="likely_resolver_stub",
+            detail=(
+                f"peb_or_segment={len(peb) + len(seg)}, "
+                f"hash_loops={len(hash_loops)}, hash_constants={len(hash_constants)}"
+            ),
+        )
+    ]

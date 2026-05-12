@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+import importlib.util
 import re
 
 from shellforge.cli import main
@@ -220,9 +221,25 @@ def test_disasm_json_schema(tmp_path, capsys) -> None:
     assert payload["result"]["arch"] == "x86"
     assert payload["result"]["base_hex"] == "0x1000"
     assert payload["result"]["instruction_count"] == 2
+    assert payload["result"]["returned_count"] == 2
+    assert payload["result"]["truncated"] is False
     assert payload["result"]["metadata"]["null_byte_count"] == 0
     assert payload["result"]["instructions"][0]["address_hex"] == "0x1000"
     assert payload["result"]["instructions"][0]["mnemonic"] == "nop"
+
+
+def test_disasm_json_limit_truncates_rows(tmp_path, capsys) -> None:
+    sample = tmp_path / "code_limit.bin"
+    sample.write_bytes(b"\x90\x90\x90\xc3")
+    code = main(["disasm", "--arch", "x86", "--base", "0x1000", "--limit", "2", str(sample), "--json"])
+    assert code == 0
+    payload = _load_json_from_stdout(capsys)
+    _assert_success_envelope_shape(payload)
+    assert payload["command"] == "disasm.analyze"
+    assert payload["result"]["instruction_count"] == 4
+    assert payload["result"]["returned_count"] == 2
+    assert payload["result"]["truncated"] is True
+    assert len(payload["result"]["instructions"]) == 2
 
 
 def test_analyze_json_schema(tmp_path, capsys) -> None:
@@ -263,6 +280,12 @@ def test_analyze_json_schema(tmp_path, capsys) -> None:
     assert len(payload["result"]["nop_regions"]) >= 1
     assert len(payload["result"]["egg_markers"]) >= 1
     assert len(payload["result"]["hash_candidates"]) >= 1
+    assert "architecture_fingerprints" in payload["result"]
+    assert "xor_decoder_loop_signatures" in payload["result"]
+    assert "additive_decoder_loop_signatures" in payload["result"]
+    assert "api_hash_loop_signatures" in payload["result"]
+    assert "suspicious_entropy_windows" in payload["result"]
+    assert "likely_resolver_stubs" in payload["result"]
     assert payload["result"]["strings_truncated"] is False
     assert payload["result"]["max_hits"] == 25
     assert any("HELLO" in value for value in payload["result"]["strings"])
@@ -279,6 +302,8 @@ def test_analyze_summary_only_json_schema(tmp_path, capsys) -> None:
     assert "heuristic_hits" in payload["result"]
     assert "likely_decoder" in payload["result"]
     assert "top_heuristics" in payload["result"]
+    assert "suspicious_entropy_windows" in payload["result"]
+    assert "likely_resolver_stub_hits" in payload["result"]
     assert len(payload["result"]["top_heuristics"]) <= 5
     if payload["result"]["top_heuristics"]:
         first = payload["result"]["top_heuristics"][0]
@@ -302,6 +327,51 @@ def test_analyze_hash_cross_reference_json_schema(tmp_path, capsys) -> None:
     assert len(refs) >= 1
     assert refs[0]["hash_hex"] == "0x7c0dfcaa"
     assert any("kernel32_fixture.dll!GetProcAddress" in item for item in refs[0]["matches"])
+
+
+def test_trace_json_schema(tmp_path, capsys) -> None:
+    if importlib.util.find_spec("unicorn") is None:
+        return
+    sample = tmp_path / "trace.bin"
+    sample.write_bytes(b"\xc7\x04\x24\x41\x41\x41\x41\xc3")
+    code = main(
+        [
+            "trace",
+            "--arch",
+            "x86",
+            "--base",
+            "0x1000",
+            "--steps",
+            "10",
+            "--stack-window",
+            "2",
+            "--watch",
+            "eip,esp",
+            "--explain-peb",
+            str(sample),
+            "--json",
+        ]
+    )
+    assert code == 0
+    payload = _load_json_from_stdout(capsys)
+    _assert_success_envelope_shape(payload)
+    assert payload["command"] == "trace.analyze"
+    assert payload["result"]["arch"] == "x86"
+    assert payload["result"]["steps_requested"] == 10
+    assert payload["result"]["steps_executed"] >= 1
+    assert "stopped_reason" in payload["result"]
+    assert "final_registers" in payload["result"]
+    assert "write_summary" in payload["result"]
+    assert "watched_registers" in payload["result"]
+    assert payload["result"]["stack_window_slots"] == 2
+    assert payload["result"]["watched_registers"] == ["eip", "esp"]
+    assert payload["result"]["write_summary"]["total_writes"] >= 1
+    assert payload["result"]["trace"]
+    first = payload["result"]["trace"][0]
+    assert "annotations" in first
+    assert "writes" in first
+    assert "stack_window" in first
+    assert "watched_registers" in first
 
 
 def test_pe_imports_json_schema(tmp_path, capsys) -> None:

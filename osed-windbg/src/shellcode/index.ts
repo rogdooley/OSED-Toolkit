@@ -81,9 +81,9 @@ class MetasploitRor13Provider implements HashProvider {
 
   public hash(text: string): number {
     let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
+    for (const byte of asciiBytes(text)) {
       hash = this.ror32(hash, 13);
-      hash = (hash + (text.charCodeAt(i) & 0xff)) >>> 0;
+      hash = (hash + byte) >>> 0;
     }
     return hash >>> 0;
   }
@@ -98,7 +98,6 @@ class HashResolver {
     const configured = providers ?? [
       new MetasploitRor13Provider(),
       new Crc32Provider(),
-      new Rol13AddProvider(),
       new Rol7AddProvider(),
     ];
     this.canonicalProviders = configured;
@@ -178,8 +177,7 @@ class Crc32Provider implements HashProvider {
 
   public hash(text: string): number {
     let crc = 0xffffffff;
-    for (let i = 0; i < text.length; i += 1) {
-      const byte = text.charCodeAt(i) & 0xff;
+    for (const byte of asciiBytes(text)) {
       const index = (crc ^ byte) & 0xff;
       crc = (crc >>> 8) ^ this.table[index];
     }
@@ -203,26 +201,6 @@ class Crc32Provider implements HashProvider {
   }
 }
 
-class Rol13AddProvider implements HashProvider {
-  public readonly algorithm = "rol13_add";
-  public readonly aliases = ["rol13"];
-  public readonly description = "Rotate-left by 13 then add byte (32-bit accumulator).";
-
-  private rol32(value: number, bits: number): number {
-    const shift = bits & 31;
-    return ((value << shift) | (value >>> (32 - shift))) >>> 0;
-  }
-
-  public hash(text: string): number {
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
-      hash = this.rol32(hash, 13);
-      hash = (hash + (text.charCodeAt(i) & 0xff)) >>> 0;
-    }
-    return hash >>> 0;
-  }
-}
-
 class Rol7AddProvider implements HashProvider {
   public readonly algorithm = "rol7_add";
   public readonly aliases = ["rol7"];
@@ -235,12 +213,24 @@ class Rol7AddProvider implements HashProvider {
 
   public hash(text: string): number {
     let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
+    for (const byte of asciiBytes(text)) {
       hash = this.rol32(hash, 7);
-      hash = (hash + (text.charCodeAt(i) & 0xff)) >>> 0;
+      hash = (hash + byte) >>> 0;
     }
     return hash >>> 0;
   }
+}
+
+function asciiBytes(text: string): number[] {
+  const bytes: number[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code > 0x7f) {
+      throw new Error("Hash input must be ASCII for shellforge parity.");
+    }
+    bytes.push(code & 0xff);
+  }
+  return bytes;
 }
 
 class PEParser {
@@ -835,6 +825,7 @@ class ShellcodeHelper {
         const hashHex = this.hashResolver.hashValue(entry.name, algorithm).Hash;
         const computed = parseInt(hashHex.replace(/^0x/i, ""), 16) >>> 0;
         if (computed === parsed) {
+          const forward = this.exportResolver.isForwarded(lookup.module, entry);
           return [
             {
               Module: lookup.module.name,
@@ -842,6 +833,8 @@ class ShellcodeHelper {
               Hash: `0x${parsed.toString(16).toUpperCase().padStart(8, "0")}`,
               Symbol: entry.name,
               Address: toDmlAddress(entry.va, "u"),
+              Forwarded: forward.forwarded ? "true" : "false",
+              ForwardTo: forward.target || "",
             },
           ];
         }
@@ -867,11 +860,11 @@ class ShellcodeHelper {
         { Field: "Base", Value: toDmlAddress(lookup.module.base, "db") },
         { Field: "Export RVA", Value: `0x${info.exportDirectoryRva.toString(16).toUpperCase()}` },
         { Field: "Export VA", Value: toDmlAddress(info.exportDirectoryVa, "db") },
+        { Field: "AddressOfNames", Value: `0x${info.addressOfNamesRva.toString(16).toUpperCase()}` },
         { Field: "NumberOfFunctions", Value: info.numberOfFunctions.toString() },
         { Field: "NumberOfNames", Value: info.numberOfNames.toString() },
         { Field: "AddressOfFunctions", Value: `0x${info.addressOfFunctionsRva.toString(16).toUpperCase()}` },
-        { Field: "AddressOfNames", Value: `0x${info.addressOfNamesRva.toString(16).toUpperCase()}` },
-        { Field: "AddressOfOrdinals", Value: `0x${info.addressOfNameOrdinalsRva.toString(16).toUpperCase()}` },
+        { Field: "AddressOfNameOrdinals", Value: `0x${info.addressOfNameOrdinalsRva.toString(16).toUpperCase()}` },
       ];
     } catch (error) {
       return this.errorRows(formatError(error));
@@ -908,9 +901,11 @@ class ShellcodeHelper {
       }
       const forward = this.exportResolver.isForwarded(lookup.module, entry);
       return [
+        { Property: "Name", Value: entry.name || "<unnamed>" },
         { Property: "Name RVA", Value: `0x${nameRva.toString(16).toUpperCase()}` },
         { Property: "Name VA", Value: toDmlAddress(lookup.module.base + BigInt(nameRva >>> 0), "db") },
         { Property: "Ordinal Index", Value: ordinalIndex.toString() },
+        { Property: "Ordinal", Value: entry.ordinal.toString() },
         { Property: "Function RVA", Value: `0x${entry.rva.toString(16).toUpperCase()}` },
         { Property: "Function VA", Value: toDmlAddress(entry.va, "u") },
         { Property: "Forwarded", Value: forward.forwarded ? "true" : "false" },
@@ -987,24 +982,27 @@ class ShellcodeHelper {
       const summary: Array<Record<string, string>> = [
         { Step: "Resolving", Value: symbol },
         { Step: "[1] Module base", Value: toDmlAddress(lookup.module.base, "db") },
-        { Step: "[2] DOS.e_lfanew", Value: `0x${headers.eLfanew.toString(16).toUpperCase()}` },
-        { Step: "[3] NT header", Value: toDmlAddress(headers.ntHeader, "db") },
-        { Step: "[4] Export Directory RVA", Value: `0x${exportDir.exportDirectoryRva.toString(16).toUpperCase()}` },
-        { Step: "[5] AddressOfNames", Value: toDmlAddress(namesVa, "db") },
+        { Step: "[2] DOS header", Value: toDmlAddress(headers.dosHeader, "db") },
+        { Step: "[3] DOS.e_lfanew", Value: `0x${headers.eLfanew.toString(16).toUpperCase()}` },
+        { Step: "[4] NT header", Value: toDmlAddress(headers.ntHeader, "db") },
+        { Step: "[5] Export directory", Value: toDmlAddress(exportDir.exportDirectoryVa, "db") },
+        { Step: "[6] AddressOfNames", Value: toDmlAddress(namesVa, "db") },
+        { Step: "[7] AddressOfNameOrdinals", Value: toDmlAddress(ordinalsVa, "db") },
+        { Step: "[8] AddressOfFunctions", Value: toDmlAddress(functionsVa, "db") },
       ];
       if (matchIndex < 0) {
-        summary.push({ Step: "[6] Match", Value: "not found" });
+        summary.push({ Step: "[9] Match", Value: "not found" });
         return summary.concat(verbose ? rows : []);
       }
       const finalVa = lookup.module.base + BigInt(functionRva >>> 0);
       const matchedEntry = this.exportResolver.resolve(lookup.module, matchName);
       const forward = matchedEntry ? this.exportResolver.isForwarded(lookup.module, matchedEntry) : { forwarded: false, target: "" };
       summary.push(
-        { Step: "[6] Match index", Value: `${matchIndex}: ${matchName}` },
-        { Step: "[7] Ordinal index", Value: ordinalIndex.toString() },
-        { Step: "[8] Function RVA", Value: `0x${functionRva.toString(16).toUpperCase()}` },
-        { Step: "[9] Final VA", Value: toDmlAddress(finalVa, "u") },
-        { Step: "[10] Forwarded", Value: forward.forwarded ? `true (${forward.target})` : "false" },
+        { Step: "[9] Match index", Value: `${matchIndex}: ${matchName}` },
+        { Step: "[10] Ordinal index", Value: ordinalIndex.toString() },
+        { Step: "[11] Function RVA", Value: `0x${functionRva.toString(16).toUpperCase()}` },
+        { Step: "[12] Final VA", Value: toDmlAddress(finalVa, "u") },
+        { Step: "[13] Forwarded", Value: forward.forwarded ? `true (${forward.target})` : "false" },
       );
       return summary.concat(verbose ? rows : []);
     } catch (error) {

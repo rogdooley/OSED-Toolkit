@@ -46,6 +46,10 @@ Use `dx @$osed().last_result()` to inspect the full structured `CommandResult`.
 - Example 2: `dx @$osed().pattern_offset("41326341", "cyclic")`
   - Expected output: offset integer or not-found message.
 
+Alias namespace:
+- `dx @$osed().pattern.create(300, "msf")`
+- `dx @$osed().pattern.offset(0x39654138, "msf")`
+
 ## badchars
 
 - Syntax: `dx @$osed().badchars(address, exclude?)`
@@ -92,6 +96,19 @@ Use `dx @$osed().last_result()` to inspect the full structured `CommandResult`.
   - Expected output: node/handler/module table with flagged suspicious entries.
 - Example 2: `dx @$osed().seh()`
   - Expected output: warning on non-x86 contexts.
+
+Alias namespace:
+- `dx @$osed().seh.visualize()`
+
+## triage
+
+- Syntax: `dx @$osed().triage(patternLength?, badchars?, module?, stackBytes?)`
+- Defaults: `patternLength=10000`, `badchars=[0,10,13]`, `stackBytes=1024`
+- Description: Fast read-only crash triage for control, SEH, stack, gadget, and module context.
+- Example 1: `dx @$osed().triage()`
+  - Expected output: compact CONTROL/SEH/STACK/GADGETS report and structured findings in `last_result`.
+- Example 2: `dx @$osed().triage(8000, "00 0A 0D", "essfunc", 2048)`
+  - Expected output: focused module triage with quick badchar scan and candidate gadgets.
 
 ## modules
 

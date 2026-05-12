@@ -11,6 +11,8 @@
     "base": 4096,
     "base_hex": "0x1000",
     "instruction_count": 2,
+    "returned_count": 2,
+    "truncated": false,
     "metadata": {
       "entropy": 1.0,
       "printable_ratio": 0.0,

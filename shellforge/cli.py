@@ -9,6 +9,7 @@ import traceback
 from shellforge.analysis.badchars import find_badchars, parse_badchars
 from shellforge.analysis.analyze import analyze_bytes, build_hash_cross_reference
 from shellforge.analysis.disasm import disassemble_bytes
+from shellforge.analysis.trace import trace_bytes
 from shellforge.analysis.pe_exports import (
     PEExport,
     PEImport,
@@ -112,6 +113,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return CommandId.DISASM_ANALYZE.value
     if args.command == "analyze":
         return CommandId.ANALYZE_STATIC.value
+    if args.command == "trace":
+        return CommandId.TRACE_ANALYZE.value
     return f"cli.{args.command}"
 
 
@@ -561,9 +564,19 @@ def _cmd_pe_va_to_rva(args: argparse.Namespace) -> int:
 
 
 def _cmd_disasm(args: argparse.Namespace) -> int:
+    if args.limit is not None and args.limit <= 0:
+        raise ValueError("--limit must be a positive integer")
     payload = _read_bytes(args.file)
     base = _parse_int(args.base)
     result = disassemble_bytes(payload, arch=args.arch, base=base)
+    full_instructions = result.instructions
+    if args.limit is None:
+        rendered_instructions = full_instructions
+    else:
+        rendered_instructions = full_instructions[: args.limit]
+    instruction_count = len(full_instructions)
+    returned_count = len(rendered_instructions)
+    truncated = returned_count < instruction_count
 
     if args.json:
         _json_success(
@@ -573,7 +586,9 @@ def _cmd_disasm(args: argparse.Namespace) -> int:
                 "arch": result.arch,
                 "base": result.base,
                 "base_hex": f"0x{result.base:x}",
-                "instruction_count": len(result.instructions),
+                "instruction_count": instruction_count,
+                "returned_count": returned_count,
+                "truncated": truncated,
                 "metadata": {
                     "entropy": round(result.metadata.entropy, 6),
                     "printable_ratio": round(result.metadata.printable_ratio, 6),
@@ -588,7 +603,7 @@ def _cmd_disasm(args: argparse.Namespace) -> int:
                         "mnemonic": item.mnemonic,
                         "operands": item.operands,
                     }
-                    for item in result.instructions
+                    for item in rendered_instructions
                 ],
             },
         )
@@ -596,12 +611,14 @@ def _cmd_disasm(args: argparse.Namespace) -> int:
 
     print(
         f"arch={result.arch} base=0x{result.base:x} size={result.metadata.size} "
-        f"instructions={len(result.instructions)} entropy={result.metadata.entropy:.4f} "
+        f"instructions={instruction_count} entropy={result.metadata.entropy:.4f} "
         f"printable_ratio={result.metadata.printable_ratio:.4f} null_bytes={result.metadata.null_byte_count}"
     )
+    if truncated:
+        print(f"Showing {returned_count}/{instruction_count} instructions (truncated)")
     print("address      bytes                mnemonic      operands")
     print("-----------  -------------------  ------------  ------------------------------")
-    for item in result.instructions:
+    for item in rendered_instructions:
         print(f"0x{item.address:08x}  {item.bytes_hex:<19}  {item.mnemonic:<12}  {item.operands}")
     return ExitCodeMapper.SUCCESS
 
@@ -631,6 +648,11 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         return {"offset": item.offset, "kind": item.kind, "detail": item.detail}
 
     if args.summary_only:
+        likely_decoder = "unknown"
+        if any(item["name"] == "xor_decoder_loop" and item["matched"] for item in report.heuristics):
+            likely_decoder = "xor"
+        elif any(item["name"] == "additive_decoder_loop" and item["matched"] for item in report.heuristics):
+            likely_decoder = "additive"
         top_heuristics = [
             {"name": str(item["name"]), "confidence": float(item["confidence"])}
             for item in report.heuristics
@@ -645,9 +667,11 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
             "printable_ratio": round(report.printable_ratio, 6),
             "null_byte_count": report.null_byte_count,
             "heuristic_hits": sum(1 for item in report.heuristics if item["matched"]),
-            "likely_decoder": "xor" if any(item["name"] == "decoder_loop" and item["matched"] for item in report.heuristics) else "unknown",
+            "likely_decoder": likely_decoder,
             "top_heuristics": top_heuristics,
             "hash_cross_reference_hits": len(report.api_hash_cross_references),
+            "suspicious_entropy_windows": len(report.suspicious_entropy_windows),
+            "likely_resolver_stub_hits": len(report.likely_resolver_stubs),
         }
         if args.json:
             _json_success(CommandId.ANALYZE_STATIC, summary_payload)
@@ -656,7 +680,9 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
                 f"arch={report.detected_arch} confidence={report.detection_confidence:.2f} entropy={report.entropy:.4f} "
                 f"printable_ratio={report.printable_ratio:.4f} null_bytes={report.null_byte_count} "
                 f"heuristic_hits={summary_payload['heuristic_hits']} likely_decoder={summary_payload['likely_decoder']} "
-                f"hash_xrefs={summary_payload['hash_cross_reference_hits']}"
+                f"hash_xrefs={summary_payload['hash_cross_reference_hits']} "
+                f"suspicious_entropy={summary_payload['suspicious_entropy_windows']} "
+                f"resolver_stubs={summary_payload['likely_resolver_stub_hits']}"
             )
         return ExitCodeMapper.SUCCESS
 
@@ -673,21 +699,27 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
                     "printable_ratio": round(report.printable_ratio, 6),
                     "null_byte_count": report.null_byte_count,
                 },
+                "architecture_fingerprints": [_match_row(item) for item in report.architecture_fingerprints],
                 "heuristics": report.heuristics,
                 "peb_walk_signatures": [_match_row(item) for item in report.peb_walk_signatures],
                 "segment_access_signatures": [_match_row(item) for item in report.segment_access_signatures],
                 "egg_markers": [_match_row(item) for item in report.egg_markers],
                 "nop_regions": [_match_row(item) for item in report.nop_sleds],
                 "decoder_loop_signatures": [_match_row(item) for item in report.decoder_loop_signatures],
+                "xor_decoder_loop_signatures": [_match_row(item) for item in report.xor_decoder_loop_signatures],
+                "additive_decoder_loop_signatures": [_match_row(item) for item in report.additive_decoder_loop_signatures],
                 "hash_candidates": [_match_row(item) for item in report.api_hash_constants],
+                "api_hash_loop_signatures": [_match_row(item) for item in report.api_hash_loop_signatures],
                 "hash_cross_references": report.api_hash_cross_references,
                 "hash_db_files": [str(pathlib.Path(item).resolve()) for item in args.hash_db],
                 "hash_algorithm": args.hash_algorithm,
                 "entropy_profile": report.entropy_windows,
+                "suspicious_entropy_windows": report.suspicious_entropy_windows,
                 "strings": report.printable_strings,
                 "strings_min_len": args.strings_min_len,
                 "max_strings": args.max_strings,
                 "strings_truncated": report.strings_truncated,
+                "likely_resolver_stubs": [_match_row(item) for item in report.likely_resolver_stubs],
                 "max_hits": args.max_hits,
                 "summary_only": False,
             },
@@ -705,26 +737,40 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         f"egg={len(report.egg_markers)} "
         f"nop_sled={len(report.nop_sleds)} "
         f"decoder={len(report.decoder_loop_signatures)} "
+        f"xor_decoder={len(report.xor_decoder_loop_signatures)} "
+        f"add_decoder={len(report.additive_decoder_loop_signatures)} "
         f"api_hash={len(report.api_hash_constants)} "
-        f"hash_xref={len(report.api_hash_cross_references)}"
+        f"api_hash_loop={len(report.api_hash_loop_signatures)} "
+        f"hash_xref={len(report.api_hash_cross_references)} "
+        f"resolver_stub={len(report.likely_resolver_stubs)}"
     )
     print(
         f"windows={len(report.entropy_windows)} window={args.window} step={args.step} "
+        f"suspicious_windows={len(report.suspicious_entropy_windows)} "
         f"strings={len(report.printable_strings)} max_strings={args.max_strings} truncated={report.strings_truncated} max_hits={args.max_hits}"
     )
     for title, items in (
+        ("Architecture Fingerprints", report.architecture_fingerprints),
         ("PEB Walk", report.peb_walk_signatures),
         ("Segment Access", report.segment_access_signatures),
         ("Egg Markers", report.egg_markers),
         ("NOP Sleds", report.nop_sleds),
         ("Decoder Loops", report.decoder_loop_signatures),
+        ("XOR Decoder Loops", report.xor_decoder_loop_signatures),
+        ("Additive Decoder Loops", report.additive_decoder_loop_signatures),
+        ("API Hash Loops", report.api_hash_loop_signatures),
         ("API Hash Constants", report.api_hash_constants),
+        ("Likely Resolver Stubs", report.likely_resolver_stubs),
     ):
         if not items:
             continue
         print(f"[{title}]")
         for item in items[:10]:
             print(f"  +0x{item.offset:04x} {item.detail}")
+    if report.suspicious_entropy_windows:
+        print("[Suspicious Entropy Windows]")
+        for item in report.suspicious_entropy_windows[:10]:
+            print(f"  +0x{int(item['offset']):04x} size={item['size']} entropy={float(item['entropy']):.4f} label={item['label']}")
     if report.api_hash_cross_references:
         print("[Hash Cross-References]")
         for item in report.api_hash_cross_references[:10]:
@@ -734,6 +780,98 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         print("[Printable Strings]")
         for text in report.printable_strings[:10]:
             print(f"  {text}")
+    return ExitCodeMapper.SUCCESS
+
+
+def _cmd_trace(args: argparse.Namespace) -> int:
+    if args.steps <= 0:
+        raise ValueError("--steps must be a positive integer")
+    if args.stack_window < 0:
+        raise ValueError("--stack-window must be non-negative")
+    watch_registers = [item.strip().lower() for item in args.watch.split(",") if item.strip()]
+    base = _parse_int(args.base)
+    payload = _read_bytes(args.file)
+    result = trace_bytes(
+        payload,
+        arch=args.arch,
+        base=base,
+        steps=args.steps,
+        stack_window_slots=args.stack_window,
+        watch_registers=watch_registers,
+        explain_peb=args.explain_peb,
+    )
+
+    if args.json:
+        _json_success(
+            CommandId.TRACE_ANALYZE,
+            {
+                "file": str(pathlib.Path(args.file).resolve()),
+                "arch": result.arch,
+                "base": result.base,
+                "base_hex": f"0x{result.base:x}",
+                "steps_requested": result.steps_requested,
+                "steps_executed": result.steps_executed,
+                "stopped_reason": result.stopped_reason,
+                "final_registers": result.final_registers,
+                "write_summary": result.write_summary,
+                "watched_registers": watch_registers,
+                "stack_window_slots": args.stack_window,
+                "trace": [
+                    {
+                        "index": item.index,
+                        "address": item.address,
+                        "address_hex": f"0x{item.address:x}",
+                        "bytes": item.bytes_hex,
+                        "mnemonic": item.mnemonic,
+                        "operands": item.operands,
+                        "register_diff": item.register_diff,
+                        "stack_pointer_before": item.stack_pointer_before,
+                        "stack_pointer_before_hex": f"0x{item.stack_pointer_before:x}",
+                        "stack_pointer_after": item.stack_pointer_after,
+                        "stack_pointer_after_hex": f"0x{item.stack_pointer_after:x}",
+                        "stack_delta": item.stack_delta,
+                        "call_depth": item.call_depth,
+                        "notes": item.notes,
+                        "annotations": item.annotations,
+                        "writes": item.writes,
+                        "stack_window": item.stack_window,
+                        "watched_registers": item.watched_registers,
+                    }
+                    for item in result.trace
+                ],
+            },
+        )
+        return ExitCodeMapper.SUCCESS
+
+    print(
+        f"arch={result.arch} base=0x{result.base:x} steps_requested={result.steps_requested} "
+        f"steps_executed={result.steps_executed} stopped_reason={result.stopped_reason}"
+    )
+    print(
+        f"writes={result.write_summary['total_writes']} self_modifying={result.write_summary['self_modifying_writes']} "
+        f"write_classes={result.write_summary['by_class']}"
+    )
+    print("IDX  ADDR        INSTRUCTION                  ESP/RSP Δ  NOTES")
+    print("---  ----------  ---------------------------  ---------  ------------------------------")
+    for item in result.trace:
+        insn = item.mnemonic if not item.operands else f"{item.mnemonic} {item.operands}"
+        all_notes = item.notes + item.annotations
+        notes = ",".join(all_notes) if all_notes else "-"
+        print(f"{item.index:>3}  0x{item.address:08x}  {insn:<27}  {item.stack_delta:>8}  {notes}")
+        if item.watched_registers:
+            watch_text = " ".join(f"{name}={value}" for name, value in item.watched_registers.items())
+            print(f"     WATCH {watch_text}")
+        if item.writes:
+            for write in item.writes:
+                extra = " self_modifying" if write["self_modifying"] else ""
+                print(
+                    f"     WRITE {write['address_hex']} size={write['size']} value={write['value_hex']} "
+                    f"class={write['classification']}{extra}"
+                )
+        if item.stack_window:
+            print("     STACK")
+            for row in item.stack_window:
+                print(f"       {row['address_hex']:>10}  {row['value_hex']}")
     return ExitCodeMapper.SUCCESS
 
 
@@ -838,6 +976,7 @@ def build_parser() -> argparse.ArgumentParser:
     disasm_cmd.add_argument("file")
     disasm_cmd.add_argument("--arch", default="x86", choices=["x86", "x64"])
     disasm_cmd.add_argument("--base", default="0x0", help="base address (hex or decimal)")
+    disasm_cmd.add_argument("--limit", type=int, default=None, help="maximum number of instruction rows")
     disasm_cmd.add_argument("--json", action="store_true", help="emit JSON")
     disasm_cmd.set_defaults(handler=_cmd_disasm)
 
@@ -854,6 +993,17 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_cmd.add_argument("--summary-only", action="store_true")
     analyze_cmd.add_argument("--json", action="store_true", help="emit JSON")
     analyze_cmd.set_defaults(handler=_cmd_analyze)
+
+    trace_cmd = sub.add_parser("trace", help="Educational x86/x64 shellcode execution tracing")
+    trace_cmd.add_argument("file")
+    trace_cmd.add_argument("--arch", default="x86", choices=["x86", "x64"])
+    trace_cmd.add_argument("--base", default="0x1000", help="base address (hex or decimal)")
+    trace_cmd.add_argument("--steps", type=int, default=100, help="instruction execution limit")
+    trace_cmd.add_argument("--stack-window", type=int, default=0, help="stack pointer slots to display (x86=dwords, x64=qwords)")
+    trace_cmd.add_argument("--watch", default="", help="comma-separated register list to project per step")
+    trace_cmd.add_argument("--explain-peb", action="store_true", help="annotate likely PEB/export resolver behavior")
+    trace_cmd.add_argument("--json", action="store_true", help="emit JSON")
+    trace_cmd.set_defaults(handler=_cmd_trace)
 
     return parser
 

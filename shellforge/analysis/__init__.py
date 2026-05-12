@@ -12,6 +12,7 @@ from shellforge.analysis.pe_exports import (
     resolve_export_by_name,
 )
 from shellforge.analysis.printable import is_mostly_printable
+from shellforge.analysis.trace import TraceResult, TraceStep, trace_bytes
 
 __all__ = [
     "contains_badchars",
@@ -28,4 +29,7 @@ __all__ = [
     "parse_pe32_exports_from_path",
     "resolve_export_by_hash",
     "resolve_export_by_name",
+    "TraceResult",
+    "TraceStep",
+    "trace_bytes",
 ]
