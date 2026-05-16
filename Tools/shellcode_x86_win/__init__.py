@@ -68,8 +68,9 @@ from .builders import (
     custom_code,
     bindshell_code,
     revshell_code,
+    loader_code,
 )
-from .assembler import assemble
+from .assembler import assemble, assemble64
 
 __all__ = [
     # hashing
@@ -84,7 +85,7 @@ __all__ = [
     'snippet_wsa_init', 'snippet_wsa_socket_tcp',
     'snippet_sockaddr_bind', 'snippet_bind_listen_accept', 'snippet_wsaconnect',
     # builders
-    'custom_code', 'bindshell_code', 'revshell_code',
+    'custom_code', 'bindshell_code', 'revshell_code', 'loader_code',
     # assembler
-    'assemble',
+    'assemble', 'assemble64',
 ]
