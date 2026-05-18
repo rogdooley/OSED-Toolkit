@@ -10,8 +10,8 @@ This folder contains imported documentation for the Windows x86 shellcode packag
 
 ## Runner Location
 
-- Script: `/Users/dooley/Documents/GithubClone/OSED-Toolkit/Exploits/windows_x86/skeleton.py`
-- Package: `/Users/dooley/Documents/GithubClone/OSED-Toolkit/Tools/shellcode_x86_win`
+- Script: `/OSED-Toolkit/Exploits/windows_x86/skeleton.py`
+- Package: `/OSED-Toolkit/Tools/shellcode_x86_win`
 
 ## Common Commands
 
