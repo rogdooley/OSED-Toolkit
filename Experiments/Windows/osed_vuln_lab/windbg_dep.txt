@@ -1,0 +1,38 @@
+OSED WinDbg Commands - dep Profile (VM-Only)
+============================================
+
+Target profile
+- dep: /GS- /DYNAMICBASE:NO /NXCOMPAT
+
+Launch
+- windbg -g -G osed_vulnsvc.exe 9999
+
+Setup
+- .symfix
+- .reload /f
+- sxe av
+
+Focus
+- DEP-aware crash triage and ROP preparation for OP_ROP.
+
+Commands
+- !analyze -v
+- r
+- kb
+- dd esp L60
+- u eip-20 L40
+
+Module review
+- lm
+- lmv m osed_vulnsvc
+- lmv m osedhelper
+
+VirtualProtect verification
+- bp kernel32!VirtualProtect
+- g
+- r
+- dd esp L20
+- g
+
+Notes
+- Use user-maintained gadget JSON and scaffold placeholders.

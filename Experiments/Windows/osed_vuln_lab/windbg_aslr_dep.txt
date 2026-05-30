@@ -1,0 +1,39 @@
+OSED WinDbg Commands - aslr_dep Profile (VM-Only)
+=================================================
+
+Target profile
+- aslr_dep: /GS- /DYNAMICBASE /NXCOMPAT
+
+Launch
+- windbg -g -G osed_vulnsvc.exe 9999
+
+Setup
+- .symfix
+- .reload /f
+- sxe av
+
+Focus
+- Leak-assisted module base discovery + DEP-aware control flow.
+
+Commands
+- !analyze -v
+- r
+- kb
+- dd esp L60
+
+Leak workflow
+- Trigger OP_LEAK from python/protocol_smoketest.py.
+- Record leaked pointer and map to module:
+  - lm
+  - lmv m osedhelper
+
+ASLR-aware review
+- Re-check module bases each launch.
+- Recompute absolute addresses from leaked/module base values.
+
+VirtualProtect verification
+- bp kernel32!VirtualProtect
+- g
+- r
+- dd esp L20
+- g

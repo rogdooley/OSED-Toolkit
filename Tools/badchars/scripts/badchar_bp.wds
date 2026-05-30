@@ -1,0 +1,61 @@
+; =============================================================================
+; badchar_bp.wds  —  WinDbg Bad Char Automation Script
+;
+; SETUP (run once in WinDbg before loading this script):
+;   1. Attach to / launch the vulnerable process.
+;   2. Load this script:  $$>< C:\path\to\badchar_bp.wds
+;   3. Run auto_badchars.py on the attacker machine.
+;
+; The script will:
+;   - Break at the target copy function
+;   - Save the destination pointer BEFORE gu unwinds the frame
+;   - Dump the destination buffer after the copy completes
+;   - Rename to dump.bin atomically so Python never reads a partial file
+;   - Continue automatically
+;
+; EDIT the two lines marked CONFIGURE below before loading.
+; =============================================================================
+
+
+; --- CONFIGURE: set the dump directory ---
+; Must match --dump argument in auto_badchars.py
+as /ma DUMPDIR C:\badchar
+
+
+; --- CONFIGURE: set the function and buffer size ---
+; Common choices:
+;   msvcrt!strcpy        esp+4 = dst,  esp+8 = src
+;   msvcrt!strncpy       esp+4 = dst,  esp+8 = src,  esp+C = count
+;   msvcrt!memcpy        esp+4 = dst,  esp+8 = src,  esp+C = count
+;   ws2_32!recv          esp+4 = sock, esp+8 = buf,   esp+C = len  (break after gu: buf is esp+8 at entry)
+;
+; Buffer size: L?200 = 0x200 (512) bytes. Adjust if your test sequence is larger.
+
+bp msvcrt!strcpy "r @$t0 = poi(@esp+4); gu; .writemem ${DUMPDIR}\tmp.bin @$t0 L?200; .shell cmd /c move /Y ${DUMPDIR}\tmp.bin ${DUMPDIR}\dump.bin; g"
+
+
+; --- UNCOMMENT to use recv instead (breaks after recv returns, buf ptr in $t0) ---
+; bp ws2_32!recv "r @$t0 = poi(@esp+8); gu; .writemem ${DUMPDIR}\tmp.bin @$t0 L?200; .shell cmd /c move /Y ${DUMPDIR}\tmp.bin ${DUMPDIR}\dump.bin; g"
+
+
+; Create the dump directory and start running
+.shell cmd /c mkdir ${DUMPDIR} 2>nul
+g
+
+
+; =============================================================================
+; IMPORTANT NOTES
+;
+; $t0 saves the dst pointer at function ENTRY, before gu unwinds the frame.
+; Using poi(@esp+4) AFTER gu would read the caller's frame — wrong address.
+;
+; The rename (move /Y tmp.bin dump.bin) is the sync point. Python polls for
+; dump.bin and never sees tmp.bin, so no partial reads.
+;
+; Dump AFTER the last transformation, not after recv. If the app URL-decodes,
+; base64-decodes, or normalizes case before the vulnerable copy, break at the
+; copy — not at recv.
+;
+; For cdb.exe (no GUI, easier to pipe from Python):
+;   cdb.exe -o -g -G -c "$$>< C:\badchar\badchar_bp.wds" vulnerable.exe
+; =============================================================================

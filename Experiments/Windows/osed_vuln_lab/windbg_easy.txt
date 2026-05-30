@@ -1,0 +1,38 @@
+OSED WinDbg Commands - easy Profile (VM-Only)
+=============================================
+
+Target profile
+- easy: /GS- /DYNAMICBASE:NO /NXCOMPAT:NO
+
+Launch
+- windbg -g -G osed_vulnsvc.exe 9999
+
+Setup
+- .symfix
+- .reload /f
+- sxe av
+
+Focus
+- Fast EIP control and offset validation on OP_STACK.
+
+Commands
+- !analyze -v
+- r
+- kb
+- dd esp L60
+- u eip-20 L40
+
+Offset workflow
+- Send cyclic pattern from python/exploit_scaffold.py to OP_STACK.
+- On crash:
+  - r eip
+  - dd esp L100
+
+Badchar workflow
+- Send scaffold badchar payload.
+- Inspect:
+  - db esp L100
+  - db <buffer_address> L100
+
+Notes
+- Keep payloads benign and local VM only.

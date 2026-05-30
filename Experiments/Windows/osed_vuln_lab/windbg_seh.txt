@@ -1,0 +1,34 @@
+OSED WinDbg Commands - seh Profile (VM-Only)
+============================================
+
+Target profile
+- seh: /GS- /SAFESEH:NO
+
+Launch
+- windbg -g -G osed_vulnsvc.exe 9999
+
+Setup
+- .symfix
+- .reload /f
+- sxe av
+
+Focus
+- SEH overwrite workflow on OP_SEH.
+
+Commands
+- !analyze -v
+- r
+- kb
+- dd esp L80
+
+SEH-specific checks
+- Trigger OP_SEH with cyclic pattern.
+- Record crash context and walk exception chain.
+- Useful views:
+  - .exr -1
+  - .ecxr
+  - r
+  - dd esp L100
+
+Notes
+- Handler intentionally forces a deterministic access violation path.

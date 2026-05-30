@@ -1,0 +1,24 @@
+{
+  "modules": {
+    "osedhelper.dll": {
+      "base": "0x10000000",
+      "aslr": false,
+      "rebase": false,
+      "safeseh": false,
+      "nxcompat": false
+    }
+  },
+  "gadgets": {
+    "pivot_or_align": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_ecx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_edx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_ebx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_edi": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_esi": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "pop_ebp": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "mov_ptr_esi_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "virtualprotect_ptr": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
+    "call_eax_or_jmp_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""}
+  }
+}

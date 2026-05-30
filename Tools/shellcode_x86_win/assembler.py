@@ -56,3 +56,19 @@ def assemble64(code: str) -> tuple:
     Returns (shellcode_bytearray, instruction_count).
     """
     return _assemble(code, mode_32=False)
+
+
+def check_bad_chars(shellcode, bad_chars):
+    """
+    Return list of (offset, byte_value) for every byte in *shellcode*
+    that appears in *bad_chars*.  Empty list = clean.
+
+    Example::
+
+        hits = check_bad_chars(sc, b'\\x00\\x0a\\x0d')
+        if hits:
+            for offset, val in hits:
+                print(f'  0x{offset:04x}: 0x{val:02x}')
+    """
+    bad_set = set(bad_chars)
+    return [(i, b) for i, b in enumerate(shellcode) if b in bad_set]
