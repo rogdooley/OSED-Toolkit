@@ -79,7 +79,6 @@ def test_start_builds_expected_invocation(monkeypatch):
     assert captured["args"] == [
         "cdb.exe",
         "-o",
-        "-g",
         "-G",
         "-cf",
         "generated.wds",

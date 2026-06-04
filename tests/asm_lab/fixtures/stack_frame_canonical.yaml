@@ -1,0 +1,505 @@
+metadata:
+  title: Stack Frame - Canonical x86 Prologue
+  summary: Show how a standard x86 function prologue establishes a frame pointer and reserves local stack space.
+  pedagogical_objective: Teach how ESP and EBP define frame structure so arguments, the return address, the saved frame pointer, and locals can be identified by role.
+  architecture: x86
+  tags:
+    - stack-frames
+    - ebp
+    - esp
+    - frame-layout
+initial_state:
+  architecture: x86
+  registers:
+    - name: ebp
+      width_bits: 32
+      value: 1245008
+    - name: esp
+      width_bits: 32
+      value: 1244992
+    - name: eip
+      width_bits: 32
+      value: 4206592
+  memory_regions:
+    - start_address: 1244956
+      bytes_value:
+        data: [
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          37, 16, 64, 0,
+          65, 65, 65, 65
+        ]
+      label: stack-frame-window
+      notes:
+        - 0x0012ff40 contains the return address.
+        - 0x0012ff44 contains the first argument.
+  stack_pointer_register: esp
+  instruction_pointer_register: eip
+  annotations:
+    - ESP initially points at the return address pushed by call.
+    - EBP still holds the caller frame pointer.
+steps:
+  - instruction: push ebp
+    explanation_focus:
+      - frame setup
+      - stack growth
+    expected_learning_points:
+      - The old frame pointer is preserved on the stack before a new frame is established.
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [85]
+      execution_trace:
+        instruction: push ebp
+        operands: [ebp]
+        reads: []
+        writes:
+          - address: 1244988
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [80, 255, 18, 0]
+            width: dword
+        register_changes: []
+        stack_changes:
+          - stack_pointer_register: esp
+            before: 1244992
+            after: 1244988
+            pushed_bytes:
+              data: [80, 255, 18, 0]
+            popped_bytes:
+              data: []
+        state_diff:
+          register_diffs: []
+          memory_diffs:
+            - address: 1244988
+              before_bytes:
+                data: [0, 0, 0, 0]
+              after_bytes:
+                data: [80, 255, 18, 0]
+              width: dword
+          stack_diffs:
+            - stack_pointer_register: esp
+              before: 1244992
+              after: 1244988
+              pushed_bytes:
+                data: [80, 255, 18, 0]
+              popped_bytes:
+                data: []
+      state_diff:
+        register_diffs: []
+        memory_diffs:
+          - address: 1244988
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [80, 255, 18, 0]
+            width: dword
+        stack_diffs:
+          - stack_pointer_register: esp
+            before: 1244992
+            after: 1244988
+            pushed_bytes:
+              data: [80, 255, 18, 0]
+            popped_bytes:
+              data: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - stack.pointer_moved
+          - stack.memory_written
+        why_keys:
+          - frame_setup
+          - stack_growth
+        interpretation_keys:
+          - saved_frame_pointer
+      before_state:
+        label: before-push-ebp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1245008
+            - name: esp
+              width_bits: 32
+              value: 1244992
+            - name: eip
+              width_bits: 32
+              value: 4206592
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+              notes:
+                - 0x0012ff40 contains the return address.
+                - 0x0012ff44 contains the first argument.
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+          annotations:
+            - ESP initially points at the return address pushed by call.
+            - EBP still holds the caller frame pointer.
+      after_state:
+        label: after-push-ebp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1245008
+            - name: esp
+              width_bits: 32
+              value: 1244988
+            - name: eip
+              width_bits: 32
+              value: 4206593
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: mov ebp, esp
+    explanation_focus:
+      - frame pointer established
+      - argument and return address locations
+    expected_learning_points:
+      - Once EBP copies ESP, offsets from EBP define the frame layout.
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [139, 236]
+      execution_trace:
+        instruction: mov ebp, esp
+        operands: [ebp, esp]
+        reads: []
+        writes: []
+        register_changes:
+          - register_name: ebp
+            before: 1245008
+            after: 1244988
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: ebp
+              before: 1245008
+              after: 1244988
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+      state_diff:
+        register_diffs:
+          - register_name: ebp
+            before: 1245008
+            after: 1244988
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - register.updated
+        why_keys:
+          - frame_pointer_established
+        interpretation_keys:
+          - return_address_location
+          - argument_location
+      before_state:
+        label: before-mov-ebp-esp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1245008
+            - name: esp
+              width_bits: 32
+              value: 1244988
+            - name: eip
+              width_bits: 32
+              value: 4206593
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-mov-ebp-esp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244988
+            - name: eip
+              width_bits: 32
+              value: 4206595
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: sub esp, 0x20
+    explanation_focus:
+      - local storage allocation
+      - frame roles
+    expected_learning_points:
+      - Reserving stack space creates room for locals below EBP while leaving saved EBP, return address, and arguments above it.
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [131, 236, 32]
+      execution_trace:
+        instruction: sub esp, 0x20
+        operands: [esp, "0x20"]
+        reads: []
+        writes: []
+        register_changes:
+          - register_name: esp
+            before: 1244988
+            after: 1244956
+            width_bits: 32
+        stack_changes:
+          - stack_pointer_register: esp
+            before: 1244988
+            after: 1244956
+            pushed_bytes:
+              data: []
+            popped_bytes:
+              data: []
+        state_diff:
+          register_diffs:
+            - register_name: esp
+              before: 1244988
+              after: 1244956
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs:
+            - stack_pointer_register: esp
+              before: 1244988
+              after: 1244956
+              pushed_bytes:
+                data: []
+              popped_bytes:
+                data: []
+      state_diff:
+        register_diffs:
+          - register_name: esp
+            before: 1244988
+            after: 1244956
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs:
+          - stack_pointer_register: esp
+            before: 1244988
+            after: 1244956
+            pushed_bytes:
+              data: []
+            popped_bytes:
+              data: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - register.updated
+        why_keys:
+          - stack_growth
+          - local_storage_allocated
+        interpretation_keys:
+          - local_storage_allocated
+          - saved_frame_pointer
+          - return_address_location
+          - argument_location
+      before_state:
+        label: before-sub-esp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244988
+            - name: eip
+              width_bits: 32
+              value: 4206595
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-sub-esp
+        machine_state:
+          architecture: x86
+          registers:
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4206598
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  65, 65, 65, 65
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      inspect_views:
+        - title: Stack Frame Inspection
+          subject: stack-frame
+          raw_value: 1244988
+          sections:
+            - label: Stack Range
+              base_pointer_value: 1244988
+              stack_pointer_value: 1244956
+              entries:
+                - address: 1244980
+                  offset_from_ebp: -8
+                  raw_bytes:
+                    data: [0, 0, 0, 0]
+                  numeric_value: 0
+                  symbolic_value: local_2
+                  role: local
+                  label: local_2
+                - address: 1244984
+                  offset_from_ebp: -4
+                  raw_bytes:
+                    data: [0, 0, 0, 0]
+                  numeric_value: 0
+                  symbolic_value: local_1
+                  role: local
+                  label: local_1
+                - address: 1244988
+                  offset_from_ebp: 0
+                  raw_bytes:
+                    data: [80, 255, 18, 0]
+                  numeric_value: 1245008
+                  symbolic_value: saved caller frame
+                  role: saved_ebp
+                - address: 1244992
+                  offset_from_ebp: 4
+                  raw_bytes:
+                    data: [37, 16, 64, 0]
+                  numeric_value: 4198437
+                  symbolic_value: caller+0x25
+                  role: return_address
+                - address: 1244996
+                  offset_from_ebp: 8
+                  raw_bytes:
+                    data: [65, 65, 65, 65]
+                  numeric_value: 1094795585
+                  symbolic_value: argument_1
+                  role: argument
+                  label: argument_1
+          common_meaning: The stack frame now has locals below EBP and caller data above EBP.
+final_stack_pointer: 1244956
+final_memory_at_stack_pointer:
+  data: []
+notes:
+  - Hand-authored canonical stack frame fixture created before executor support.
+  - Role-aware inspect output is a hard acceptance criterion for this lesson.

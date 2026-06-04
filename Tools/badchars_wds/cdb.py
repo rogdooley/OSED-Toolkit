@@ -48,7 +48,16 @@ class CDBDriver(object):
         if self._log_path:
             self._log_handle = open(self._log_path, "w", encoding="utf-8")
 
-        args = [self._cdb_path, "-o", "-g", "-G", "-cf", self._script_path]
+        # -o  : debug child processes spawned by the target
+        # -G  : ignore the final breakpoint at process exit (clean shutdown)
+        # -cf : run the script at the initial loader break, then let the
+        #       script's own "g" command continue execution
+        #
+        # NOTE: -g ("ignore initial breakpoint") is intentionally absent.
+        # -g would auto-continue past the initial break *before* the -cf
+        # script gets a chance to run, so bp/bu commands in the script would
+        # never be issued and no breakpoints would ever fire.
+        args = [self._cdb_path, "-o", "-G", "-cf", self._script_path]
         args.extend(self._target_command)
 
         self._proc = subprocess.Popen(
