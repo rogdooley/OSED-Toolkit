@@ -71,6 +71,21 @@ The roadmap for unfinished modules lives in [roadmap.md](roadmap.md). Each
 roadmap entry lists the questions that will drive those exercises so you can
 preview what's coming.
 
+## WinDbg Deep-Dive Series
+
+A dedicated hands-on series focused on x86 WinDbg technique, from orientation
+through PEB walking, PE export resolution, and hash-based API identification.
+Uses the osed-windbg toolkit (`osed-windbg/`) for cross-verification.
+
+| Series | Status | Focus |
+|---|---|---|
+| [WinDbg x86](windbg-x86/) | Built | Orientation → C code → TEB/PEB → module list → PE exports → hashes |
+| [WinDbg x64](windbg-x64/) | Built (companion) | Calling convention, GS register, wider offsets — deltas from x86 only |
+
+These series are self-contained and can be worked independently of Modules 01–05
+above. They assume less prerequisite knowledge than Module 01 and are a good
+starting point if WinDbg itself is the blocker.
+
 ## One ground rule
 
 When an exercise asks you to figure something out, do not look it up first.
