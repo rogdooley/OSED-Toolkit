@@ -7,6 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "capstone>=5.0.6",
     "keystone>=29.0.1",
+    "pydantic>=2.11.7",
+    "pyyaml>=6.0.2",
+    "rich>=14.2.0",
+    "textual>=6.6.0",
 ]
 
 [project.scripts]
@@ -18,4 +22,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["Tools*", "shellforge*"]
+include = ["Tools*", "asm_lab*", "shellforge*"]

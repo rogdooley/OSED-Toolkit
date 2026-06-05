@@ -1,0 +1,490 @@
+metadata:
+  title: Stack Strings - calc.exe
+  summary: Build a null-terminated ASCII string on the stack using little-endian pushes.
+  pedagogical_objective: Teach how x86 shellcode constructs stack strings and why the bytes appear reversed in immediate operands.
+  architecture: x86
+  tags:
+    - stack-strings
+    - little-endian
+    - shellcode
+initial_state:
+  architecture: x86
+  registers:
+    - name: eax
+      width_bits: 32
+      value: 1094795585
+    - name: esp
+      width_bits: 32
+      value: 1244996
+    - name: eip
+      width_bits: 32
+      value: 4198400
+  memory_regions:
+    - start_address: 1244992
+      bytes_value:
+        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      label: stack-window
+      notes:
+        - Empty stack window used for the lesson fixture.
+  stack_pointer_register: esp
+  instruction_pointer_register: eip
+  annotations:
+    - Stack grows downward.
+    - EAX starts nonzero so xor-zeroing is visible.
+steps:
+  - instruction: xor eax, eax
+    explanation_focus:
+      - register clearing
+      - shellcode null avoidance
+    expected_learning_points:
+      - XOR self-zeroing clears a register without a zero immediate.
+    prediction_prompt:
+      prompt: Predict the value of EAX after XORing it with itself.
+      focus:
+        - register state
+        - shellcode constraints
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [49, 192]
+      execution_trace:
+        instruction: xor eax, eax
+        operands: [eax, eax]
+        reads: []
+        writes: []
+        register_changes:
+          - register_name: eax
+            before: 1094795585
+            after: 0
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: eax
+              before: 1094795585
+              after: 0
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+        notes:
+          - Register-only transition.
+      state_diff:
+        register_diffs:
+          - register_name: eax
+            before: 1094795585
+            after: 0
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - register.updated
+        why_keys:
+          - xor.zeroing
+        interpretation_keys:
+          - register.numeric_value
+        shellcode_relevance_keys:
+          - xor_zeroing
+      state_snapshot:
+        label: after-xor
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: esp
+              width_bits: 32
+              value: 1244996
+            - name: eip
+              width_bits: 32
+              value: 4198402
+          memory_regions:
+            - start_address: 1244992
+              bytes_value:
+                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              label: stack-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: push eax
+    explanation_focus:
+      - null terminator
+      - stack growth
+    expected_learning_points:
+      - PUSH writes four zero bytes because EAX was zeroed first.
+    prediction_prompt:
+      prompt: Predict where the null terminator will appear after pushing EAX onto the stack.
+      focus:
+        - stack growth
+        - null termination
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [80]
+      execution_trace:
+        instruction: push eax
+        operands: [eax]
+        reads: []
+        writes:
+          - address: 1244992
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [0, 0, 0, 0]
+            width: dword
+        register_changes: []
+        stack_changes:
+          - stack_pointer_register: esp
+            before: 1244996
+            after: 1244992
+            pushed_bytes:
+              data: [0, 0, 0, 0]
+            popped_bytes:
+              data: []
+        state_diff:
+          register_diffs: []
+          memory_diffs:
+            - address: 1244992
+              before_bytes:
+                data: [0, 0, 0, 0]
+              after_bytes:
+                data: [0, 0, 0, 0]
+              width: dword
+          stack_diffs:
+            - stack_pointer_register: esp
+              before: 1244996
+              after: 1244992
+              pushed_bytes:
+                data: [0, 0, 0, 0]
+              popped_bytes:
+                data: []
+      state_diff:
+        register_diffs: []
+        memory_diffs:
+          - address: 1244992
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [0, 0, 0, 0]
+            width: dword
+        stack_diffs:
+          - stack_pointer_register: esp
+            before: 1244996
+            after: 1244992
+            pushed_bytes:
+              data: [0, 0, 0, 0]
+            popped_bytes:
+              data: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - stack.pointer_moved
+          - stack.memory_written
+        why_keys:
+          - push.grows_down
+        interpretation_keys:
+          - bytes.hex_view
+          - integer.little_endian
+        shellcode_relevance_keys:
+          - stack_string_construction
+      inspect_views:
+        - title: ESP Inspection
+          subject: esp
+          raw_value: 1244992
+          sections:
+            - label: Raw Value
+              format: hex
+              value: "0x0012ff40"
+            - label: Hex Bytes
+              format: hex
+              value: "00 00 00 00"
+              raw_bytes:
+                data: [0, 0, 0, 0]
+            - label: ASCII
+              format: ascii
+              value: "...."
+              raw_bytes:
+                data: [0, 0, 0, 0]
+          common_meaning: Null terminator buffer at the top of the stack.
+      state_snapshot:
+        label: after-push-eax
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: esp
+              width_bits: 32
+              value: 1244992
+            - name: eip
+              width_bits: 32
+              value: 4198403
+          memory_regions:
+            - start_address: 1244992
+              bytes_value:
+                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+              label: stack-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: push 0x6578652e
+    explanation_focus:
+      - little-endian immediate layout
+      - stack string construction
+    expected_learning_points:
+      - The immediate bytes are pushed in memory order, producing ".exe" at the new stack top.
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [104, 46, 101, 120, 101]
+      execution_trace:
+        instruction: push 0x6578652e
+        operands: ["0x6578652e"]
+        reads: []
+        writes:
+          - address: 1244988
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [46, 101, 120, 101]
+            width: dword
+        register_changes: []
+        stack_changes:
+          - stack_pointer_register: esp
+            before: 1244992
+            after: 1244988
+            pushed_bytes:
+              data: [46, 101, 120, 101]
+            popped_bytes:
+              data: []
+        state_diff:
+          register_diffs: []
+          memory_diffs:
+            - address: 1244988
+              before_bytes:
+                data: [0, 0, 0, 0]
+              after_bytes:
+                data: [46, 101, 120, 101]
+              width: dword
+          stack_diffs:
+            - stack_pointer_register: esp
+              before: 1244992
+              after: 1244988
+              pushed_bytes:
+                data: [46, 101, 120, 101]
+              popped_bytes:
+                data: []
+      state_diff:
+        register_diffs: []
+        memory_diffs:
+          - address: 1244988
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [46, 101, 120, 101]
+            width: dword
+        stack_diffs:
+          - stack_pointer_register: esp
+            before: 1244992
+            after: 1244988
+            pushed_bytes:
+              data: [46, 101, 120, 101]
+            popped_bytes:
+              data: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - stack.pointer_moved
+          - stack.memory_written
+        why_keys:
+          - push.grows_down
+        interpretation_keys:
+          - bytes.hex_view
+          - ascii.pointer_string
+          - integer.little_endian
+        shellcode_relevance_keys:
+          - stack_string_construction
+      inspect_views:
+        - title: ESP Inspection
+          subject: esp
+          raw_value: 1244988
+          sections:
+            - label: Raw Value
+              format: hex
+              value: "0x0012ff3c"
+            - label: Hex Bytes
+              format: hex
+              value: "2e 65 78 65"
+              raw_bytes:
+                data: [46, 101, 120, 101]
+            - label: ASCII
+              format: ascii
+              value: ".exe"
+              raw_bytes:
+                data: [46, 101, 120, 101]
+          common_meaning: Tail fragment of the target string stored on the stack.
+      state_snapshot:
+        label: after-push-exe
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: esp
+              width_bits: 32
+              value: 1244988
+            - name: eip
+              width_bits: 32
+              value: 4198408
+          memory_regions:
+            - start_address: 1244988
+              bytes_value:
+                data: [46, 101, 120, 101, 0, 0, 0, 0, 0, 0, 0, 0]
+              label: stack-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: push 0x636c6163
+    explanation_focus:
+      - final string assembly
+      - little-endian order
+    expected_learning_points:
+      - A second push completes the stack string so ESP points at "calc.exe\\x00".
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [104, 99, 97, 108, 99]
+      execution_trace:
+        instruction: push 0x636c6163
+        operands: ["0x636c6163"]
+        reads: []
+        writes:
+          - address: 1244984
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [99, 97, 108, 99]
+            width: dword
+        register_changes: []
+        stack_changes:
+          - stack_pointer_register: esp
+            before: 1244988
+            after: 1244984
+            pushed_bytes:
+              data: [99, 97, 108, 99]
+            popped_bytes:
+              data: []
+        state_diff:
+          register_diffs: []
+          memory_diffs:
+            - address: 1244984
+              before_bytes:
+                data: [0, 0, 0, 0]
+              after_bytes:
+                data: [99, 97, 108, 99]
+              width: dword
+          stack_diffs:
+            - stack_pointer_register: esp
+              before: 1244988
+              after: 1244984
+              pushed_bytes:
+                data: [99, 97, 108, 99]
+              popped_bytes:
+                data: []
+      state_diff:
+        register_diffs: []
+        memory_diffs:
+          - address: 1244984
+            before_bytes:
+              data: [0, 0, 0, 0]
+            after_bytes:
+              data: [99, 97, 108, 99]
+            width: dword
+        stack_diffs:
+          - stack_pointer_register: esp
+            before: 1244988
+            after: 1244984
+            pushed_bytes:
+              data: [99, 97, 108, 99]
+            popped_bytes:
+              data: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - stack.pointer_moved
+          - stack.memory_written
+        why_keys:
+          - push.grows_down
+        interpretation_keys:
+          - bytes.hex_view
+          - ascii.pointer_string
+          - integer.little_endian
+        shellcode_relevance_keys:
+          - stack_string_construction
+      inspect_views:
+        - title: ESP Inspection
+          subject: esp
+          raw_value: 1244984
+          sections:
+            - label: Raw Value
+              format: hex
+              value: "0x0012ff38"
+            - label: Hex Bytes
+              format: hex
+              value: "63 61 6c 63 2e 65 78 65 00 00 00 00"
+              raw_bytes:
+                data: [99, 97, 108, 99, 46, 101, 120, 101, 0, 0, 0, 0]
+            - label: ASCII
+              format: ascii
+              value: "calc.exe...."
+              raw_bytes:
+                data: [99, 97, 108, 99, 46, 101, 120, 101, 0, 0, 0, 0]
+          common_meaning: ESP now points to the null-terminated stack string for calc.exe.
+          shellcode_relevance:
+            - key: stack_string_construction
+              label: Stack String Construction
+              text: Shellcode can pass this stack pointer directly to an API expecting a C string.
+      state_snapshot:
+        label: after-push-calc
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: esp
+              width_bits: 32
+              value: 1244984
+            - name: eip
+              width_bits: 32
+              value: 4198413
+          memory_regions:
+            - start_address: 1244984
+              bytes_value:
+                data: [99, 97, 108, 99, 46, 101, 120, 101, 0, 0, 0, 0]
+              label: stack-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+final_stack_pointer: 1244984
+final_memory_at_stack_pointer:
+  data: [99, 97, 108, 99, 46, 101, 120, 101, 0, 0, 0, 0]
+notes:
+  - Hand-authored golden fixture created before runtime implementation.
+  - Pre-baked instruction bytes are included intentionally without assembler integration.

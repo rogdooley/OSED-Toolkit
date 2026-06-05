@@ -1,0 +1,323 @@
+metadata:
+  title: Pointer Lesson - calc DWORD
+  summary: Load a pointer into EAX, then dereference it into EBX to show how bytes in memory become a value in a register.
+  pedagogical_objective: Teach pointer setup, dereferencing, little-endian interpretation, and inspect-driven memory understanding.
+  architecture: x86
+  tags:
+    - pointers
+    - dereference
+    - little-endian
+    - inspect
+initial_state:
+  architecture: x86
+  registers:
+    - name: eax
+      width_bits: 32
+      value: 0
+    - name: ebx
+      width_bits: 32
+      value: 0
+    - name: eip
+      width_bits: 32
+      value: 4198912
+  memory_regions:
+    - start_address: 8192
+      bytes_value:
+        data: [99, 97, 108, 99, 0, 0, 0, 0]
+      label: pointer-target
+      notes:
+        - Memory at 0x2000 contains the bytes for "calc".
+  stack_pointer_register: esp
+  instruction_pointer_register: eip
+  annotations:
+    - EAX will become a pointer.
+    - EBX will receive the dereferenced DWORD.
+steps:
+  - instruction: mov eax, 0x2000
+    explanation_focus:
+      - pointer setup
+      - register as address
+    expected_learning_points:
+      - A register can hold an address without reading memory yet.
+    prediction_prompt:
+      prompt: Predict what EAX represents after loading 0x2000 into it.
+      focus:
+        - register state
+        - address meaning
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [184, 0, 32, 0, 0]
+      execution_trace:
+        instruction: mov eax, 0x2000
+        operands: [eax, "0x2000"]
+        reads: []
+        writes: []
+        register_changes:
+          - register_name: eax
+            before: 0
+            after: 8192
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: eax
+              before: 0
+              after: 8192
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+        notes:
+          - Immediate value loaded into a general-purpose register.
+      state_diff:
+        register_diffs:
+          - register_name: eax
+            before: 0
+            after: 8192
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - register.updated
+        why_keys:
+          - pointer_setup
+          - address_vs_value
+        interpretation_keys:
+          - address_vs_value
+          - pointer_setup
+        shellcode_relevance_keys:
+          - pointer_setup
+      before_state:
+        label: before-mov-eax-imm
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: eip
+              width_bits: 32
+              value: 4198912
+          memory_regions:
+            - start_address: 8192
+              bytes_value:
+                data: [99, 97, 108, 99, 0, 0, 0, 0]
+              label: pointer-target
+              notes:
+                - Memory at 0x2000 contains the bytes for "calc".
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+          annotations:
+            - EAX will become a pointer.
+            - EBX will receive the dereferenced DWORD.
+      after_state:
+        label: after-mov-eax-imm
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 8192
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: eip
+              width_bits: 32
+              value: 4198917
+          memory_regions:
+            - start_address: 8192
+              bytes_value:
+                data: [99, 97, 108, 99, 0, 0, 0, 0]
+              label: pointer-target
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      inspect_views:
+        - title: Register Inspection
+          subject: eax
+          raw_value: 8192
+          sections:
+            - label: Raw Value
+              format: hex
+              value: "0x00002000"
+            - label: Interpretation
+              format: pointer
+              value: "Address"
+            - label: Dereference Target
+              format: hex
+              value: "0x00002000"
+          common_meaning: EAX now holds a pointer to the memory location at 0x2000.
+  - instruction: mov ebx, [eax]
+    explanation_focus:
+      - pointer dereference
+      - memory read
+      - data interpretation
+    expected_learning_points:
+      - Dereferencing EAX reads bytes from memory and loads the resulting DWORD into EBX.
+    prediction_prompt:
+      prompt: Predict which bytes at 0x2000 will be loaded into EBX and how they will be interpreted.
+      focus:
+        - memory read
+        - little-endian interpretation
+        - ASCII interpretation
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [139, 24]
+      execution_trace:
+        instruction: mov ebx, [eax]
+        operands: [ebx, "[eax]"]
+        reads:
+          - address: 8192
+            bytes_value:
+              data: [99, 97, 108, 99]
+            width: dword
+            pointer_source: eax
+        writes: []
+        register_changes:
+          - register_name: ebx
+            before: 0
+            after: 1668047203
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: ebx
+              before: 0
+              after: 1668047203
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+      state_diff:
+        register_diffs:
+          - register_name: ebx
+            before: 0
+            after: 1668047203
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+          - shellcode_relevance
+        what_changed_keys:
+          - memory_read
+          - register_updated_from_memory
+        why_keys:
+          - pointer_dereference
+        interpretation_keys:
+          - address_vs_value
+          - little_endian_interpretation
+        shellcode_relevance_keys:
+          - pointer_dereference
+      before_state:
+        label: before-mov-ebx-deref
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 8192
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: eip
+              width_bits: 32
+              value: 4198917
+          memory_regions:
+            - start_address: 8192
+              bytes_value:
+                data: [99, 97, 108, 99, 0, 0, 0, 0]
+              label: pointer-target
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-mov-ebx-deref
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 8192
+            - name: ebx
+              width_bits: 32
+              value: 1668047203
+            - name: eip
+              width_bits: 32
+              value: 4198919
+          memory_regions:
+            - start_address: 8192
+              bytes_value:
+                data: [99, 97, 108, 99, 0, 0, 0, 0]
+              label: pointer-target
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      inspect_views:
+        - title: Register Inspection
+          subject: eax
+          raw_value: 8192
+          sections:
+            - label: Raw Value
+              format: hex
+              value: "0x00002000"
+            - label: Interpretation
+              format: pointer
+              value: "Address"
+            - label: Dereference Target
+              format: hex
+              value: "0x00002000"
+          common_meaning: EAX holds the address of the bytes that will be read.
+        - title: Dereference Inspection
+          subject: "[eax]"
+          raw_value: 8192
+          sections:
+            - label: Address
+              format: hex
+              value: "0x00002000"
+            - label: Bytes
+              format: hex
+              value: "63 61 6c 63"
+              raw_bytes:
+                data: [99, 97, 108, 99]
+            - label: ASCII
+              format: ascii
+              value: "calc"
+              raw_bytes:
+                data: [99, 97, 108, 99]
+            - label: DWORD
+              format: unsigned
+              value: "0x636c6163"
+              raw_bytes:
+                data: [99, 97, 108, 99]
+          common_meaning: Dereferencing EAX reads the DWORD stored at address 0x2000.
+        - title: Raw Memory Inspection
+          subject: "0x2000"
+          raw_value: 8192
+          sections:
+            - label: Bytes
+              format: hex
+              value: "63 61 6c 63"
+              raw_bytes:
+                data: [99, 97, 108, 99]
+            - label: ASCII
+              format: ascii
+              value: "calc"
+              raw_bytes:
+                data: [99, 97, 108, 99]
+          common_meaning: Raw memory at 0x2000 contains the four bytes that become EBX.
+final_stack_pointer: 0
+final_memory_at_stack_pointer:
+  data: []
+notes:
+  - Hand-authored pointer lesson fixture created before mov implementation.
+  - This fixture justifies future support for mov reg, imm and mov reg, [reg].

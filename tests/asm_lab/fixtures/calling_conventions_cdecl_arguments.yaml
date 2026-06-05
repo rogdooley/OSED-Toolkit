@@ -1,0 +1,570 @@
+metadata:
+  title: Calling Conventions - cdecl Arguments
+  summary: Show how a cdecl callee reads stack arguments from positive EBP-relative offsets.
+  pedagogical_objective: Teach that the caller pushes arguments before call, the return address sits below them, and the callee accesses arguments through EBP-relative offsets.
+  architecture: x86
+  tags:
+    - calling-conventions
+    - cdecl
+    - arguments
+    - ebp
+initial_state:
+  architecture: x86
+  registers:
+    - name: eax
+      width_bits: 32
+      value: 0
+    - name: ebx
+      width_bits: 32
+      value: 0
+    - name: ecx
+      width_bits: 32
+      value: 0
+    - name: ebp
+      width_bits: 32
+      value: 1244988
+    - name: esp
+      width_bits: 32
+      value: 1244956
+    - name: eip
+      width_bits: 32
+      value: 4202496
+  memory_regions:
+    - start_address: 1244956
+      bytes_value:
+        data: [
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          0, 0, 0, 0,
+          80, 255, 18, 0,
+          37, 16, 64, 0,
+          17, 17, 17, 17,
+          34, 34, 34, 34,
+          51, 51, 51, 51
+        ]
+      label: stack-frame-window
+      notes:
+        - 0x0012ff40 contains the return address.
+        - 0x0012ff44 contains argument_1.
+        - 0x0012ff48 contains argument_2.
+        - 0x0012ff4c contains argument_3.
+  stack_pointer_register: esp
+  instruction_pointer_register: eip
+  annotations:
+    - The caller already pushed three cdecl arguments before call.
+    - The callee frame is already established with EBP as the stable anchor.
+steps:
+  - instruction: mov eax, [ebp+8]
+    explanation_focus:
+      - cdecl argument order
+      - ebp-relative access
+    expected_learning_points:
+      - In cdecl, the first argument is read from [EBP+8].
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [139, 69, 8]
+      execution_trace:
+        instruction: mov eax, [ebp+8]
+        operands: [eax, "[ebp+8]"]
+        reads:
+          - address: 1244996
+            bytes_value:
+              data: [17, 17, 17, 17]
+            width: dword
+            pointer_source: ebp
+            notes:
+              - offset +8 selects argument_1 in the canonical cdecl frame.
+        writes: []
+        register_changes:
+          - register_name: eax
+            before: 0
+            after: 286331153
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: eax
+              before: 0
+              after: 286331153
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+      state_diff:
+        register_diffs:
+          - register_name: eax
+            before: 0
+            after: 286331153
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - register_updated_from_memory
+          - memory_read
+        why_keys:
+          - caller_pushed_arguments
+          - ebp_relative_access
+        interpretation_keys:
+          - argument_location
+          - cdecl_argument_order
+      before_state:
+        label: before-read-argument-1
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 0
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: ecx
+              width_bits: 32
+              value: 0
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202496
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-read-argument-1
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 286331153
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: ecx
+              width_bits: 32
+              value: 0
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202499
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: mov ebx, [ebp+12]
+    explanation_focus:
+      - cdecl argument order
+      - ebp-relative access
+    expected_learning_points:
+      - In cdecl, the second argument is read from [EBP+12].
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [139, 93, 12]
+      execution_trace:
+        instruction: mov ebx, [ebp+12]
+        operands: [ebx, "[ebp+12]"]
+        reads:
+          - address: 1245000
+            bytes_value:
+              data: [34, 34, 34, 34]
+            width: dword
+            pointer_source: ebp
+            notes:
+              - offset +12 selects argument_2 in the canonical cdecl frame.
+        writes: []
+        register_changes:
+          - register_name: ebx
+            before: 0
+            after: 572662306
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: ebx
+              before: 0
+              after: 572662306
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+      state_diff:
+        register_diffs:
+          - register_name: ebx
+            before: 0
+            after: 572662306
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - register_updated_from_memory
+          - memory_read
+        why_keys:
+          - caller_pushed_arguments
+          - ebp_relative_access
+        interpretation_keys:
+          - argument_location
+          - cdecl_argument_order
+      before_state:
+        label: before-read-argument-2
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 286331153
+            - name: ebx
+              width_bits: 32
+              value: 0
+            - name: ecx
+              width_bits: 32
+              value: 0
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202499
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-read-argument-2
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 286331153
+            - name: ebx
+              width_bits: 32
+              value: 572662306
+            - name: ecx
+              width_bits: 32
+              value: 0
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202502
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+  - instruction: mov ecx, [ebp+16]
+    explanation_focus:
+      - cdecl argument order
+      - ebp-relative access
+    expected_learning_points:
+      - In cdecl, the third argument is read from [EBP+16].
+      - Arguments remain above the return address and saved frame pointer.
+    expected_output:
+      instruction_encoding:
+        bytes_value:
+          data: [139, 77, 16]
+      execution_trace:
+        instruction: mov ecx, [ebp+16]
+        operands: [ecx, "[ebp+16]"]
+        reads:
+          - address: 1245004
+            bytes_value:
+              data: [51, 51, 51, 51]
+            width: dword
+            pointer_source: ebp
+            notes:
+              - offset +16 selects argument_3 in the canonical cdecl frame.
+        writes: []
+        register_changes:
+          - register_name: ecx
+            before: 0
+            after: 858993459
+            width_bits: 32
+        stack_changes: []
+        state_diff:
+          register_diffs:
+            - register_name: ecx
+              before: 0
+              after: 858993459
+              width_bits: 32
+          memory_diffs: []
+          stack_diffs: []
+      state_diff:
+        register_diffs:
+          - register_name: ecx
+            before: 0
+            after: 858993459
+            width_bits: 32
+        memory_diffs: []
+        stack_diffs: []
+      explanation:
+        categories:
+          - what_changed
+          - why
+          - interpretation
+        what_changed_keys:
+          - register_updated_from_memory
+          - memory_read
+        why_keys:
+          - caller_pushed_arguments
+          - ebp_relative_access
+        interpretation_keys:
+          - argument_location
+          - cdecl_argument_order
+      before_state:
+        label: before-read-argument-3
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 286331153
+            - name: ebx
+              width_bits: 32
+              value: 572662306
+            - name: ecx
+              width_bits: 32
+              value: 0
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202502
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      after_state:
+        label: after-read-argument-3
+        machine_state:
+          architecture: x86
+          registers:
+            - name: eax
+              width_bits: 32
+              value: 286331153
+            - name: ebx
+              width_bits: 32
+              value: 572662306
+            - name: ecx
+              width_bits: 32
+              value: 858993459
+            - name: ebp
+              width_bits: 32
+              value: 1244988
+            - name: esp
+              width_bits: 32
+              value: 1244956
+            - name: eip
+              width_bits: 32
+              value: 4202505
+          memory_regions:
+            - start_address: 1244956
+              bytes_value:
+                data: [
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  0, 0, 0, 0,
+                  80, 255, 18, 0,
+                  37, 16, 64, 0,
+                  17, 17, 17, 17,
+                  34, 34, 34, 34,
+                  51, 51, 51, 51
+                ]
+              label: stack-frame-window
+          stack_pointer_register: esp
+          instruction_pointer_register: eip
+      inspect_views:
+        - title: Calling Convention Inspection
+          subject: stack-frame
+          raw_value: 1244988
+          sections:
+            - label: Stack Range
+              base_pointer_value: 1244988
+              stack_pointer_value: 1244956
+              entries:
+                - address: 1244980
+                  offset_from_ebp: -8
+                  raw_bytes:
+                    data: [0, 0, 0, 0]
+                  numeric_value: 0
+                  symbolic_value: local_2
+                  role: local
+                  label: local_2
+                - address: 1244984
+                  offset_from_ebp: -4
+                  raw_bytes:
+                    data: [0, 0, 0, 0]
+                  numeric_value: 0
+                  symbolic_value: local_1
+                  role: local
+                  label: local_1
+                - address: 1244988
+                  offset_from_ebp: 0
+                  raw_bytes:
+                    data: [80, 255, 18, 0]
+                  numeric_value: 1245008
+                  symbolic_value: saved caller frame
+                  role: saved_ebp
+                - address: 1244992
+                  offset_from_ebp: 4
+                  raw_bytes:
+                    data: [37, 16, 64, 0]
+                  numeric_value: 4198437
+                  symbolic_value: caller+0x25
+                  role: return_address
+                - address: 1244996
+                  offset_from_ebp: 8
+                  raw_bytes:
+                    data: [17, 17, 17, 17]
+                  numeric_value: 286331153
+                  symbolic_value: argument_1
+                  role: argument
+                  label: argument_1
+                - address: 1245000
+                  offset_from_ebp: 12
+                  raw_bytes:
+                    data: [34, 34, 34, 34]
+                  numeric_value: 572662306
+                  symbolic_value: argument_2
+                  role: argument
+                  label: argument_2
+                - address: 1245004
+                  offset_from_ebp: 16
+                  raw_bytes:
+                    data: [51, 51, 51, 51]
+                  numeric_value: 858993459
+                  symbolic_value: argument_3
+                  role: argument
+                  label: argument_3
+          common_meaning: In cdecl, the caller pushes arguments above the return address and the callee reads them using positive EBP-relative offsets.
+final_stack_pointer: 1244956
+final_memory_at_stack_pointer:
+  data: []
+notes:
+  - Hand-authored cdecl calling-conventions fixture created before executor or explanation support.
+  - Argument labels remain structural placeholders rather than semantic program-analysis names.

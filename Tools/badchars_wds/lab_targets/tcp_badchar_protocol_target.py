@@ -18,23 +18,45 @@ def copy_buffer(data):
     return copied
 
 
+def parse_wrapped_payload(data):
+    """
+    Accept payloads in form: AUTH test:pass\\r\\nSEND <raw-bytes>\\r\\n
+    Returns extracted SEND bytes or b"" on parse failure.
+    """
+    if not data.startswith(b"AUTH "):
+        return b""
+    split = data.split(b"\r\n", 1)
+    if len(split) != 2:
+        return b""
+    remainder = split[1]
+    if not remainder.startswith(b"SEND "):
+        return b""
+    return remainder[5:].rstrip(b"\r\n")
+
+
 def handle_client(client, mode, trigger_byte):
+    client.sendall(b"220 LABTARGET Ready\r\n")
     data = client.recv(BUFFER_SIZE)
     if not data:
         return
 
+    payload = parse_wrapped_payload(data)
+    if not payload:
+        client.sendall(b"500 Invalid sequence\r\n")
+        return
+
     if mode == "truncate":
-        index = data.find(bytes([trigger_byte]))
+        index = payload.find(bytes([trigger_byte]))
         if index != -1:
-            data = data[:index]
+            payload = payload[:index]
     elif mode == "crash":
-        if bytes([trigger_byte]) in data:
+        if bytes([trigger_byte]) in payload:
             print("[!] Crash trigger encountered: 0x{0:02x}".format(trigger_byte), flush=True)
             os._exit(1)
 
-    copied = copy_buffer(data)
-    print("[+] Received={0} Copied={1}".format(len(data), copied), flush=True)
-    client.sendall(b"OK")
+    copied = copy_buffer(payload)
+    print("[+] Wrapped payload bytes={0} copied={1}".format(len(payload), copied), flush=True)
+    client.sendall(b"250 OK\r\n")
 
 
 def run_server(host, port, mode, trigger_byte):
@@ -43,7 +65,7 @@ def run_server(host, port, mode, trigger_byte):
         server.bind((host, port))
         server.listen(5)
         print(
-            "[+] Listening on {0}:{1} (mode={2}, trigger=0x{3:02x})".format(
+            "[+] Protocol target on {0}:{1} (mode={2}, trigger=0x{3:02x})".format(
                 host, port, mode, trigger_byte
             ),
             flush=True,
@@ -58,7 +80,7 @@ def run_server(host, port, mode, trigger_byte):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=9999)
+    parser.add_argument("--port", type=int, default=10000)
     parser.add_argument("--mode", choices=["normal", "truncate", "crash"], default="normal")
     parser.add_argument(
         "--trigger-byte",
