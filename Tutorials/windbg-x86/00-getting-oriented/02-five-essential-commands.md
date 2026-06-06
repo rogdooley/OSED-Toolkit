@@ -18,13 +18,26 @@ Write your answers before reading on.
 ## Setup
 
 Same target as Exercise 01: `hello_args_x86.exe alpha beta gamma` under
-WinDbg. Break on `print_arg` — the function inside the binary that has two
-arguments and a local buffer.
+WinDbg (no `-G` flag).
+
+**Wait for the `0:000>` prompt before setting any breakpoint.** On Windows 10
+the debugger fires an initial break in the conhost helper process first
+(`1:001>`). A breakpoint set there will go deferred and never fire. The
+sequence every time you start a fresh session with this target:
 
 ```
-0:000> bp hello_args_x86!print_arg
-0:000> g
+; Cold launch — you get the conhost break first:
+1:001> g                             ; run past the conhost break
+
+; Now you are at the hello_args process break:
+0:000> bp hello_args_x86!print_arg  ; BP resolves immediately
+0:000> g                             ; run to the breakpoint
 ```
+
+`print_arg` is called once per argument, so the breakpoint will fire four
+times (once for `argv[0]` through `argv[3]`). The first hit is for
+`argv[0]` (the program name). Press `g` again if you want to land on the
+`argv[1] = "alpha"` call instead.
 
 ---
 

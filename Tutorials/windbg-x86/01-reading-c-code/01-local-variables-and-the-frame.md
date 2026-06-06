@@ -13,7 +13,8 @@ frame layout, and where do each of its local variables live?
 windbgx -o stack_lab_x86.exe HelloWorld
 ```
 
-Break on `process_buffer`:
+Wait for the `0:000>` prompt (run `g` once to skip the conhost break if
+needed — see the module README). Then:
 
 ```
 0:000> bp stack_lab_x86!process_buffer

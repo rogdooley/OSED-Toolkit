@@ -45,3 +45,23 @@ cl /nologo /Od /Zi /MT /W3 stack_lab.c /link /OUT:stack_lab_x86.exe
 - Module 00 completed (five essential commands)
 - `push`/`pop` grow/shrink the stack toward lower addresses
 - `call` pushes the return address, `ret` pops it into `eip`
+
+## Session startup pattern (applies to every exercise in this module)
+
+On Windows 10, launching a console app with `windbgx -o` fires an initial
+break in the **conhost** helper process first (`1:001>` prompt). The target
+module is not yet executing. **Always do this at the start of each session:**
+
+```
+; You see the conhost break:
+1:001> g
+
+; Now you are at the hello_args / stack_lab process break:
+0:000> bp <target>!<function>    ← set your breakpoint here
+0:000> g
+```
+
+If you set a breakpoint at `1:001>` it will show `deferred` and never fire.
+If you accidentally step with `p` instead of running `g`, you will walk
+through ntdll instructions instead of reaching your breakpoint. Each exercise
+setup section assumes you are already at the `0:000>` prompt.

@@ -17,7 +17,8 @@ follow a chain mechanically in the debugger, every later module will stall.
 windbgx -o stack_lab_x86.exe HelloWorld
 ```
 
-Break on `run_and_print`:
+Wait for the `0:000>` prompt (run `g` once to skip the conhost break if
+needed — see the module README). Then:
 
 ```
 0:000> bp stack_lab_x86!run_and_print
