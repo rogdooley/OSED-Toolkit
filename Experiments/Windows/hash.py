@@ -44,6 +44,8 @@ def main() -> None:
         "WSASocketA",
         "connect",
         "CreateProcessA",
+        "STARTUPINFOA",
+        "PROCESS_INFORMATION",
     ]
 
     for api in apis:
