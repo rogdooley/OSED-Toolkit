@@ -44,7 +44,7 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, FrozenSet, List, Optional, Set, Union
+from typing import Callable, List, Optional, Set, Union
 
 from .analyzer import compare_observed, generate_candidate_bytes, validate_magic
 from .cdb import CDBDriver
@@ -57,7 +57,6 @@ _CRASH_MARKER = "BADCHAR_CRASH"
 _SCRIPT_FILENAME = "badchar_bp.wds"
 _SIZE_SETTLE_SECONDS = 0.02
 _POLL_INTERVAL_SECONDS = 0.05
-_DEFAULT_PADDING = b"C" * 32
 _STALE_RETRY_DELAY_SECONDS = 0.05
 
 
@@ -84,13 +83,6 @@ class RestartPolicy(Enum):
     CONDITIONAL = "conditional"
     NEVER = "never"
 
-
-_TERMINAL_STATUSES = frozenset({
-    IterationStatus.TIMEOUT,
-    IterationStatus.CRASH,
-    IterationStatus.INVALID_DUMP,
-    IterationStatus.DEBUGGER_EXITED,
-})
 
 _RETRY_STATUSES = frozenset({
     IterationStatus.DIVERGENCE,
@@ -142,6 +134,9 @@ class BadCharOrchestrator(object):
         max_iterations,   # type: int
         excluded_bytes,   # type: Set[int]
         restart_policy=RestartPolicy.CONDITIONAL,  # type: RestartPolicy
+        filler_byte=0x41,  # type: int
+        pad_byte=0x43,     # type: int
+        pad_len=32,        # type: int
     ):
         if not callable(sender):
             raise TypeError("sender must be callable")
@@ -155,10 +150,30 @@ class BadCharOrchestrator(object):
             raise ValueError("max_iterations must be >= 1")
         if not isinstance(restart_policy, RestartPolicy):
             raise TypeError("restart_policy must be a RestartPolicy")
+        if not (0 <= filler_byte <= 0xFF):
+            raise ValueError("filler_byte must be in 0..255")
+        if not (0 <= pad_byte <= 0xFF):
+            raise ValueError("pad_byte must be in 0..255")
+        if pad_len < 0:
+            raise ValueError("pad_len must be >= 0")
 
         # Hard failure: magic bytes that overlap excluded bytes make the
         # dump validation mechanism self-defeating from iteration one.
         validate_magic(magic, excluded_bytes)
+
+        # The dumped region must be large enough to hold the magic plus every
+        # candidate byte, otherwise the observed buffer is truncated by the
+        # debugger itself and every iteration reports a spurious bad byte.
+        excluded_set = set(excluded_bytes)
+        candidate_count = 256 - len([b for b in excluded_set if 0 <= b <= 0xFF])
+        min_dump_size = len(magic) + candidate_count
+        if stage.dump_size < min_dump_size:
+            raise ValueError(
+                "stage.dump_size={} too small; need >= {} "
+                "(magic {} + candidates {})".format(
+                    stage.dump_size, min_dump_size, len(magic), candidate_count,
+                )
+            )
 
         self._driver          = driver
         self._stage           = stage
@@ -171,6 +186,21 @@ class BadCharOrchestrator(object):
         self._max_iterations  = max_iterations
         self._excluded_bytes  = frozenset(excluded_bytes)  # never mutated
         self._restart_policy  = restart_policy
+        self._filler_byte     = filler_byte
+        self._pad_byte        = pad_byte
+        self._pad_len         = pad_len
+
+        # A filler or pad byte that is itself a known bad char silently
+        # corrupts the payload before the candidate region is reached.
+        for label, value in (("filler_byte", filler_byte), ("pad_byte", pad_byte)):
+            if value in self._excluded_bytes:
+                self._log_warn_pending = (
+                    "{}=0x{:02x} is in excluded_bytes; payload framing may be "
+                    "corrupted on this target".format(label, value)
+                )
+                break
+        else:
+            self._log_warn_pending = None
 
         self._script_path = os.path.join(dump_dir, _SCRIPT_FILENAME)
         self._dump_path   = self._resolve_dump_path()
@@ -183,6 +213,8 @@ class BadCharOrchestrator(object):
             self._log.warning(
                 "restart_policy=never may produce invalid results on unstable targets"
             )
+        if self._log_warn_pending:
+            self._log.warning(self._log_warn_pending)
 
         # Runtime state — reset at the start of every run() call so run()
         # is safely re-entrant.
@@ -284,46 +316,42 @@ class BadCharOrchestrator(object):
     def _ensure_driver_running(self):
         # type: () -> None
         """
-        Lazy + conditional driver startup.
+        Start the debugger if needed, honouring the restart policy.
 
-        Does nothing if the driver is already running (persistent service).
-        Writes the WDS script and starts the driver if it is not (crash target
-        or first iteration).
+        is_running() is the liveness signal:
+          - ALWAYS:      kill any running session, then start fresh every
+                         iteration.
+          - NEVER:       keep a running session; (re)start only when not
+                         running. Warned about at construction time.
+          - CONDITIONAL: keep a running session (persistent services such as
+                         SLMail), and start only when not running — which is
+                         exactly the first iteration, or a crash-per-payload
+                         target (Vulnserver) whose cdb exited after the
+                         previous payload landed.
 
-        v1 assumption: is_running() == True means a usable debug session.
-        Does not handle cdb-alive-but-inferior-dead. Expose
-        driver.is_session_usable() in a future revision to close this gap.
+        Design note: CONDITIONAL trusts is_running() alone. The previous
+        implementation also consulted driver.has_live_target(), but that
+        signal is documented as fail-closed (False when uncertain). Treating
+        "uncertain" as "dead" forced a kill+restart on *every* iteration, so
+        persistent services were needlessly relaunched and the conditional
+        policy was indistinguishable from ALWAYS. A future driver that can
+        positively detect "cdb alive but inferior dead" should surface that as
+        an explicit restart trigger; uncertainty must never force a restart.
         """
         running = self._driver.is_running()
 
-        if self._restart_policy == RestartPolicy.NEVER and running:
-            return
-        if self._restart_policy == RestartPolicy.CONDITIONAL:
-            if running and self._has_usable_session():
-                return
-        if self._restart_policy == RestartPolicy.ALWAYS:
-            if running:
+        if running:
+            if self._restart_policy == RestartPolicy.ALWAYS:
                 self._driver.kill()
-
-        if self._restart_policy == RestartPolicy.CONDITIONAL and running:
-            # Running but unusable session: force restart.
-            self._driver.kill()
+            else:
+                # NEVER and CONDITIONAL both keep a live session.
+                return
 
         self._write_script()
         self._log.debug("stage=START_DRIVER script=%s", self._script_path)
         self._driver.start()
         if self._restart_delay > 0:
             time.sleep(self._restart_delay)
-
-    def _has_usable_session(self):
-        # type: () -> bool
-        checker = getattr(self._driver, "has_live_target", None)
-        if checker is None or not callable(checker):
-            return False
-        try:
-            return bool(checker())
-        except Exception:
-            return False
 
     def _prepare_iteration(self):
         # type: () -> bytes
@@ -595,7 +623,9 @@ class BadCharOrchestrator(object):
 
     def _build_payload(self, candidates):
         # type: (bytes) -> bytes
-        return b"A" * self._offset + self._magic + candidates + _DEFAULT_PADDING
+        leading = bytes([self._filler_byte]) * self._offset
+        trailing = bytes([self._pad_byte]) * self._pad_len
+        return leading + self._magic + candidates + trailing
 
     def _resolve_dump_path(self):
         # type: () -> str

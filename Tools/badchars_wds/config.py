@@ -54,6 +54,9 @@ class LoadedConfig:
     max_iterations: int
     excluded_bytes: Set[int]
     restart_policy: RestartPolicy
+    filler_byte: int = 0x41
+    pad_byte: int = 0x43
+    pad_len: int = 32
 
 
 _ROOT_KEYS = frozenset(["driver", "stage", "orchestrator", "transport"])
@@ -198,12 +201,21 @@ def _validate_schema_phase(config, source, issues):
             "excluded_bytes": list,
             "restart_policy": str,
         },
-        optional={},
+        optional={"filler_byte": int, "pad_byte": int, "pad_len": int},
     )
     _validate_object(
         config, "transport", source, issues,
         required={"type": str},
-        optional={"host": str, "port": int, "timeout": (int, float), "callback_name": str},
+        optional={
+            "host": str,
+            "port": int,
+            "timeout": (int, float),
+            "callback_name": str,
+            "prefix": str,
+            "suffix": str,
+            "read_banner": bool,
+            "banner_size": int,
+        },
     )
 
     driver = config.get("driver")
@@ -268,6 +280,13 @@ def _validate_semantic_phase(config, source, issues):
             for index, value in enumerate(excluded):
                 if isinstance(value, int) and (value < 0 or value > 255):
                     issues.append(_issue("orchestrator.excluded_bytes[{}]".format(index), "byte out of range", source, "0..255", value))
+        for byte_field in ("filler_byte", "pad_byte"):
+            value = orch.get(byte_field)
+            if isinstance(value, int) and (value < 0 or value > 255):
+                issues.append(_issue("orchestrator.{}".format(byte_field), "byte out of range", source, "0..255", value))
+        pad_len = orch.get("pad_len")
+        if isinstance(pad_len, int) and pad_len < 0:
+            issues.append(_issue("orchestrator.pad_len", "must be >= 0", source, "int >= 0", pad_len))
 
     transport = config.get("transport", {})
     if isinstance(transport, dict):
@@ -448,4 +467,7 @@ def _materialize(config):
         max_iterations=orch_cfg["max_iterations"],
         excluded_bytes=set(orch_cfg["excluded_bytes"]),
         restart_policy=RestartPolicy(orch_cfg["restart_policy"]),
+        filler_byte=orch_cfg.get("filler_byte", 0x41),
+        pad_byte=orch_cfg.get("pad_byte", 0x43),
+        pad_len=orch_cfg.get("pad_len", 32),
     )

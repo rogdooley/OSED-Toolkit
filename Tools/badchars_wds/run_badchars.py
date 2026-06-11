@@ -78,6 +78,9 @@ def main():
         max_iterations=cfg.max_iterations,
         excluded_bytes=cfg.excluded_bytes,
         restart_policy=cfg.restart_policy,
+        filler_byte=cfg.filler_byte,
+        pad_byte=cfg.pad_byte,
+        pad_len=cfg.pad_len,
     )
 
     result = orchestrator.run()

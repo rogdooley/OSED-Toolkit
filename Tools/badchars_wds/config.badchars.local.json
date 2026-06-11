@@ -8,9 +8,9 @@
   },
   "stage": {
     "breakpoint": "msvcrt!strcpy",
-    "dump_expr": "poi(@esp+4)+2006",
+    "dump_expr": "poi(@esp+8)+2006",
     "dump_size": 512,
-    "step_mode": "pt",
+    "step_mode": "none",
     "custom_step": null,
     "temp_dump_path": "C:\\temp\\_tmp.bin",
     "final_dump_path": "C:\\temp\\dump.bin",
@@ -21,7 +21,7 @@
     "dump_dir": "C:\\temp",
     "magic": "bcf0bcf0",
     "timeout": 10.0,
-    "restart_delay": 0.2,
+    "restart_delay": 2.0,
     "max_iterations": 64,
     "excluded_bytes": [
       0
@@ -32,6 +32,9 @@
     "type": "tcp",
     "host": "127.0.0.1",
     "port": 9999,
-    "timeout": 3.0
+    "timeout": 3.0,
+    "prefix": "",
+    "suffix": "",
+    "read_banner": false
   }
 }
