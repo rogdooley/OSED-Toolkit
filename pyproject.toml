@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 shellforge = "shellforge.cli:main"
+value-convert = "Tools.Value_Conversion_Scripts.cli:main"
 
 [build-system]
 requires = ["setuptools"]
