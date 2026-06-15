@@ -207,10 +207,10 @@ def _try_assemble(asm: str) -> bytes | None:
 def _load_template(name: str) -> PayloadTemplate:
     """Load a payload template by short name."""
     registry = {
-        "reverse_shell": "emitter.payload_templates.reverse_shell.ReverseShellTemplate",
-        "run_command":   "emitter.payload_templates.run_command.RunCommandTemplate",
-        "copy_file":     "emitter.payload_templates.copy_file.CopyFileTemplate",
-        "bind_shell":    "emitter.payload_templates.bind_shell.BindShellTemplate",
+        "reverse_shell": "Tools.emitter.payload_templates.reverse_shell.ReverseShellTemplate",
+        "run_command":   "Tools.emitter.payload_templates.run_command.RunCommandTemplate",
+        "copy_file":     "Tools.emitter.payload_templates.copy_file.CopyFileTemplate",
+        "bind_shell":    "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
     }
     if name not in registry:
         raise ValueError(
