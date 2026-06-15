@@ -5,18 +5,9 @@ strings.py emitters. For push method, emits the push sequence only (ESP = pointe
 """
 from __future__ import annotations
 
-import pathlib
-import sys
-
 from .schema import Manifest, StringEntry
 from .stack_alloc import StackLayout
-
-# strings.py lives one level above the emitter package (at Tools/strings.py)
-_TOOLS_DIR = str(pathlib.Path(__file__).parent.parent)
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
-
-from strings import emit_mov, emit_push, emit_shiftor, emit_xor  # noqa: E402
+from Tools.strings import emit_mov, emit_push, emit_shiftor, emit_xor
 
 
 def emit_string(entry: StringEntry, layout: StackLayout, badchars: set[int]) -> str:

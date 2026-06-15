@@ -5,53 +5,53 @@ import pytest
 
 
 def test_startupinfoa_cb_field(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("STARTUPINFOA", revshell_layout)
     assert "0x44" in asm
 
 
 def test_startupinfoa_dwflags_offset(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("STARTUPINFOA", revshell_layout)
     assert "0x2c" in asm
 
 
 def test_startupinfoa_dwflags_value(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("STARTUPINFOA", revshell_layout)
     # STARTF_USESTDHANDLES = 0x100 expressed via rol
     assert "rol  eax, 8" in asm
 
 
 def test_startupinfoa_slot_referenced(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("STARTUPINFOA", revshell_layout)
     slot_ref = revshell_layout.slot("STARTUPINFOA").ebp_ref
     assert slot_ref in asm
 
 
 def test_startupinfoa_zero_loop_present(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("STARTUPINFOA", revshell_layout)
     assert "loop" in asm
     assert "17" in asm  # ecx = 17 for 17 DWORDs
 
 
 def test_process_information_slot_referenced(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("PROCESS_INFORMATION", revshell_layout)
     slot_ref = revshell_layout.slot("PROCESS_INFORMATION").ebp_ref
     assert slot_ref in asm
 
 
 def test_process_information_zeroed(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("PROCESS_INFORMATION", revshell_layout)
     assert "0x0c" in asm  # last field offset
 
 
 def test_wsadata_no_instructions(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("WSADATA", revshell_layout)
     # WSADATA is comment-only (WSAStartup populates it)
     non_comment = [
@@ -62,21 +62,21 @@ def test_wsadata_no_instructions(revshell_layout):
 
 
 def test_sockaddr_in_sin_family(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("sockaddr_in", revshell_layout)
     assert "0x0002" in asm  # AF_INET
 
 
 def test_sockaddr_in_slot_referenced(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("sockaddr_in", revshell_layout)
     slot_ref = revshell_layout.slot("sockaddr_in").ebp_ref
     assert slot_ref in asm
 
 
 def test_emit_all_structures_all_present(manifest_dir, revshell_layout):
-    from emitter.schema import load
-    from emitter.structure_emitter import emit_all_structures
+    from Tools.emitter.schema import load
+    from Tools.emitter.structure_emitter import emit_all_structures
     manifest = load(str(manifest_dir / "revshell.yaml"))
     asm = emit_all_structures(manifest, revshell_layout)
     for struct_name in ("STARTUPINFOA", "PROCESS_INFORMATION", "WSADATA", "sockaddr_in"):
@@ -84,8 +84,8 @@ def test_emit_all_structures_all_present(manifest_dir, revshell_layout):
 
 
 def test_emit_all_structures_no_duplicate_labels(manifest_dir, revshell_layout):
-    from emitter.schema import load
-    from emitter.structure_emitter import emit_all_structures
+    from Tools.emitter.schema import load
+    from Tools.emitter.structure_emitter import emit_all_structures
     manifest = load(str(manifest_dir / "revshell.yaml"))
     asm = emit_all_structures(manifest, revshell_layout)
     # Zero-loop label should appear only once (one STARTUPINFOA)
@@ -93,9 +93,9 @@ def test_emit_all_structures_no_duplicate_labels(manifest_dir, revshell_layout):
 
 
 def test_unknown_structure_fallback(revshell_layout):
-    from emitter.structure_emitter import emit_structure
+    from Tools.emitter.structure_emitter import emit_structure
     # Inject a fake slot
-    from emitter.stack_alloc import Slot, StackLayout
+    from Tools.emitter.stack_alloc import Slot, StackLayout
     fake_slot = Slot(name="FakeStruct", offset=0x400, size=0x20, category="structure")
     layout = StackLayout(revshell_layout.all_slots() + [fake_slot])
     asm = emit_structure("FakeStruct", layout)

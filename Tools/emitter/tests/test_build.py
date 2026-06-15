@@ -7,7 +7,7 @@ import pytest
 
 
 def test_build_generates_asm(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         template_name="reverse_shell",
@@ -19,7 +19,7 @@ def test_build_generates_asm(manifest_dir, tmp_path):
 
 
 def test_build_contains_framework_bootstrap(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -31,7 +31,7 @@ def test_build_contains_framework_bootstrap(manifest_dir, tmp_path):
 
 
 def test_build_generates_contract_md(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -43,9 +43,9 @@ def test_build_generates_contract_md(manifest_dir, tmp_path):
 
 
 def test_build_all_hashes_match_ror13(manifest_dir, tmp_path):
-    from emitter.build import build
-    from emitter.schema import load
-    from emitter.hash_gen import ror13
+    from Tools.emitter.build import build
+    from Tools.emitter.schema import load
+    from Tools.emitter.hash_gen import ror13
     manifest = load(str(manifest_dir / "revshell.yaml"))
     result = build(
         str(manifest_dir / "revshell.yaml"),
@@ -58,7 +58,7 @@ def test_build_all_hashes_match_ror13(manifest_dir, tmp_path):
 
 
 def test_build_no_duplicate_api_slot_assignments(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -75,7 +75,7 @@ def test_build_no_duplicate_api_slot_assignments(manifest_dir, tmp_path):
 
 
 def test_build_write_outputs(manifest_dir, tmp_path):
-    from emitter.build import build, write_outputs
+    from Tools.emitter.build import build, write_outputs
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -88,7 +88,7 @@ def test_build_write_outputs(manifest_dir, tmp_path):
 
 
 def test_calc_build_no_network(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "calc.yaml"),
         template_name="run_command",
@@ -101,8 +101,8 @@ def test_calc_build_no_network(manifest_dir, tmp_path):
 
 
 def test_calc_build_winexec_hash(manifest_dir, tmp_path):
-    from emitter.build import build
-    from emitter.hash_gen import ror13
+    from Tools.emitter.build import build
+    from Tools.emitter.hash_gen import ror13
     result = build(
         str(manifest_dir / "calc.yaml"),
         out_dir=str(tmp_path),
@@ -113,7 +113,7 @@ def test_calc_build_winexec_hash(manifest_dir, tmp_path):
 
 
 def test_build_contains_dll_load_block(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -125,7 +125,7 @@ def test_build_contains_dll_load_block(manifest_dir, tmp_path):
 
 
 def test_build_string_section_present(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -135,7 +135,7 @@ def test_build_string_section_present(manifest_dir, tmp_path):
 
 
 def test_build_structure_section_present(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -146,7 +146,7 @@ def test_build_structure_section_present(manifest_dir, tmp_path):
 
 
 def test_build_layout_returned(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         out_dir=str(tmp_path),
@@ -157,7 +157,7 @@ def test_build_layout_returned(manifest_dir, tmp_path):
 
 
 def test_build_no_assemble_skips_keystone(manifest_dir, tmp_path):
-    from emitter.build import build
+    from Tools.emitter.build import build
     result = build(
         str(manifest_dir / "revshell.yaml"),
         assemble=False,

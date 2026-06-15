@@ -10,16 +10,16 @@ import pytest
 
 @pytest.fixture
 def revshell_layout(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
     manifest = load(str(manifest_dir / "revshell.yaml"))
     return build_layout(manifest)
 
 
 @pytest.fixture
 def calc_layout(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
     manifest = load(str(manifest_dir / "calc.yaml"))
     return build_layout(manifest)
 

@@ -66,10 +66,10 @@ def test_kernel32_base_in_module_bases_section(revshell_doc):
 
 def test_hash_from_ror13_not_hardcoded():
     # Verify the doc generation uses ror13 dynamically
-    from emitter.hash_gen import ror13
-    from emitter.doc_gen import emit_api_contracts_md
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
+    from Tools.emitter.hash_gen import ror13
+    from Tools.emitter.doc_gen import emit_api_contracts_md
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
     manifest_dir = pathlib.Path(__file__).parent.parent / "manifests"
     manifest = load(str(manifest_dir / "revshell.yaml"))
     layout = build_layout(manifest)
@@ -80,9 +80,9 @@ def test_hash_from_ror13_not_hardcoded():
 
 
 def test_calc_manifest_no_network_structs(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
-    from emitter.doc_gen import emit_full_contract_md
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    from Tools.emitter.doc_gen import emit_full_contract_md
     manifest = load(str(manifest_dir / "calc.yaml"))
     layout = build_layout(manifest)
     doc = emit_full_contract_md(manifest, layout)

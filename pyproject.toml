@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 shellforge = "shellforge.cli:main"
 value-convert = "Tools.Value_Conversion_Scripts.cli:main"
+emitter = "Tools.emitter.build:main"
 
 [build-system]
 requires = ["setuptools"]
@@ -24,3 +25,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["Tools*", "asm_lab*", "shellforge*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]

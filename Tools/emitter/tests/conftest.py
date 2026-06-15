@@ -13,23 +13,23 @@ def manifest_dir() -> pathlib.Path:
 
 @pytest.fixture
 def revshell_layout(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
     manifest = load(str(manifest_dir / "revshell.yaml"))
     return build_layout(manifest)
 
 
 @pytest.fixture
 def calc_layout(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
     manifest = load(str(manifest_dir / "calc.yaml"))
     return build_layout(manifest)
 
 
 @pytest.fixture
 def revshell_doc(revshell_layout, manifest_dir):
-    from emitter.schema import load
-    from emitter.doc_gen import emit_full_contract_md
+    from Tools.emitter.schema import load
+    from Tools.emitter.doc_gen import emit_full_contract_md
     manifest = load(str(manifest_dir / "revshell.yaml"))
     return emit_full_contract_md(manifest, revshell_layout)

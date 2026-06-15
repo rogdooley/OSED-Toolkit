@@ -5,16 +5,8 @@ Builds command string inline via push (no fixed slot required).
 """
 from __future__ import annotations
 
-import pathlib
-import sys
-
 from .base import PayloadTemplate, TemplateConfig
-
-_TOOLS_DIR = str(pathlib.Path(__file__).parent.parent.parent)
-if _TOOLS_DIR not in sys.path:
-    sys.path.insert(0, _TOOLS_DIR)
-
-from strings import emit_push, to_dwords  # noqa: E402
+from Tools.strings import emit_push, to_dwords
 
 
 class RunCommandTemplate(PayloadTemplate):

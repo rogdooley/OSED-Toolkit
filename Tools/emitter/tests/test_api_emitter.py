@@ -6,8 +6,8 @@ import pytest
 
 @pytest.fixture
 def revshell_asm(manifest_dir, revshell_layout):
-    from emitter.schema import load
-    from emitter.api_emitter import emit_api_resolution
+    from Tools.emitter.schema import load
+    from Tools.emitter.api_emitter import emit_api_resolution
     manifest = load(str(manifest_dir / "revshell.yaml"))
     return emit_api_resolution(manifest, revshell_layout)
 
@@ -41,15 +41,15 @@ def test_loadlibrarya_hash(revshell_asm):
 
 
 def test_all_functions_present(revshell_asm, manifest_dir):
-    from emitter.schema import load
+    from Tools.emitter.schema import load
     manifest = load(str(manifest_dir / "revshell.yaml"))
     for name in manifest.functions:
         assert name in revshell_asm, f"{name} not found in output"
 
 
 def test_all_hashes_correct(revshell_asm, manifest_dir):
-    from emitter.schema import load
-    from emitter.hash_gen import ror13
+    from Tools.emitter.schema import load
+    from Tools.emitter.hash_gen import ror13
     manifest = load(str(manifest_dir / "revshell.yaml"))
     for name in manifest.functions:
         expected = f"0x{ror13(name):08x}"
@@ -57,7 +57,7 @@ def test_all_hashes_correct(revshell_asm, manifest_dir):
 
 
 def test_all_slots_present(revshell_asm, revshell_layout, manifest_dir):
-    from emitter.schema import load
+    from Tools.emitter.schema import load
     manifest = load(str(manifest_dir / "revshell.yaml"))
     for name in manifest.functions:
         slot_ref = revshell_layout.slot(name).ebp_ref
@@ -95,9 +95,9 @@ def test_no_payload_instructions(revshell_asm):
 
 
 def test_calc_manifest_minimal(manifest_dir):
-    from emitter.schema import load
-    from emitter.stack_alloc import build_layout
-    from emitter.api_emitter import emit_api_resolution
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    from Tools.emitter.api_emitter import emit_api_resolution
     manifest = load(str(manifest_dir / "calc.yaml"))
     layout = build_layout(manifest)
     asm = emit_api_resolution(manifest, layout)
