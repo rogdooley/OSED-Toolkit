@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -142,6 +146,7 @@ class BuildResult:
     py_bytes: str | None = None
     c_array: str | None = None
     layout: StackLayout | None = None
+    assembler: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -189,19 +194,70 @@ def _bytes_to_c(raw: bytes) -> str:
     return f"unsigned char shellcode[] = {{\n{body}\n}};\n// Length: {len(raw)} bytes"
 
 
-def _try_assemble(asm: str) -> bytes | None:
+def _strip_hash_comments(asm: str) -> str:
+    return "\n".join(line.split("#")[0] for line in asm.splitlines())
+
+
+def _to_nasm(asm: str) -> str:
+    """Convert emitter Intel syntax to nasm flat-binary syntax.
+
+    Differences handled:
+    - Prepend 'BITS 32' so nasm knows the mode
+    - Strip # comments (emitter uses these for notes)
+    - 'dword/word/byte ptr [...]' → 'dword/word/byte [...]'
+    - 'fs:[...]' → '[fs:...]'  (segment register syntax)
+    """
+    lines = ["BITS 32"]
+    for line in asm.splitlines():
+        line = line.split("#")[0].rstrip()
+        line = re.sub(r'\bfs:\[', '[fs:', line)
+        line = re.sub(r'\b(dword|word|byte)\s+ptr\b', r'\1', line, flags=re.IGNORECASE)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _try_assemble_keystone(asm: str) -> bytes | None:
     try:
         import keystone
     except ImportError:
         return None
     try:
         ks = keystone.Ks(keystone.KS_ARCH_X86, keystone.KS_MODE_32)
-        # Remove Python-style # comments before assembling
-        clean = "\n".join(line.split("#")[0] for line in asm.splitlines())
-        encoding, _ = ks.asm(clean)
+        encoding, _ = ks.asm(_strip_hash_comments(asm))
         return bytes(encoding)
     except Exception:
         return None
+
+
+def _try_assemble_nasm(asm: str) -> bytes | None:
+    if not shutil.which("nasm"):
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = pathlib.Path(tmpdir) / "shellcode.asm"
+            out = pathlib.Path(tmpdir) / "shellcode.bin"
+            src.write_text(_to_nasm(asm))
+            result = subprocess.run(
+                ["nasm", "-f", "bin", "-o", str(out), str(src)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return None
+            return out.read_bytes()
+    except Exception:
+        return None
+
+
+def _try_assemble(asm: str) -> tuple[bytes, str] | tuple[None, None]:
+    """Try keystone, then nasm. Returns (bytes, assembler_name) or (None, None)."""
+    raw = _try_assemble_keystone(asm)
+    if raw is not None:
+        return raw, "keystone"
+    raw = _try_assemble_nasm(asm)
+    if raw is not None:
+        return raw, "nasm"
+    return None, None
 
 
 def _load_template(name: str) -> PayloadTemplate:
@@ -347,8 +403,9 @@ def build(
     contract_md = emit_full_contract_md(manifest, layout)
 
     raw: bytes | None = None
+    assembler: str | None = None
     if assemble:
-        raw = _try_assemble(asm)
+        raw, assembler = _try_assemble(asm)
 
     return BuildResult(
         manifest_path=manifest_path,
@@ -359,6 +416,7 @@ def build(
         py_bytes=_bytes_to_py(raw) if raw else None,
         c_array=_bytes_to_c(raw) if raw else None,
         layout=layout,
+        assembler=assembler,
     )
 
 
@@ -422,10 +480,11 @@ def main() -> None:
     print(f"[+] Generated: {args.out}/asm/generated.asm")
     print(f"[+] Contract:  {args.out}/Documentation/contract.md")
     if result.shellcode_bytes:
+        print(f"[+] Assembler: {result.assembler}")
         print(f"[+] Shellcode: {len(result.shellcode_bytes)} bytes")
         print(f"[+] Hex:       {args.out}/bin/shellcode.{{bin,hex,py,c}}")
     else:
-        print("[*] Assembly skipped (keystone not available or --no-assemble)")
+        print("[*] Assembly skipped (no assembler available or --no-assemble)")
 
 
 if __name__ == "__main__":

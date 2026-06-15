@@ -168,5 +168,78 @@ def test_build_no_assemble_skips_keystone(manifest_dir, tmp_path):
 
 
 def test_existing_modules_still_import():
-    from emitter import schema, hash_gen, api_database, stack_alloc, doc_gen, api_emitter
+    from Tools.emitter import schema, hash_gen, api_database, stack_alloc, doc_gen, api_emitter
     assert True
+
+
+# ---------------------------------------------------------------------------
+# _to_nasm syntax transformation
+# ---------------------------------------------------------------------------
+
+def test_to_nasm_adds_bits32():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("xor eax, eax")
+    assert out.startswith("BITS 32")
+
+
+def test_to_nasm_strips_hash_comments():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("mov eax, 1  # set eax")
+    assert "#" not in out
+    assert "mov eax, 1" in out
+
+
+def test_to_nasm_removes_dword_ptr():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("call dword ptr [ebp-0x28]")
+    assert "ptr" not in out
+    assert "call dword [ebp-0x28]" in out
+
+
+def test_to_nasm_removes_word_ptr():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("cmp word ptr [esi], 0x004b")
+    assert "ptr" not in out
+    assert "cmp word [esi], 0x004b" in out
+
+
+def test_to_nasm_removes_byte_ptr():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("movzx eax, byte ptr [esi]")
+    assert "ptr" not in out
+    assert "movzx eax, byte [esi]" in out
+
+
+def test_to_nasm_fixes_fs_segment():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("mov eax, fs:[ecx + 0x30]")
+    assert "fs:[" not in out
+    assert "[fs:ecx + 0x30]" in out
+
+
+def test_to_nasm_no_change_to_normal_instructions():
+    from Tools.emitter.build import _to_nasm
+    src = "xor ecx, ecx\npush eax\npop ebx"
+    out = _to_nasm(src)
+    for instr in src.splitlines():
+        assert instr in out
+
+
+# ---------------------------------------------------------------------------
+# assembler field on BuildResult
+# ---------------------------------------------------------------------------
+
+def test_build_assembler_none_when_no_assemble(manifest_dir, tmp_path):
+    from Tools.emitter.build import build
+    result = build(str(manifest_dir / "calc.yaml"), assemble=False, out_dir=str(tmp_path))
+    assert result.assembler is None
+
+
+def test_build_assembler_set_when_assembled(manifest_dir, tmp_path):
+    import shutil
+    if not shutil.which("nasm"):
+        pytest.skip("nasm not available")
+    from Tools.emitter.build import build
+    result = build(str(manifest_dir / "calc.yaml"), assemble=True, out_dir=str(tmp_path))
+    if result.assembler is not None:
+        assert result.assembler in ("keystone", "nasm")
