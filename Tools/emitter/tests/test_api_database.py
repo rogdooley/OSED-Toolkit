@@ -18,7 +18,7 @@ def test_all_modules_are_known():
 
 
 def test_categories_are_valid():
-    valid = {"process", "filesystem", "library", "network", "memory", "token", "service"}
+    valid = {"process", "filesystem", "library", "network", "memory", "synchronization", "token", "service"}
     for name, record in API_DATABASE.items():
         assert record.category in valid, f"{name}.category={record.category!r} is invalid"
 

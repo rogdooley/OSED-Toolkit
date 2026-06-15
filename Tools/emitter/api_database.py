@@ -150,6 +150,125 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("lpProcName", "LPCSTR", "function name string"),
         ],
     ),
+    "GetModuleHandleA": APIRecord(
+        module="kernel32.dll",
+        category="library",
+        prototype="HMODULE GetModuleHandleA(LPCSTR lpModuleName)",
+        arguments=[
+            Argument("lpModuleName", "LPCSTR", "NULL returns base of current process; or e.g. kernel32.dll"),
+        ],
+    ),
+    # --- kernel32.dll : memory ---
+    "VirtualAlloc": APIRecord(
+        module="kernel32.dll",
+        category="memory",
+        prototype=(
+            "LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize,"
+            " DWORD flAllocationType, DWORD flProtect)"
+        ),
+        arguments=[
+            Argument("lpAddress", "LPVOID", "NULL to let OS choose; or preferred address"),
+            Argument("dwSize", "SIZE_T", "size of region in bytes"),
+            Argument("flAllocationType", "DWORD", "MEM_COMMIT|MEM_RESERVE = 0x3000"),
+            Argument("flProtect", "DWORD", "PAGE_EXECUTE_READWRITE = 0x40"),
+        ],
+    ),
+    "VirtualProtect": APIRecord(
+        module="kernel32.dll",
+        category="memory",
+        prototype=(
+            "BOOL VirtualProtect(LPVOID lpAddress, SIZE_T dwSize,"
+            " DWORD flNewProtect, PDWORD lpflOldProtect)"
+        ),
+        arguments=[
+            Argument("lpAddress", "LPVOID", "base of region to change"),
+            Argument("dwSize", "SIZE_T", "size in bytes"),
+            Argument("flNewProtect", "DWORD", "PAGE_EXECUTE_READ = 0x20; PAGE_EXECUTE_READWRITE = 0x40"),
+            Argument("lpflOldProtect", "PDWORD", "pointer to DWORD for old protection; use a scratch slot"),
+        ],
+    ),
+    # --- kernel32.dll : process ---
+    "CreateThread": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype=(
+            "HANDLE CreateThread(LPSECURITY_ATTRIBUTES lpThreadAttributes,"
+            " SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress,"
+            " LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId)"
+        ),
+        arguments=[
+            Argument("lpThreadAttributes", "LPSECURITY_ATTRIBUTES", "NULL"),
+            Argument("dwStackSize", "SIZE_T", "0 for default"),
+            Argument("lpStartAddress", "LPTHREAD_START_ROUTINE", "pointer to shellcode or function"),
+            Argument("lpParameter", "LPVOID", "NULL or pointer to argument"),
+            Argument("dwCreationFlags", "DWORD", "0 to run immediately"),
+            Argument("lpThreadId", "LPDWORD", "NULL; output thread ID, unused in shellcode"),
+        ],
+    ),
+    "GetLastError": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="DWORD GetLastError(void)",
+        arguments=[],
+    ),
+    # --- kernel32.dll : synchronization ---
+    "WaitForSingleObject": APIRecord(
+        module="kernel32.dll",
+        category="synchronization",
+        prototype="DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)",
+        arguments=[
+            Argument("hHandle", "HANDLE", "thread or process handle to wait on"),
+            Argument("dwMilliseconds", "DWORD", "INFINITE = 0xFFFFFFFF; or timeout in ms"),
+        ],
+    ),
+    "CloseHandle": APIRecord(
+        module="kernel32.dll",
+        category="synchronization",
+        prototype="BOOL CloseHandle(HANDLE hObject)",
+        arguments=[
+            Argument("hObject", "HANDLE", "handle to close; returns nonzero on success"),
+        ],
+    ),
+    # --- kernel32.dll : filesystem (additional) ---
+    "ReadFile": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype=(
+            "BOOL ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,"
+            " LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)"
+        ),
+        arguments=[
+            Argument("hFile", "HANDLE", "handle from CreateFileA"),
+            Argument("lpBuffer", "LPVOID", "pointer to destination buffer"),
+            Argument("nNumberOfBytesToRead", "DWORD", "number of bytes to read"),
+            Argument("lpNumberOfBytesRead", "LPDWORD", "pointer to DWORD for bytes read; NULL if lpOverlapped set"),
+            Argument("lpOverlapped", "LPOVERLAPPED", "NULL for synchronous I/O"),
+        ],
+    ),
+    "WriteFile": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype=(
+            "BOOL WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,"
+            " LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)"
+        ),
+        arguments=[
+            Argument("hFile", "HANDLE", "handle from CreateFileA"),
+            Argument("lpBuffer", "LPCVOID", "pointer to source buffer"),
+            Argument("nNumberOfBytesToWrite", "DWORD", "number of bytes to write"),
+            Argument("lpNumberOfBytesWritten", "LPDWORD", "pointer to DWORD for bytes written; NULL if lpOverlapped set"),
+            Argument("lpOverlapped", "LPOVERLAPPED", "NULL for synchronous I/O"),
+        ],
+    ),
+    "GetTempPathA": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype="DWORD GetTempPathA(DWORD nBufferLength, LPSTR lpBuffer)",
+        arguments=[
+            Argument("nBufferLength", "DWORD", "size of lpBuffer in chars; MAX_PATH = 260"),
+            Argument("lpBuffer", "LPSTR", "pointer to buffer that receives temp path"),
+        ],
+    ),
     # --- ws2_32.dll : network ---
     "WSAStartup": APIRecord(
         module="ws2_32.dll",
@@ -187,6 +306,51 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("namelen", "int", "0x10"),
         ],
         requires_structs=("sockaddr_in",),
+    ),
+    "bind": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int bind(SOCKET s, const struct sockaddr *addr, int namelen)",
+        arguments=[
+            Argument("s", "SOCKET", "listening socket from WSASocketA"),
+            Argument("addr", "const struct sockaddr *", "pointer to sockaddr_in with sin_family, sin_port, sin_addr"),
+            Argument("namelen", "int", "0x10 (sizeof sockaddr_in)"),
+        ],
+        requires_structs=("sockaddr_in",),
+    ),
+    "listen": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int listen(SOCKET s, int backlog)",
+        arguments=[
+            Argument("s", "SOCKET", "bound socket from bind()"),
+            Argument("backlog", "int", "SOMAXCONN = 0x7fffffff; or small value like 1"),
+        ],
+    ),
+    "accept": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="SOCKET accept(SOCKET s, struct sockaddr *addr, int *addrlen)",
+        arguments=[
+            Argument("s", "SOCKET", "listening socket; blocks until client connects"),
+            Argument("addr", "struct sockaddr *", "NULL to ignore client address; or pointer to sockaddr_in"),
+            Argument("addrlen", "int *", "NULL if addr is NULL; or pointer to 0x10"),
+        ],
+        requires_structs=("sockaddr_in",),
+    ),
+    "closesocket": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int closesocket(SOCKET s)",
+        arguments=[
+            Argument("s", "SOCKET", "socket handle to close"),
+        ],
+    ),
+    "WSAGetLastError": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int WSAGetLastError(void)",
+        arguments=[],
     ),
     "WSACleanup": APIRecord(
         module="ws2_32.dll",
