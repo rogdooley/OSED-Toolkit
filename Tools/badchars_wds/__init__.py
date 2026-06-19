@@ -1,6 +1,13 @@
 """Deterministic WinDbg/cdb script generator."""
 
-from .analyzer import compare_observed, generate_candidate_bytes, validate_magic
+from .analyzer import (
+    ByteVerdict,
+    FullComparison,
+    compare_observed,
+    full_compare,
+    generate_candidate_bytes,
+    validate_magic,
+)
 from .cdb import CDBDriver
 from .models import (
     ComparisonResult,
@@ -20,9 +27,12 @@ from .wds import generate_wds
 
 __all__ = [
     "BadCharOrchestrator",
+    "ByteVerdict",
     "ComparisonResult",
     "CDBDriver",
     "Divergence",
+    "FullComparison",
+    "full_compare",
     "IterationResult",
     "IterationStatus",
     "RestartPolicy",

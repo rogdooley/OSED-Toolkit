@@ -15,12 +15,13 @@ Pure stdlib, no external dependencies.
 1. [How it works](#how-it-works)
 2. [Quick start](#quick-start)
 3. [The generic workflow](#the-generic-workflow)
-4. [Worked examples](#worked-examples)
+4. [Finding the three numbers](#finding-the-three-numbers)
+5. [Worked examples](#worked-examples)
    - [Example 1 — Local lab target (synthetic bad chars)](#example-1--local-lab-target-synthetic-bad-chars)
    - [Example 2 — Vulnserver TRUN (simple real-world target)](#example-2--vulnserver-trun-simple-real-world-target)
    - [Example 3 — SLMail PASS (unknown target walkthrough)](#example-3--slmail-pass-unknown-target-walkthrough)
-5. [Config reference](#config-reference)
-6. [Troubleshooting](#troubleshooting)
+6. [Config reference](#config-reference)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -65,6 +66,16 @@ The script prints `Confirmed bad chars: 0xNN 0xNN ...` on completion.
 ---
 
 ## The generic workflow
+
+If you only need the operator-facing rule for making a new target work, read
+[`THREE_NUMBERS.md`](/Users/dooley/Documents/GithubClone/OSED-Toolkit/Tools/badchars_wds/THREE_NUMBERS.md)
+first. It is the short field note for deriving:
+
+- sender prefix length
+- payload offset
+- `dump_expr` displacement
+
+Those three values are where most target bring-up failures come from.
 
 For any new target, the work is always the same five steps:
 
