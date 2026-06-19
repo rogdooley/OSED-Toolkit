@@ -222,6 +222,12 @@ class BadCharOrchestrator(object):
         self._excluded  = set()   # type: Set[int]
         self._confirmed = []      # type: List[int]
 
+        # How the most recent run() ended. Lets callers distinguish
+        # "completed cleanly, no bad chars" from "stopped early on a fault".
+        # One of: "clean", "exhausted", or a terminal IterationStatus value.
+        self.final_status = None       # type: Optional[str]
+        self.final_reason = None       # type: Optional[str]
+
     # -----------------------------------------------------------------------
     # Public
     # -----------------------------------------------------------------------
@@ -240,6 +246,8 @@ class BadCharOrchestrator(object):
         self._iteration = 0
         self._excluded  = set(self._excluded_bytes)
         self._confirmed = []
+        self.final_status = None
+        self.final_reason = None
 
         try:
             while self._iteration < self._max_iterations:
@@ -250,6 +258,7 @@ class BadCharOrchestrator(object):
 
                 if result.status == IterationStatus.CLEAN:
                     self._log.info("status=CLEAN")
+                    self.final_status = "clean"
                     break
 
                 if result.status in _RETRY_STATUSES:
@@ -262,11 +271,17 @@ class BadCharOrchestrator(object):
                     result.status.value,
                     result.reason or "none",
                 )
+                self.final_status = result.status.value
+                self.final_reason = result.reason
                 break
             else:
                 self._log.warning(
                     "max_iterations=%d reached without clean pass",
                     self._max_iterations,
+                )
+                self.final_status = "exhausted"
+                self.final_reason = "max_iterations={} reached".format(
+                    self._max_iterations
                 )
         finally:
             self._driver.kill()
