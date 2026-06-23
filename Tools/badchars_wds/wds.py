@@ -15,10 +15,6 @@ def generate_wds(config):  # type: (WDSConfig) -> str
     stage = config.stage
     _validate_stage(stage)
 
-    dump_end_expr = "({base}+0x{size:x})".format(
-        base=_wrap_expr(stage.dump_expr), size=stage.dump_size
-    )
-
     commands = []
     commands.append("sxd ibp")
     commands.append("sxd ld")
@@ -33,24 +29,17 @@ def generate_wds(config):  # type: (WDSConfig) -> str
     step_cmd = _step_command(stage.step_mode, stage.custom_step)
     if step_cmd:
         bp_parts.append(step_cmd)
+    # Use L<length> form — more reliable than two-address form inside a bp
+    # command string.  Write directly to final_dump_path so no shell rename
+    # is needed (avoiding .shell -ci which interprets its argument as debugger
+    # commands, not a shell command).
     bp_parts.append(
-        '.writemem {temp} {start} {end}'.format(
-            temp=_shell_quote_path(stage.temp_dump_path),
+        '.writemem {final} {start} L0x{size:x}'.format(
+            final=_shell_quote_path(stage.final_dump_path),
             start=_wrap_expr(stage.dump_expr),
-            end=dump_end_expr,
+            size=stage.dump_size,
         )
     )
-    # Only emit the rename shell command when temp and final are distinct.
-    # When they are the same, .writemem writes directly to the final path and
-    # no rename is needed.  A self-rename (move X X) errors on Windows and
-    # would silently swallow the breakpoint's remaining commands.
-    if stage.temp_dump_path != stage.final_dump_path:
-        bp_parts.append(
-            '.shell -ci "cmd /c move /Y {temp} {final}"'.format(
-                temp=_shell_quote_path(stage.temp_dump_path),
-                final=_shell_quote_path(stage.final_dump_path),
-            )
-        )
     if stage.quit_after_dump:
         bp_parts.append("q")
     else:
