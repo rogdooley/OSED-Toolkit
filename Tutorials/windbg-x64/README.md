@@ -3,6 +3,9 @@
 This is a companion to [../windbg-x86/README.md](../windbg-x86/README.md).
 Read the x86 series first. This series covers only the differences.
 
+For the full workflow guide, see [../windbg-cheatsheet.md](../windbg-cheatsheet.md).
+For ARM notes, see [../windbg-arm/README.md](../windbg-arm/README.md).
+
 ## The three categories of x64 differences
 
 1. **Register and calling convention changes** — 64-bit general-purpose

@@ -16,12 +16,14 @@ Pure stdlib, no external dependencies.
 2. [Quick start](#quick-start)
 3. [The generic workflow](#the-generic-workflow)
 4. [Finding the three numbers](#finding-the-three-numbers)
-5. [Worked examples](#worked-examples)
+5. [Breakpoint selection](#breakpoint-selection)
+6. [Target bring-up checklist](#target-bring-up-checklist)
+7. [Worked examples](#worked-examples)
    - [Example 1 — Local lab target (synthetic bad chars)](#example-1--local-lab-target-synthetic-bad-chars)
    - [Example 2 — Vulnserver TRUN (simple real-world target)](#example-2--vulnserver-trun-simple-real-world-target)
    - [Example 3 — SLMail PASS (unknown target walkthrough)](#example-3--slmail-pass-unknown-target-walkthrough)
-6. [Config reference](#config-reference)
-7. [Troubleshooting](#troubleshooting)
+8. [Config reference](#config-reference)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -76,6 +78,15 @@ first. It is the short field note for deriving:
 - `dump_expr` displacement
 
 Those three values are where most target bring-up failures come from.
+
+For the other two short field notes, see:
+
+- [`BREAKPOINT_SELECTION.md`](/Users/dooley/Documents/GithubClone/OSED-Toolkit/Tools/badchars_wds/BREAKPOINT_SELECTION.md)
+- [`TARGET_BRINGUP_CHECKLIST.md`](/Users/dooley/Documents/GithubClone/OSED-Toolkit/Tools/badchars_wds/TARGET_BRINGUP_CHECKLIST.md)
+
+Worked bring-up example:
+
+- [`TARGET_BRINGUP_EXAMPLE_LTER.md`](/Users/dooley/Documents/GithubClone/OSED-Toolkit/Tools/badchars_wds/TARGET_BRINGUP_EXAMPLE_LTER.md)
 
 For any new target, the work is always the same five steps:
 

@@ -1,7 +1,7 @@
 """Model definitions for WDS generation and byte comparison."""
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 
 @dataclass
@@ -14,6 +14,7 @@ class Stage:
     temp_dump_path: str = "dump.tmp.bin"
     final_dump_path: str = "dump.bin"
     quit_after_dump: bool = False
+    extra_init_commands: List[str] = field(default_factory=list)
 
 
 @dataclass

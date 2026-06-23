@@ -1,9 +1,9 @@
 import { Command, CommandResult } from "../core/registry";
 import * as out from "../core/output";
-import { getPointerSize, readMemory } from "../core/memory";
+import { getPointerSize, tryReadMemory } from "../core/memory";
 import { normalizeByteArray } from "../core/validation";
 import { scanPattern } from "../core/scan_engine";
-import { validateInstructionCandidate } from "../logic/instruction_validation";
+import { knownPatterns, validateInstructionCandidate } from "../logic/instruction_validation";
 import { findModuleByAddress } from "./modules";
 
 type TriState = "enabled" | "disabled" | "unknown";
@@ -20,19 +20,6 @@ type SehPprFinding = {
   score: number;
   reasons: string[];
 };
-
-const POP_REG_START = 0x58;
-const POP_REG_END = 0x5f;
-
-function buildPatterns(): number[][] {
-  const patterns: number[][] = [];
-  for (let first = POP_REG_START; first <= POP_REG_END; first += 1) {
-    for (let second = POP_REG_START; second <= POP_REG_END; second += 1) {
-      patterns.push([first, second, 0xc3]);
-    }
-  }
-  return patterns;
-}
 
 function addressBytes(address: bigint, pointerSize: 4 | 8): number[] {
   const bytes: number[] = [];
@@ -87,13 +74,6 @@ function scoreFinding(badcharSafe: boolean, aslr: TriState, safeseh: TriState): 
   return { score, reasons };
 }
 
-function isPprMnemonic(mnemonic?: string): boolean {
-  if (!mnemonic) {
-    return false;
-  }
-  return /^pop [a-z0-9]+ ; pop [a-z0-9]+ ; ret$/i.test(mnemonic);
-}
-
 function normalizeMode(value: unknown): Mode {
   return value === "thorough" ? "thorough" : "fast";
 }
@@ -126,7 +106,9 @@ export function createSehPprCommand(): Command {
 
       const findings: SehPprFinding[] = [];
       const seen = new Set<string>();
-      const patterns = buildPatterns();
+      const patterns = knownPatterns()
+        .filter((p) => /^pop \w+ ; pop \w+ ; ret$/.test(p.mnemonic))
+        .map((p) => p.bytes);
 
       for (const pattern of patterns) {
         if (findings.length >= maxResults) {
@@ -153,13 +135,12 @@ export function createSehPprCommand(): Command {
           }
           seen.add(key);
 
-          const candidate = readMemory(hit, 3);
-          const validated = validateInstructionCandidate(candidate, true, true);
-          if (!validated.flags.decoded || !validated.flags.mnemonicMatch || !validated.flags.executable) {
+          const candidate = tryReadMemory(hit, 3);
+          if (!candidate) {
             continue;
           }
-
-          if (!isPprMnemonic(validated.mnemonic)) {
+          const validated = validateInstructionCandidate(candidate, true, true);
+          if (!validated.flags.decoded || !validated.flags.mnemonicMatch || !validated.flags.executable) {
             continue;
           }
 

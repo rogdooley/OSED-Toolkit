@@ -187,6 +187,7 @@ def _validate_schema_phase(config, source, issues):
             "temp_dump_path": str,
             "final_dump_path": str,
             "quit_after_dump": bool,
+            "extra_init_commands": list,
         },
     )
     _validate_object(
@@ -221,6 +222,10 @@ def _validate_schema_phase(config, source, issues):
     driver = config.get("driver")
     if isinstance(driver, dict):
         _validate_str_list(driver, "driver.target_command", source, issues)
+
+    stage = config.get("stage")
+    if isinstance(stage, dict):
+        _validate_str_list(stage, "stage.extra_init_commands", source, issues)
         env = driver.get("env")
         if env is not None:
             if not isinstance(env, dict):
@@ -453,6 +458,7 @@ def _materialize(config):
         temp_dump_path=stage_cfg.get("temp_dump_path", "dump.tmp.bin"),
         final_dump_path=stage_cfg.get("final_dump_path", "dump.bin"),
         quit_after_dump=stage_cfg.get("quit_after_dump", False),
+        extra_init_commands=stage_cfg.get("extra_init_commands", []),
     )
     return LoadedConfig(
         raw=copy.deepcopy(config),

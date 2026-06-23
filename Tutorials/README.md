@@ -80,7 +80,8 @@ Uses the osed-windbg toolkit (`osed-windbg/`) for cross-verification.
 | Series | Status | Focus |
 |---|---|---|
 | [WinDbg x86](windbg-x86/) | Built | Orientation → C code → TEB/PEB → module list → PE exports → hashes |
-| [WinDbg x64](windbg-x64/) | Built (companion) | Calling convention, GS register, wider offsets — deltas from x86 only |
+| [WinDbg x64](windbg-x64/) | Built (companion) | Calling convention, GS register, wider offsets - deltas from x86 only |
+| [WinDbg ARM](windbg-arm/) | Separate | Architecture notes and WinDbg differences for ARM targets |
 
 These series are self-contained and can be worked independently of Modules 01–05
 above. They assume less prerequisite knowledge than Module 01 and are a good

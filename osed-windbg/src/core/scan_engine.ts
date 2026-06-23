@@ -246,9 +246,9 @@ export function scanPattern(options: ScanOptions, pattern: Uint8Array): ScanResu
     for (let offset = 0; offset < section.size; offset += normalizedChunk) {
       const chunkStart = section.start + BigInt(offset);
       const remaining = section.size - offset;
-      const size = Math.max(0, Math.min(remaining, normalizedChunk));
+      const size = Math.max(0, Math.min(remaining, normalizedChunk + pattern.length - 1));
 
-      if (size === 0) {
+      if (size < pattern.length) {
         continue;
       }
 

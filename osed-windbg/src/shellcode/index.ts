@@ -265,7 +265,7 @@ class PEParser {
     const entryPointRva = readUint32LE(optionalHeader + BigInt(0x10));
     const imageBase = isPe32Plus
       ? readPointer(optionalHeader + BigInt(0x18), 8)
-      : BigInt(readUint32LE(optionalHeader + BigInt(0x1c)) >>> 0);
+      : BigInt(readUint32LE(optionalHeader + BigInt(0x1c)));
     const sizeOfImage = readUint32LE(optionalHeader + BigInt(0x38));
 
     const dataDirectoryOffset = optionalHeader + BigInt(isPe32Plus ? 0x70 : 0x60);
@@ -279,12 +279,12 @@ class PEParser {
       machine,
       machineName: machineToString(machine),
       entryPointRva,
-      entryPointVa: base + BigInt(entryPointRva >>> 0),
+      entryPointVa: base + BigInt(entryPointRva),
       imageBase,
       sizeOfImage,
       optionalHeaderMagic,
       exportDirectoryRva,
-      exportDirectoryVa: base + BigInt(exportDirectoryRva >>> 0),
+      exportDirectoryVa: base + BigInt(exportDirectoryRva),
       exportDirectorySize,
     };
   }
@@ -298,23 +298,23 @@ class PEParser {
       return [];
     }
 
-    const functionsVa = module.base + BigInt(exportInfo.addressOfFunctionsRva >>> 0);
-    const namesVa = module.base + BigInt(exportInfo.addressOfNamesRva >>> 0);
-    const ordinalsVa = module.base + BigInt(exportInfo.addressOfNameOrdinalsRva >>> 0);
+    const functionsVa = module.base + BigInt(exportInfo.addressOfFunctionsRva);
+    const namesVa = module.base + BigInt(exportInfo.addressOfNamesRva);
+    const ordinalsVa = module.base + BigInt(exportInfo.addressOfNameOrdinalsRva);
 
     const namesByIndex = new Map<number, string>();
 
     for (let i = 0; i < exportInfo.numberOfNames; i += 1) {
       const nameRva = readUint32LE(namesVa + BigInt(i * 4));
       const ordinalIndex = readUint16LE(ordinalsVa + BigInt(i * 2));
-      const nameAddress = module.base + BigInt(nameRva >>> 0);
+      const nameAddress = module.base + BigInt(nameRva);
       namesByIndex.set(ordinalIndex, readAsciiString(nameAddress, 512));
     }
 
     const entries: ExportEntry[] = [];
     for (let index = 0; index < exportInfo.numberOfFunctions; index += 1) {
       const rva = readUint32LE(functionsVa + BigInt(index * 4));
-      const va = module.base + BigInt(rva >>> 0);
+      const va = module.base + BigInt(rva);
       const ordinal = exportInfo.ordinalBase + index;
       entries.push({
         ordinal,
@@ -348,7 +348,7 @@ class PEParser {
     if (headers.exportDirectoryRva === 0 || headers.exportDirectorySize === 0) {
       return undefined;
     }
-    const exportDir = module.base + BigInt(headers.exportDirectoryRva >>> 0);
+    const exportDir = module.base + BigInt(headers.exportDirectoryRva);
     return {
       exportDirectoryRva: headers.exportDirectoryRva,
       exportDirectoryVa: headers.exportDirectoryVa,
@@ -431,7 +431,7 @@ class ExportResolver {
     if (entry.rva >= start && entry.rva < end) {
       return {
         forwarded: true,
-        target: readAsciiString(module.base + BigInt(entry.rva >>> 0), 512),
+        target: readAsciiString(module.base + BigInt(entry.rva), 512),
       };
     }
     return { forwarded: false, target: "" };
@@ -484,7 +484,7 @@ class IATResolver {
 
     const modules = this.modulesProvider();
     const rows: IatEntry[] = [];
-    let descriptorAddress = owner.base + BigInt(importDirRva >>> 0);
+    let descriptorAddress = owner.base + BigInt(importDirRva);
     const maxDescriptors = 4096;
 
     for (let index = 0; index < maxDescriptors; index += 1) {
@@ -498,12 +498,12 @@ class IATResolver {
         break;
       }
 
-      const dllName = nameRva === 0 ? "<unknown>" : readAsciiString(owner.base + BigInt(nameRva >>> 0), 260);
+      const dllName = nameRva === 0 ? "<unknown>" : readAsciiString(owner.base + BigInt(nameRva), 260);
       const expectedModule = this.findByDllName(modules, dllName);
       const intBaseRva = originalFirstThunk !== 0 ? originalFirstThunk : firstThunk;
 
-      let intPtr = owner.base + BigInt(intBaseRva >>> 0);
-      let iatPtr = owner.base + BigInt(firstThunk >>> 0);
+      let intPtr = owner.base + BigInt(intBaseRva);
+      let iatPtr = owner.base + BigInt(firstThunk);
       const maxThunks = 16384;
 
       for (let thunkIndex = 0; thunkIndex < maxThunks; thunkIndex += 1) {
@@ -586,7 +586,7 @@ class IATResolver {
         const virtualSize = readUint32LE(sectionHeader + BigInt(0x8));
         const virtualAddress = readUint32LE(sectionHeader + BigInt(0xc));
         const characteristics = readUint32LE(sectionHeader + BigInt(0x24));
-        const start = BigInt(virtualAddress >>> 0);
+        const start = BigInt(virtualAddress);
         const end = start + BigInt(Math.max(virtualSize, 1));
         if (rva >= start && rva < end) {
           return (characteristics & IMAGE_SCN_MEM_EXECUTE) !== 0;
@@ -617,7 +617,7 @@ class IATResolver {
         return { target: dest, note: "jmp-rel8" };
       }
       if (this.pointerSize === 4 && op === 0xff && first[1] === 0x25) {
-        const memPtr = BigInt(readUint32LE(address + BigInt(2)) >>> 0);
+        const memPtr = BigInt(readUint32LE(address + BigInt(2)));
         const dest = readPointer(memPtr, this.pointerSize);
         return { target: dest, note: "jmp-[imm]" };
       }
@@ -628,7 +628,7 @@ class IATResolver {
   }
 
   private readInt32LE(address: bigint): number {
-    const value = readUint32LE(address) >>> 0;
+    const value = readUint32LE(address);
     return value > 0x7fffffff ? value - 0x100000000 : value;
   }
 
@@ -672,7 +672,7 @@ class IATResolver {
   }
 
   private readThunk(address: bigint): bigint {
-    return this.pointerSize === 8 ? readPointer(address, 8) : BigInt(readUint32LE(address) >>> 0);
+    return this.pointerSize === 8 ? readPointer(address, 8) : BigInt(readUint32LE(address));
   }
 }
 
@@ -885,14 +885,14 @@ class ShellcodeHelper {
       if (!exportDir) {
         return this.errorRows(`Module ${lookup.module.name} has no export directory.`);
       }
-      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva >>> 0);
-      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva >>> 0);
+      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva);
+      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva);
       let nameRva = 0;
       let ordinalIndex = entry.ordinal - exportDir.ordinalBase;
       for (let i = 0; i < exportDir.numberOfNames; i += 1) {
         const candidateNameRva = readUint32LE(namesVa + BigInt(i * 4));
         const candidateOrdinal = readUint16LE(ordinalsVa + BigInt(i * 2));
-        const candidate = readAsciiString(lookup.module.base + BigInt(candidateNameRva >>> 0), 512);
+        const candidate = readAsciiString(lookup.module.base + BigInt(candidateNameRva), 512);
         if (candidate.toLowerCase() === entry.name.toLowerCase()) {
           nameRva = candidateNameRva;
           ordinalIndex = candidateOrdinal;
@@ -903,7 +903,7 @@ class ShellcodeHelper {
       return [
         { Property: "Name", Value: entry.name || "<unnamed>" },
         { Property: "Name RVA", Value: `0x${nameRva.toString(16).toUpperCase()}` },
-        { Property: "Name VA", Value: toDmlAddress(lookup.module.base + BigInt(nameRva >>> 0), "db") },
+        { Property: "Name VA", Value: toDmlAddress(lookup.module.base + BigInt(nameRva), "db") },
         { Property: "Ordinal Index", Value: ordinalIndex.toString() },
         { Property: "Ordinal", Value: entry.ordinal.toString() },
         { Property: "Function RVA", Value: `0x${entry.rva.toString(16).toUpperCase()}` },
@@ -955,9 +955,9 @@ class ShellcodeHelper {
       if (!exportDir) {
         return this.errorRows(`Module ${lookup.module.name} has no export directory.`);
       }
-      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva >>> 0);
-      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva >>> 0);
-      const functionsVa = lookup.module.base + BigInt(exportDir.addressOfFunctionsRva >>> 0);
+      const namesVa = lookup.module.base + BigInt(exportDir.addressOfNamesRva);
+      const ordinalsVa = lookup.module.base + BigInt(exportDir.addressOfNameOrdinalsRva);
+      const functionsVa = lookup.module.base + BigInt(exportDir.addressOfFunctionsRva);
       const rows: Array<Record<string, string>> = [];
 
       let matchIndex = -1;
@@ -966,7 +966,7 @@ class ShellcodeHelper {
       let functionRva = 0;
       for (let i = 0; i < exportDir.numberOfNames; i += 1) {
         const nameRva = readUint32LE(namesVa + BigInt(i * 4));
-        const name = readAsciiString(lookup.module.base + BigInt(nameRva >>> 0), 512);
+        const name = readAsciiString(lookup.module.base + BigInt(nameRva), 512);
         if (verbose) {
           rows.push({ Step: "Walk", Value: `${i}: ${name}` });
         }
@@ -994,7 +994,7 @@ class ShellcodeHelper {
         summary.push({ Step: "[9] Match", Value: "not found" });
         return summary.concat(verbose ? rows : []);
       }
-      const finalVa = lookup.module.base + BigInt(functionRva >>> 0);
+      const finalVa = lookup.module.base + BigInt(functionRva);
       const matchedEntry = this.exportResolver.resolve(lookup.module, matchName);
       const forward = matchedEntry ? this.exportResolver.isForwarded(lookup.module, matchedEntry) : { forwarded: false, target: "" };
       summary.push(
@@ -1471,7 +1471,7 @@ class DxRow {
   }
 
   public toString(): string {
-    const pairs = Object.entries(this as unknown as Record<string, string>).filter(([k]) => k !== "toString");
+    const pairs = Object.entries(this as unknown as Record<string, string>).filter(([, v]) => typeof v === "string");
     return pairs.map(([k, v]) => `${k}: ${v}`).join(" | ");
   }
 }

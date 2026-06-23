@@ -6,8 +6,16 @@ import { validateInstructionCandidate } from "../logic/instruction_validation";
 
 const PIVOT_PATTERNS: Array<{ sequence: string; bytes: number[] }> = [
   { sequence: "xchg eax, esp ; ret", bytes: [0x94, 0xc3] },
+  { sequence: "xchg ecx, esp ; ret", bytes: [0x87, 0xcc, 0xc3] },
+  { sequence: "xchg edx, esp ; ret", bytes: [0x87, 0xd4, 0xc3] },
+  { sequence: "xchg ebx, esp ; ret", bytes: [0x87, 0xdc, 0xc3] },
+  { sequence: "xchg esi, esp ; ret", bytes: [0x87, 0xf4, 0xc3] },
+  { sequence: "xchg edi, esp ; ret", bytes: [0x87, 0xfc, 0xc3] },
+  { sequence: "xchg ebp, esp ; ret", bytes: [0x87, 0xec, 0xc3] },
   { sequence: "push esp ; ret", bytes: [0x54, 0xc3] },
   { sequence: "mov esp, ebp ; ret", bytes: [0x8b, 0xe5, 0xc3] },
+  { sequence: "mov esp, eax ; ret", bytes: [0x89, 0xc4, 0xc3] },
+  { sequence: "leave ; ret", bytes: [0xc9, 0xc3] },
 ];
 
 export function createPivotCommand(): Command {

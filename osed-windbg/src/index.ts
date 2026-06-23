@@ -34,6 +34,9 @@ import { createReloadCommand } from "./commands/reload";
 import { createSehPprCommand } from "./commands/seh_ppr";
 import { createExploitCommand } from "./commands/exploit";
 import { createTriageCommand } from "./commands/triage";
+import { createEncodeCommand } from "./commands/encode";
+import { createNopCommand } from "./commands/nop";
+import { createRopTemplateCommand } from "./commands/rop_template";
 import { createShellcodeNamespace } from "./shellcode";
 
 type OsedApi = {
@@ -72,6 +75,9 @@ function registerAll(): void {
     createPivotCommand(),
     createSehPprCommand(),
     createTriageCommand(),
+    createEncodeCommand(),
+    createNopCommand(),
+    createRopTemplateCommand(),
     createExploitCommand(),
     createHelpCommand(registry),
     createReloadCommand(registry),
@@ -162,9 +168,7 @@ function parseHexByteList(value: unknown): number[] | unknown {
       continue;
     }
 
-    if (!/^[0-9a-fA-F]{1,2}$/.test(token)) {
-      return value;
-    }
+    return value;
   }
   return parsed;
 }
@@ -196,11 +200,23 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
     case "rop":
     case "rop_suggest":
     case "pivots":
+    case "retn":
+    case "add_esp":
       return {
         module: args[0],
         maxResults: args[1],
         executableOnly: args[2],
         mode: args[3],
+      };
+    case "nop":
+      return { length: args[0], byte: args[1] };
+    case "rop_template":
+      return { api: args[0], module: args[1] };
+    case "encode":
+      return {
+        shellcode: args[0],
+        exclude: parseHexByteList(args[1]),
+        key: args[2],
       };
     case "find_bytes":
       return {

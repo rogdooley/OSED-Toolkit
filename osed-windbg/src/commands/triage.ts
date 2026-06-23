@@ -79,6 +79,17 @@ function toBigInt(value: unknown): bigint | undefined {
     } catch (_error) {
       // ignore
     }
+    try {
+      const asString = safeGet(value, "toString");
+      if (typeof asString === "function") {
+        const str = (asString as () => unknown).call(value);
+        if (typeof str === "string" && str !== "[object Object]") {
+          return toBigInt(str);
+        }
+      }
+    } catch (_error) {
+      // ignore
+    }
   }
   return undefined;
 }

@@ -1,6 +1,6 @@
 import { Command, CommandResult, ValidationFlags } from "../core/registry";
 import * as out from "../core/output";
-import { getPointerSize, readMemory } from "../core/memory";
+import { getPointerSize, readMemory, tryReadMemory } from "../core/memory";
 import { scanPattern } from "../core/scan_engine";
 import { knownPatterns, validateInstructionCandidate } from "../logic/instruction_validation";
 import { listModulesWithMitigations } from "./modules";
@@ -245,5 +245,190 @@ export function createRopCommands(): Command[] {
     },
   };
 
-  return [rop, findBytes, ropSuggest];
+  const retnGadgets: Command = {
+    name: "retn",
+    description: "Scan for retn N gadgets that pop N bytes before returning.",
+    usage: "dx @$osed.retn({ module: 'essfunc', maxResults: 50 })",
+    examples: [
+      "dx @$osed.retn({ module: 'essfunc' })",
+      "dx @$osed.retn({ module: 'essfunc', maxResults: 100 })",
+    ],
+    schema: {
+      module: { type: "string" },
+      executableOnly: { type: "boolean", default: true },
+      maxResults: { type: "number", min: 1, max: 200, default: 50 },
+      mode: { type: "string", enum: ["fast", "thorough"], default: "fast" },
+    },
+    execute(options: Record<string, unknown>): CommandResult {
+      const pointerSize = getPointerSize();
+      const maxResults = Math.min((options.maxResults as number | undefined) ?? 50, 200);
+      const executableOnly = (options.executableOnly as boolean | undefined) ?? true;
+      const moduleFilter = options.module as string | undefined;
+      const chunkSize = (options.mode as string) === "thorough" ? 0x1000 : 0x4000;
+
+      // Scan for the retn opcode (C2) with a generous internal limit to capture diverse N values.
+      const scan = scanPattern(
+        { module: moduleFilter, executableOnly, maxResults: 200, chunkSize },
+        Uint8Array.from([0xc2]),
+      );
+
+      const warnings: string[] = [...scan.warnings.map((w) => `${w.region}: ${w.message}`)];
+
+      // Group hits by N value; keep the first address seen for each.
+      type Group = { first: bigint; count: number };
+      const groups = new Map<number, Group>();
+
+      for (const hit of scan.hits) {
+        const bytes = tryReadMemory(hit, 3);
+        if (!bytes || bytes.length < 3 || bytes[0] !== 0xc2) continue;
+        const n = bytes[1] | (bytes[2] << 8);
+        if (n === 0) continue; // retn 0 is functionally ret — not useful for chain adjustment
+        const existing = groups.get(n);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          groups.set(n, { first: hit, count: 1 });
+        }
+      }
+
+      const sorted = [...groups.entries()]
+        .sort(([a], [b]) => a - b)
+        .slice(0, maxResults);
+
+      const findings = sorted.map(([n, { first, count }]) => ({ n, address: first, count }));
+      const rows = findings.map(({ n, address, count }) => ({
+        n: `0x${n.toString(16).toUpperCase().padStart(4, "0")}`,
+        decimal: n.toString(),
+        count: count.toString(),
+        address: out.formatAddress(address, pointerSize),
+        python: `0x${address.toString(16).toUpperCase()}`,
+      }));
+
+      out.section("RETN N Gadgets");
+      if (rows.length === 0) {
+        out.print("No retn N gadgets found.");
+      } else {
+        out.table(
+          [
+            { key: "n", header: "N (hex)", width: 8 },
+            { key: "decimal", header: "N (dec)", width: 8 },
+            { key: "count", header: "Count", width: 6 },
+            { key: "address", header: "Address", width: 18 },
+            { key: "python", header: "Python", width: 14 },
+          ],
+          rows,
+        );
+      }
+      out.whyItMatters("retn N pops N bytes before returning — used to skip arguments in stdcall ROP chains.");
+
+      return {
+        command: "retn",
+        args: options,
+        success: true,
+        findings,
+        warnings,
+        errors: [],
+        stats: scan.stats,
+      };
+    },
+  };
+
+  const addEsp: Command = {
+    name: "add_esp",
+    description: "Scan for add esp, N ; ret gadgets used to skip stack slots in ROP chains.",
+    usage: "dx @$osed.add_esp({ module: 'essfunc', maxResults: 50 })",
+    examples: [
+      "dx @$osed.add_esp({ module: 'essfunc' })",
+      "dx @$osed.add_esp({ module: 'essfunc', maxResults: 100 })",
+    ],
+    schema: {
+      module: { type: "string" },
+      executableOnly: { type: "boolean", default: true },
+      maxResults: { type: "number", min: 1, max: 200, default: 50 },
+      mode: { type: "string", enum: ["fast", "thorough"], default: "fast" },
+    },
+    execute(options: Record<string, unknown>): CommandResult {
+      const pointerSize = getPointerSize();
+      const maxResults = Math.min((options.maxResults as number | undefined) ?? 50, 200);
+      const executableOnly = (options.executableOnly as boolean | undefined) ?? true;
+      const moduleFilter = options.module as string | undefined;
+      const chunkSize = (options.mode as string) === "thorough" ? 0x1000 : 0x4000;
+
+      const warnings: string[] = [];
+
+      // Group hits by N; keep the first address found.
+      type Group = { first: bigint; count: number; imm32: boolean };
+      const groups = new Map<number, Group>();
+
+      // Scan for ADD ESP, imm8 (83 C4 NN C3)
+      const scan8 = scanPattern({ module: moduleFilter, executableOnly, maxResults: 200, chunkSize }, Uint8Array.from([0x83, 0xc4]));
+      warnings.push(...scan8.warnings.map((w) => `${w.region}: ${w.message}`));
+      for (const hit of scan8.hits) {
+        const bytes = tryReadMemory(hit, 4);
+        if (!bytes || bytes.length < 4 || bytes[0] !== 0x83 || bytes[1] !== 0xc4 || bytes[3] !== 0xc3) continue;
+        const n = bytes[2]; // imm8 (treat as unsigned for display)
+        if (n === 0) continue;
+        const existing = groups.get(n);
+        if (existing) { existing.count += 1; } else { groups.set(n, { first: hit, count: 1, imm32: false }); }
+      }
+
+      // Scan for ADD ESP, imm32 (81 C4 NN NN NN NN C3)
+      const scan32 = scanPattern({ module: moduleFilter, executableOnly, maxResults: 200, chunkSize }, Uint8Array.from([0x81, 0xc4]));
+      warnings.push(...scan32.warnings.map((w) => `${w.region}: ${w.message}`));
+      for (const hit of scan32.hits) {
+        const bytes = tryReadMemory(hit, 7);
+        if (!bytes || bytes.length < 7 || bytes[0] !== 0x81 || bytes[1] !== 0xc4 || bytes[6] !== 0xc3) continue;
+        const n = bytes[2] | (bytes[3] << 8) | (bytes[4] << 16) | (bytes[5] << 24);
+        if (n <= 0) continue;
+        // Only add if we don't already have it from the imm8 scan (n > 255 means imm32-only)
+        if (!groups.has(n)) { groups.set(n, { first: hit, count: 1, imm32: true }); }
+        else { groups.get(n)!.count += 1; }
+      }
+
+      const sorted = [...groups.entries()]
+        .filter(([n]) => n > 0)
+        .sort(([a], [b]) => a - b)
+        .slice(0, maxResults);
+
+      const findings = sorted.map(([n, { first, count, imm32 }]) => ({ n, address: first, count, imm32 }));
+      const rows = findings.map(({ n, address, count, imm32 }) => ({
+        n: `0x${n.toString(16).toUpperCase().padStart(imm32 ? 8 : 2, "0")}`,
+        decimal: n.toString(),
+        enc: imm32 ? "imm32" : "imm8",
+        count: count.toString(),
+        address: out.formatAddress(address, pointerSize),
+        python: `0x${address.toString(16).toUpperCase()}`,
+      }));
+
+      out.section("ADD ESP, N ; RET Gadgets");
+      if (rows.length === 0) {
+        out.print("No add esp, N ; ret gadgets found.");
+      } else {
+        out.table(
+          [
+            { key: "n",       header: "N (hex)",  width: 10 },
+            { key: "decimal", header: "N (dec)",  width: 8  },
+            { key: "enc",     header: "Enc",      width: 6  },
+            { key: "count",   header: "Count",    width: 6  },
+            { key: "address", header: "Address",  width: 18 },
+            { key: "python",  header: "Python",   width: 14 },
+          ],
+          rows,
+        );
+      }
+      out.whyItMatters("add esp, N skips N bytes of ROP chain slots — essential for aligning stdcall argument frames.");
+
+      const stats = {
+        sectionsScanned: (scan8.stats?.sectionsScanned ?? 0) + (scan32.stats?.sectionsScanned ?? 0),
+        chunksRead: (scan8.stats?.chunksRead ?? 0) + (scan32.stats?.chunksRead ?? 0),
+        chunksSkipped: (scan8.stats?.chunksSkipped ?? 0) + (scan32.stats?.chunksSkipped ?? 0),
+        results: findings.length,
+        stoppedEarly: (scan8.stats?.stoppedEarly ?? 0) + (scan32.stats?.stoppedEarly ?? 0),
+      };
+
+      return { command: "add_esp", args: options, success: true, findings, warnings, errors: [], stats };
+    },
+  };
+
+  return [rop, findBytes, ropSuggest, retnGadgets, addEsp];
 }

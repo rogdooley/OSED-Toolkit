@@ -28,4 +28,9 @@ describe("pattern logic", () => {
     expect(decodeOffsetNeedle("41326341")).toBe("Ac2A");
     expect(() => decodeOffsetNeedle("GARBAGE")).toThrow(/hex/i);
   });
+
+  test("cyclic pattern throws when length exceeds De Bruijn sequence", () => {
+    expect(generateCyclicPattern(10).length).toBe(10);
+    expect(() => generateCyclicPattern(300000)).toThrow(/exceeds/i);
+  });
 });

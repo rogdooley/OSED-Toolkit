@@ -36,7 +36,7 @@ export function readUint16LE(address: bigint): number {
 
 export function readUint32LE(address: bigint): number {
   const bytes = readMemory(address, 4);
-  return bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+  return (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0;
 }
 
 export function readUint64LE(address: bigint): bigint {
@@ -49,7 +49,7 @@ export function readUint64LE(address: bigint): bigint {
 }
 
 export function readPointer(address: bigint, pointerSize: 4 | 8): bigint {
-  return pointerSize === 8 ? readUint64LE(address) : BigInt(readUint32LE(address) >>> 0);
+  return pointerSize === 8 ? readUint64LE(address) : BigInt(readUint32LE(address));
 }
 
 export function getPointerSize(): 4 | 8 {

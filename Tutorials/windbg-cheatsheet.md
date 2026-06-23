@@ -1,5 +1,5 @@
 ---
-title: "WinDbg / cdb Cheat Sheet — x86 Exploit Dev (OSED)"
+title: "WinDbg / cdb Workflow Guide for OSED"
 documentclass: extarticle
 geometry: "margin=0.4in"
 fontsize: 8pt
@@ -18,149 +18,253 @@ header-includes:
   - \AtBeginDocument{\footnotesize}
 ---
 
-Default number base is **hex**. Write decimal as `0n100`. Registers are `@eax`, pseudo-regs `$teb`. `poi(x)` = deref pointer at x. Comment in scripts with `$$` or `*`.
+This guide is ordered the way OSED work usually unfolds: start the debug
+session, triage the crash, inspect stack and memory, then move into module
+enumeration, PE walking, and exploit-development helpers. The syntax is the
+same debugger syntax you would use in WinDbg or cdb, but the examples are
+chosen for x86 exploit work first.
 
-## Launch / Attach / Symbols
+Default number base is **hex**. Use `0n100` when you mean decimal 100.
+Registers are written as `@eax`, `@esp`, and `@eip`. `poi(x)` means "read the
+pointer stored at `x`". WinDbg comments use `$$` inside scripts.
 
-| Command | Purpose |
-|---|---|
-| `cdb -o -G target.exe args` | Launch + debug children, ignore final break. (`-g` skips the *initial* break — usually leave it off.) |
-| `cdb -cf script.wds target.exe` | Run script at initial loader break, then continue. |
-| `windbg -p <pid>` / `-pn name.exe` | Attach to running process by pid / name. |
-| `.sympath srv*c:\sym*https://msdl.microsoft.com/download/symbols` | Set Microsoft symbol path. |
-| `.reload /f` | Force-reload symbols for all modules. |
-| `lm` / `lmf` / `lm m vuln*` | List modules / with paths / filtered. |
-| `x ntdll!*Ldr*` | Search symbols by wildcard. |
-| `ln 0x76f7db6b` | Nearest symbol to an address. |
+## 1. Start the session
 
-## Execution Control
+| Command | Why use it | Example |
+|---|---|---|
+| `cdb -o -G target.exe args` | Launch under the debugger and keep child processes visible. | `cdb -o -G vuln_strcpy_x86.exe AAAA` |
+| `cdb -cf script.wds target.exe` | Run a command script at the initial loader break, then continue. | `cdb -cf setup.wds vuln_strcpy_x86.exe` |
+| `windbgx -o -g target.exe args` | Same idea in WinDbg Preview. Use this when you want the GUI. | `windbgx -o -g vuln_strcpy_x86.exe AAAA` |
+| `windbg -p <pid>` | Attach to a running process by PID. | `windbg -p 4128` |
+| `windbg -pn name.exe` | Attach by image name when the PID is not stable. | `windbg -pn vuln_strcpy_x86.exe` |
+| `.sympath srv*c:\sym*https://msdl.microsoft.com/download/symbols` | Set a symbol path that can pull Microsoft symbols on demand. | `.sympath srv*c:\sym*https://msdl.microsoft.com/download/symbols` |
+| `.reload /f` | Force symbol reload after you change the symbol path or load a new module. | `.reload /f` |
+| `lm` | List loaded modules. Good first check after attach. | `lm` |
+| `lm m vuln*` | Filter the module list to a target pattern. | `lm m vuln*` |
+| `lmf` | Show loaded modules with their paths. | `lmf` |
+| `x ntdll!*Ldr*` | Search symbols by wildcard when you know the subsystem but not the exact name. | `x ntdll!*Ldr*` |
+| `ln 0x76f7db6b` | Ask WinDbg for the nearest symbol to an address. | `ln 0x76f7db6b` |
+| `!analyze -v` | Let WinDbg summarize the exception and common crash clues. | `!analyze -v` |
+| `dx @$osed().help()` | If the osed-windbg toolkit is loaded, show command help first. | `dx @$osed().help()` |
+| `dx @$osed().triage()` | Run a fast read-only crash triage for control, SEH, stack, and modules. | `dx @$osed().triage()` |
 
-| Command | Purpose |
-|---|---|
-| `g` | Go (run). `g 0x401000` = run to address. |
-| `p` / `t` | Step over / step into (one instruction). |
-| `pa 0x401050` | Step (over) until address is reached. |
-| `pt` / `pc` | Step to next `ret` / next `call`. |
-| `gu` | Go up — run until current function returns. |
-| `.restart` | Restart the target from scratch. |
-| `q` / `qd` | Quit (kill) / quit and detach. |
+## Threads and expressions
 
-## Breakpoints
+Use this section when the debugger output is ambiguous and you need to confirm
+which thread owns the state you are reading, or when you need to do explicit
+address math instead of relying on a higher-level helper.
 
-| Command | Purpose |
-|---|---|
-| `bp module+0x1821` | Software BP at module RVA (module already loaded). |
-| `bp kernel32!WinExec` | BP on a symbol. |
-| `bu module!func` | **Deferred** BP — resolves when module loads. |
-| `ba w4 0x402000` | **Hardware** BP: break on 4-byte **w**rite (also `r`/`e`/`i`). |
-| `bp x "command; g"` | BP that runs a command list then continues. |
-| `` bp x ".if (poi(@esp+8)==0x41) {} .else {gc}" `` | Conditional BP (break only when condition holds). |
-| `bl` / `bc *` / `bd 0` / `be 0` | List / clear all / disable / enable BP. |
-| `bp x 1000` | Pass count — break only on the 1000th hit. |
+| Command | Why use it | Example |
+|---|---|---|
+| `~` | List all threads, their TEBs, and current execution state. | `~` |
+| `~1s` | Switch to thread 1 when you want a different execution context. | `~1s` |
+| `~*k` | Show the call stacks for all threads at once. | `~*k` |
+| `? expr` | Evaluate an expression, including pointer arithmetic and offsets. | `? @esp+0x20` |
+| `? poi(@rsp)` | Dereference a stack pointer and inspect the value it points to. | `? poi(@rsp)` |
+| `? poi(@esp+4)` | Common pattern for following the first stack argument. | `? poi(@esp+4)` |
+| `? @$ra` | Show the current return address without manually dereferencing the stack. | `? @$ra` |
+| `?? expr` | Use the alternate expression evaluator when you want C++-style evaluation. | `?? (void**)@rsp` |
+| `.formats expr` | Inspect a value in multiple numeric representations. | `.formats poi(@esp)` |
+| `k 2` | Limit the stack trace to a small number of frames for quick triage. | `k 2` |
+| `dx (void**)@rsp` | Typed pointer inspection bridge between raw memory and `dx`. | `dx (void**)@rsp` |
 
-## Registers and Flags
+## 2. Read the crash state
 
-| Command | Purpose |
-|---|---|
-| `r` | Dump all registers + flags + next instruction. |
-| `r eax` / `r eax=0x41414141` | Show / set a single register. |
-| `r $t0=0x100` | Set a scratch pseudo-register (`$t0`..`$t19`). |
-| flags | `zr`=ZF `cy`=CF `ov`=OF `pl/mi`=sign — shown in `r`. |
+| Command | Why use it | Example |
+|---|---|---|
+| `r` | Dump registers, flags, and the next instruction in one shot. | `r` |
+| `r eip` | Check whether instruction pointer control is obvious. | `r eip` |
+| `r esp` | Confirm the current stack pointer before reading stack data. | `r esp` |
+| `.exr -1` | Show the last exception record. | `.exr -1` |
+| `.ecxr` | Switch to the exception context register state. | `.ecxr` |
+| `k` | Show the current call stack quickly. | `k` |
+| `kb` | Show the stack with the first three arguments for each frame. | `kb` |
+| `kp` | Show the stack with full parameters when symbols support it. | `kp` |
+| `dps esp L40` | Dump stack pointers with symbol resolution. This is a common post-crash view. | `dps esp L40` |
+| `dd esp L20` | Read raw DWORDs from the stack when you want exact values. | `dd esp L20` |
+| `da poi(esp+4)` | Follow the argument pointer and read the pointed-to ASCII string. | `da poi(esp+4)` |
+| `db esp L20` | Inspect the first bytes near the stack pointer. | `db esp L20` |
 
-## Examining Memory
+## 3. Control execution
 
-| Command | Purpose |
-|---|---|
-| `db esp L20` | Bytes + ASCII, 0x20 of them. |
-| `dd esp L40` | DWORDs (the stack-reading workhorse). |
-| `dps esp L20` | DWORDs **with symbol resolution** (find return addrs). |
-| `dc`, `dw`, `dq` | DWORD+ASCII, WORDs, QWORDs. |
-| `da` / `du addr` | ASCII / Unicode string at address. |
-| `dt ntdll!_PEB @$peb` | Dump a typed structure (if symbols present). |
-| `!address esp` | Region info + permissions for an address. |
-| `eb addr 90 90` / `ed addr 0x..` | Edit bytes / dword in memory. |
+| Command | Why use it | Example |
+|---|---|---|
+| `g` | Continue execution. | `g` |
+| `g 0x401000` | Run until a specific address. | `g 0x401000` |
+| `p` | Step over one instruction. | `p` |
+| `t` | Step into one instruction. | `t` |
+| `pa 0x401050` | Step over until an address is reached. | `pa 0x401050` |
+| `pt` | Step to the next `ret`. | `pt` |
+| `pc` | Step to the next `call`. | `pc` |
+| `gu` | Run until the current function returns. | `gu` |
+| `.restart` | Restart the target from scratch after a bad run. | `.restart` |
+| `q` | Quit the debugger. | `q` |
+| `qd` | Quit and detach. | `qd` |
 
-## Disassembly
+## 4. Place breakpoints
 
-| Command | Purpose |
-|---|---|
-| `u eip` / `u addr L20` | Disassemble forward (default 8 instrs). |
-| `ub addr` | Disassemble **backward** (find the call before a ret addr). |
-| `uf module!func` | Disassemble a whole function. |
-| `u poi(@esp)` | Disassemble at the address on top of stack. |
+| Command | Why use it | Example |
+|---|---|---|
+| `bp module+0x1821` | Break at a module-relative offset. | `bp vuln_strcpy_x86+0x1821` |
+| `bp kernel32!WinExec` | Break on a known symbol. | `bp kernel32!WinExec` |
+| `bu module!func` | Deferred breakpoint that resolves after the module loads. | `bu msvcrt!strcpy` |
+| `ba w4 0x402000` | Break when 4 bytes at an address are written. | `ba w4 0x402000` |
+| `bp address "command; g"` | Run a command list on break, then continue. | `bp kernel32!CreateFileA "kb; dd esp L10; g"` |
+| `bl` | List active breakpoints. | `bl` |
+| `bc *` | Clear all breakpoints. | `bc *` |
+| `bd 0` | Disable breakpoint 0 without deleting it. | `bd 0` |
+| `be 0` | Re-enable breakpoint 0. | `be 0` |
 
-## Stack and Call Frames
+## 5. Read registers and flags
 
-| Command | Purpose |
-|---|---|
-| `k` / `kb` / `kp` | Call stack / with first 3 args / with full params. |
-| `.frame N` | Switch to frame N (then `dv`, `dd ebp` are in its context). |
-| `dv` | Local variables (needs **private** symbols — fails on stripped). |
+| Command | Why use it | Example |
+|---|---|---|
+| `r eax` | Show one register. | `r eax` |
+| `r eax=0x41414141` | Set a register while testing assumptions. | `r eax=0x41414141` |
+| `r $t0=0x100` | Use a scratch pseudo-register for notes or temporary values. | `r $t0=0x100` |
+| `r @eip` | Read the instruction pointer without symbol lookup. | `r @eip` |
+| `r` output flags | Read `zr`, `cy`, `ov`, `pl`, and `mi` when the flags matter. | `r` |
 
-Stripped binary (no `dv`): read the prologue. `sub esp,0x208` = local size; `[ebp-N]` = locals, `[ebp+8..]` = args, `[ebp+4]` = saved return address.
+## 6. Inspect memory
 
-## Searching Memory
+| Command | Why use it | Example |
+|---|---|---|
+| `db addr L20` | View raw bytes and ASCII together. | `db esp L20` |
+| `dd addr L40` | View DWORDs. This is the workhorse for stack reads. | `dd esp L40` |
+| `dps addr L20` | View DWORDs and resolve any pointers to symbols. | `dps esp L20` |
+| `dc addr` | View DWORDs as ASCII and hex. | `dc esp L10` |
+| `dw addr` | View 16-bit words. | `dw esp L10` |
+| `dq addr` | View 64-bit values. Useful on x64 or when reading 8-byte fields. | `dq rsp L10` |
+| `da addr` | Read ASCII text at an address. | `da poi(esp+4)` |
+| `du addr` | Read UTF-16 text at an address. | `du poi(esp+4)` |
+| `dt ntdll!_PEB @$peb` | Dump the current process environment block if symbols are present. | `dt ntdll!_PEB @$peb` |
+| `dt ntdll!_TEB @$teb` | Dump the current thread environment block if symbols are present. | `dt ntdll!_TEB @$teb` |
+| `!address esp` | Check the memory region and protection flags around a pointer. | `!address esp` |
+| `eb addr 90 90` | Patch bytes in memory. | `eb eip 90 90` |
+| `ed addr 0x41414141` | Patch a DWORD in memory. | `ed esp 0x41414141` |
 
-| Command | Purpose |
-|---|---|
-| `s -a 0 L?80000000 "TRUN"` | Search all memory for ASCII string. |
-| `s -u 0 L?80000000 "calc"` | Search for Unicode string. |
-| `s -b 0 L?80000000 90 90 90 90` | Search for a byte pattern (e.g. NOP sled). |
-| `s -d 0 L?80000000 0x41414141` | Search for a DWORD value. |
+## 7. Disassemble and inspect code
 
-## SEH / Exceptions (OSED-critical)
+| Command | Why use it | Example |
+|---|---|---|
+| `u eip` | Disassemble forward from the current instruction. | `u eip` |
+| `u addr L20` | Disassemble a specific range. | `u 0x401000 L20` |
+| `ub addr` | Disassemble backward to find the call that led here. | `ub 0x401050` |
+| `uf module!func` | Disassemble a whole function. | `uf kernel32!WinExec` |
+| `u poi(@esp)` | Disassemble the return target or saved code pointer on the stack. | `u poi(@esp)` |
+| `dx @$osed().sc.base("kernel32")` | Use the toolkit to resolve a module base before reading code around it. | `dx @$osed().sc.base("kernel32")` |
 
-| Command | Purpose |
-|---|---|
-| `!exchain` | Show the SEH chain (handler addresses). |
-| `sxe av` / `sxd av` | Break on / ignore access violations. |
-| `sxe ld:module` | Break when a specific module loads. |
-| `g` (after AV) | First chance vs second chance — pass once to reach handler. |
-| `.exr -1` / `.ecxr` | Show last exception record / its context. |
+## 8. Follow the stack and frames
 
-## Exploit-Dev Recipes
+| Command | Why use it | Example |
+|---|---|---|
+| `.frame N` | Switch to a different stack frame. | `.frame 2` |
+| `dv` | Show local variables when private symbols are available. | `dv` |
+| `k` | Re-check the stack after changing frame or context. | `k` |
+| `kb` | Use when you want arguments alongside return addresses. | `kb` |
+| `kp` | Use when you want fuller parameter decoding. | `kp` |
 
-```
-Pattern -> offset (no Mona):
-  send cyclic pattern, crash, then:   r eip
-  msf-pattern_offset -q <eip value>   (or !mona findmsp)
+Stripped binary rule of thumb: read the prologue. `sub esp,0x208` tells you how
+much local space was reserved. `[ebp-N]` is a local, `[ebp+8..]` are arguments,
+and `[ebp+4]` is the saved return address.
 
-Find a jmp esp / call esp return address:
-  s -b 0x62500000 L?1000 ff e4          $$ jmp esp opcode
-  s -b 0x62500000 L?1000 ff d4          $$ call esp
-  !mona jmp -r esp -cpb '\x00\x0a\x0d'  $$ with bad-char filter
+## 9. Search memory
 
-POP/POP/RET for SEH:
-  !mona seh -cpb '\x00\x0a\x0d'
+| Command | Why use it | Example |
+|---|---|---|
+| `s -a 0 L?80000000 "TRUN"` | Search for an ASCII string across memory. | `s -a 0 L?80000000 "TRUN"` |
+| `s -u 0 L?80000000 "calc"` | Search for a UTF-16 string. | `s -u 0 L?80000000 "calc"` |
+| `s -b 0 L?80000000 90 90 90 90` | Search for a raw byte pattern. | `s -b 0 L?80000000 90 90 90 90` |
+| `s -d 0 L?80000000 0x41414141` | Search for a DWORD value. | `s -d 0 L?80000000 0x41414141` |
+| `dx @$osed().pattern_create(300, "msf")` | Generate a cyclic pattern for offset finding. | `dx @$osed().pattern_create(300, "msf")` |
+| `dx @$osed().pattern_offset(0x39654138, "msf")` | Convert a crash value into an offset. | `dx @$osed().pattern_offset(0x39654138, "msf")` |
+| `dx @$osed().exploit("offset")` | Generate the usual pattern workflow commands in one step. | `dx @$osed().exploit("offset")` |
 
-Dump a buffer to disk (bad-char capture):
-  .writemem C:\dbg\dump.bin poi(@esp+4)+0x7d6 (poi(@esp+4)+0x7d6)+0x200
+## 10. Walk the process model and loaded modules
 
-Compare bytes in memory vs a clean array:
-  !mona compare -f C:\mona\bytearray.bin -a <addr>
+| Command | Why use it | Example |
+|---|---|---|
+| `!teb` | Show thread environment block details quickly. | `!teb` |
+| `!peb` | Show process environment block details quickly. | `!peb` |
+| `dt ntdll!_PEB @$peb` | Read the current PEB as a typed structure. | `dt ntdll!_PEB @$peb` |
+| `dt ntdll!_TEB @$teb` | Read the current TEB as a typed structure. | `dt ntdll!_TEB @$teb` |
+| `lm` | Confirm which modules are loaded. | `lm` |
+| `lm m kernel*` | Filter to the modules that matter. | `lm m kernel*` |
+| `!dh kernel32` | Inspect PE headers for a loaded module. | `!dh kernel32` |
+| `!lmi kernel32` | Show detailed loaded-module information. | `!lmi kernel32` |
+| `dx @$osed().sc.peb()` | Ask the toolkit to summarize PEB state. | `dx @$osed().sc.peb()` |
+| `dx @$osed().sc.modules()` | Ask the toolkit for a module table. | `dx @$osed().sc.modules()` |
+| `dx @$osed().sc.modules("kernel")` | Filter the toolkit module view. | `dx @$osed().sc.modules("kernel")` |
 
-Verify a candidate dump (Python side):  dump[:4] == b"\xbc\xf0\xbc\xf0"
-```
+## 11. Read PE headers and exports
 
-## Pseudo-Registers and Operators
+| Command | Why use it | Example |
+|---|---|---|
+| `!dh -f module` | Dump headers and file layout for a module. | `!dh -f kernel32` |
+| `!dh module` | Inspect the DOS and NT headers for the module. | `!dh kernel32` |
+| `dx @$osed().sc.exportdir("kernel32")` | Show the export directory in a structured view. | `dx @$osed().sc.exportdir("kernel32")` |
+| `dx @$osed().sc.export("kernel32", "GetProcAddress")` | Resolve a named export directly. | `dx @$osed().sc.export("kernel32", "GetProcAddress")` |
+| `dx @$osed().sc.exportwalk("kernel32", "GetProcAddress")` | Walk exports the way shellcode would. | `dx @$osed().sc.exportwalk("kernel32", "GetProcAddress")` |
+| `dx @$osed().sc.exportat("kernel32", 842)` | Resolve by ordinal/index when that is all you have. | `dx @$osed().sc.exportat("kernel32", 842)` |
+| `dx @$osed().sc.hashes("kernel32", "crc32")` | See hash values for a whole module. | `dx @$osed().sc.hashes("kernel32", "crc32")` |
+| `dx @$osed().sc.hash("WinExec", "ROR13")` | Compute a hash for one API name. | `dx @$osed().sc.hash("WinExec", "ROR13")` |
+| `dx @$osed().sc.hashresolve("kernel32", 0x7c0dfcaa, "ROR13")` | Reverse a hash to a likely API name. | `dx @$osed().sc.hashresolve("kernel32", 0x7c0dfcaa, "ROR13")` |
+| `dx @$osed().sc.algorithms()` | List the supported hash algorithms. | `dx @$osed().sc.algorithms()` |
 
-| Token | Meaning |
-|---|---|
-| `@eax @esp @eip` | Register values (the `@` avoids symbol lookup). |
-| `$teb` `$peb` | TEB / PEB base for current thread/process. |
-| `$ra` `$ip` `$csp` | Return address / instruction ptr / stack ptr. |
-| `poi(x)` | Pointer dereference: the DWORD stored at x. |
-| `by(x)` `wo(x)` `dwo(x)` | Byte / word / dword at x. |
-| `? expr` | Evaluate an expression. `? poi(@esp+4)+0n2006`. |
-| `0n100` / `0x64` | Decimal 100 / hex 100. Default base is **hex**. |
+## 12. Use exploit-development helpers
 
-## Logging and Scripting
+| Command | Why use it | Example |
+|---|---|---|
+| `!exchain` | Inspect the SEH chain during exception work. | `!exchain` |
+| `sxe av` | Break on access violations so you can stop at the fault. | `sxe av` |
+| `sxd av` | Ignore access violations when you want the program to continue. | `sxd av` |
+| `sxe ld:module` | Break when a module loads. Useful for deferred breakpoint work. | `sxe ld:kernel32` |
+| `.exr -1` | Re-check the exception record when you return to the crash. | `.exr -1` |
+| `.ecxr` | Switch into the exception context before inspecting registers. | `.ecxr` |
+| `dx @$osed().seh()` | Inspect the SEH chain with toolkit support. | `dx @$osed().seh()` |
+| `dx @$osed().seh_ppr("libspp.dll", "00 0A 0D", 50, true, "fast")` | Find usable `pop; pop; ret` candidates for SEH work. | `dx @$osed().seh_ppr("libspp.dll", "00 0A 0D", 50, true, "fast")` |
+| `dx @$osed().pivots("essfunc")` | Search for stack pivots in a chosen module. | `dx @$osed().pivots("essfunc")` |
+| `dx @$osed().rop("essfunc")` | Scope the gadget search to a module. | `dx @$osed().rop("essfunc")` |
+| `dx @$osed().rop_suggest("essfunc")` | Get validated gadget suggestions. | `dx @$osed().rop_suggest("essfunc")` |
+| `dx @$osed().find_bytes("essfunc", "FF E4")` | Search a module for a specific instruction byte sequence. | `dx @$osed().find_bytes("essfunc", "FF E4")` |
+| `dx @$osed().badchars(0x00B8F900)` | Compare memory against an expected byte sequence after a badchar probe. | `dx @$osed().badchars(0x00B8F900)` |
+| `.writemem C:\dbg\dump.bin poi(@esp+4)+0x7d6 (poi(@esp+4)+0x7d6)+0x200` | Dump a candidate buffer for offline comparison. | `.writemem C:\dbg\dump.bin poi(@esp+4)+0x7d6 (poi(@esp+4)+0x7d6)+0x200` |
+| `.logopen c:\dbg\log.txt` | Capture output to a file for later review. | `.logopen c:\dbg\log.txt` |
+| `.logclose` | Stop logging. | `.logclose` |
+| `.printf "eip=%x\n", @eip` | Print a formatted line inside a script or command list. | `.printf "eip=%x\n", @eip` |
+| `.echo BADCHAR_CRASH` | Emit a marker that is easy to spot in logs. | `.echo BADCHAR_CRASH` |
+| `$$<c:\s.wds` | Run a script file. | `$$<c:\s.wds` |
+| `.foreach (a {!some}) { u a }` | Iterate over the output of another command. | `.foreach (a {!some}) { u a }` |
+| `.shell -ci "cmd" cmd /c move ...` | Run a host command from the debugger. | `.shell -ci "dir" cmd /c dir` |
 
-| Command | Purpose |
-|---|---|
-| `.logopen c:\dbg\log.txt` / `.logclose` | Capture session output to a file. |
-| `.printf "eip=%x\\n", @eip` | Formatted output in a command/script. |
-| `.echo BADCHAR_CRASH` | Emit a marker string (for harness detection). |
-| `$$<c:\s.wds` / `$><c:\s.wds` | Run a script file (`$><` allows block commands). |
-| `.foreach (a {!some}) { u a }` | Iterate over tokens of another command's output. |
-| `.shell -ci "cmd" cmd /c move ...` | Run a host shell command (e.g. atomic dump rename). |
+## 13. x86-to-x64 notes
+
+The flow stays the same on x64, but the registers, pointer width, and a few
+structure offsets change. Treat this section as the delta list, not a second
+workflow.
+
+| Command | Why use it | Example |
+|---|---|---|
+| `r rcx` / `r rdx` / `r r8` / `r r9` | x64 first four arguments live in registers. | `r rcx` |
+| `dq addr` | Read 8-byte values on x64. | `dq rsp L10` |
+| `dt ntdll!_PEB @$peb` | The idea is the same even though the structure layout changes. | `dt ntdll!_PEB @$peb` |
+| `dx @$osed().sc.peb()` | The toolkit adapts to the active architecture. | `dx @$osed().sc.peb()` |
+| `dx @$osed().sc.export("kernel32", "GetProcAddress")` | Export walking is still the same concept on x64. | `dx @$osed().sc.export("kernel32", "GetProcAddress")` |
+
+WoW64 note: for OSED-style 32-bit exploitation, use the 32-bit PEB and 32-bit
+register model. The x64 companion is for the native 64-bit side only.
+
+ARM and ARM64 notes live in [windbg-arm/README.md](windbg-arm/README.md) as a
+separate delta sheet.
+
+## 14. Suggested study order
+
+1. Start the session and set symbols.
+2. Read the crash state.
+3. Inspect registers, stack, and memory.
+4. Control execution and place breakpoints.
+5. Search memory for patterns and bad characters.
+6. Walk the PEB and loaded modules.
+7. Read PE headers and exports.
+8. Use the SEH, pivot, and gadget helpers.
+9. Move to the x64 delta sheet once the x86 flow is comfortable.

@@ -26,6 +26,9 @@ def generate_wds(config):  # type: (WDSConfig) -> str
     if config.enable_second_chance_av:
         commands.append('sxe -c ".echo BADCHAR_CRASH; q" av')
 
+    for cmd in (stage.extra_init_commands or []):
+        commands.append(cmd)
+
     bp_parts = []
     step_cmd = _step_command(stage.step_mode, stage.custom_step)
     if step_cmd:

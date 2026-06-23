@@ -48,11 +48,13 @@ function deBruijn(alphabet: string, order: number): string {
 export function generateCyclicPattern(length: number): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const sequence = deBruijn(alphabet, 3);
-  if (length <= sequence.length) {
-    return sequence.slice(0, length);
+  if (length > sequence.length) {
+    throw new Error(
+      `Cyclic pattern length ${length} exceeds the maximum unique-window length ${sequence.length}. Use a smaller length or the "msf" pattern type.`,
+    );
   }
 
-  return `${sequence}${sequence.repeat(Math.ceil((length - sequence.length) / sequence.length))}`.slice(0, length);
+  return sequence.slice(0, length);
 }
 
 export function decodeOffsetNeedle(value: number | string): string {
