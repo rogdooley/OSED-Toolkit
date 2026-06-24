@@ -16,6 +16,8 @@ Modules/*
 # macOS
 .DS_Store
 
+.codex
+.agents
 .claude
 .pytest_cache/
 .vscode/
