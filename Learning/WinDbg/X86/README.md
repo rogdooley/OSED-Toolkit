@@ -36,10 +36,10 @@ For the workflow guide that ties the series together, see
 [../windbg-cheatsheet.md](../windbg-cheatsheet.md).
 
 For x64 differences - register calling convention, wider pointers, GS segment
-- see [../windbg-x64/README.md](../windbg-x64/README.md). Read the x86 series
+- see [../X64/README.md](../X64/README.md). Read the x86 series
 first. The x64 companion only covers deltas.
 
-For ARM notes, see [../windbg-arm/README.md](../windbg-arm/README.md). That
+For ARM notes, see [../ARM/README.md](../ARM/README.md). That
 document is separate from the x86/x64 flow and only covers architecture
 differences.
 

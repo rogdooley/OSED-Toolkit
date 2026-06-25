@@ -4,7 +4,7 @@
 Create a cyclic-pattern payload file for the Win32/x86 lessons.
 
 Run from the repo root (or ensure Tools/ is importable):
-  python lessons/win32_x86/tools/make_pattern_payload.py --length 600 --out payload.bin
+  python Learning/Win32_X86/tools/make_pattern_payload.py --length 600 --out payload.bin
 """
 
 import argparse

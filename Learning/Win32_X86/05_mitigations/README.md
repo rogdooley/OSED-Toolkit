@@ -14,7 +14,7 @@ Use the same source as lesson 01 to keep variables controlled.
 From:
 
 ```bat
-cd lessons\win32_x86\05_mitigations\src
+cd Learning\Win32_X86\05_mitigations\src
 ```
 
 ### Variant A: Minimal (closest to lesson 01)

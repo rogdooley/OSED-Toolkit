@@ -21,7 +21,7 @@ This lesson intentionally stops at **crash + offset + root cause**.
 From a VS Developer Command Prompt:
 
 ```bat
-cd lessons\win32_x86\06_network_overflow_lab\src
+cd Learning\Win32_X86\06_network_overflow_lab\src
 cl /nologo /W3 /Od /Zi /MT labsrv_overflow.c ws2_32.lib /link /OUT:labsrv_overflow_x86.exe
 ```
 
@@ -106,7 +106,7 @@ Open the EXE in IDA Free and find:
 
 Write a short note using:
 
-`lessons/win32_x86/shared/notes_template.md`
+`Learning/Win32_X86/shared/notes_template.md`
 
 ## Safety
 

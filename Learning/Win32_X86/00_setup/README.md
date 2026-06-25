@@ -26,7 +26,7 @@ You should see a version banner (means `cl.exe` is on PATH).
 Build the program in `01_crash_basics/src/vuln_strcpy.c` as x86:
 
 ```bat
-cd lessons\win32_x86\01_crash_basics\src
+cd Learning\Win32_X86\01_crash_basics\src
 cl /nologo /W3 /Od /Zi /MT vuln_strcpy.c /link /OUT:vuln_strcpy_x86.exe
 ```
 

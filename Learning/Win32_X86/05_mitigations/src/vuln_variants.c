@@ -1,6 +1,6 @@
 // Mitigation observation target (Win32/x86).
 // Build this file with different compiler/linker flags as described in:
-//   lessons/win32_x86/05_mitigations/README.md
+//   Learning/Win32_X86/05_mitigations/README.md
 //
 // This is intentionally unsafe and designed only for an authorized lab VM.
 

@@ -7,7 +7,7 @@ This complements Tools.badchars (analysis), by making it easy to generate the
 byte stream you will send/inspect in your debugger.
 
 Example:
-  python lessons/win32_x86/tools/make_badchar_payload.py --exclude 00 --out badchars.bin
+  python Learning/Win32_X86/tools/make_badchar_payload.py --exclude 00 --out badchars.bin
 """
 
 import argparse

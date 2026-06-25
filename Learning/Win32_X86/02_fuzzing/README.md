@@ -13,19 +13,19 @@ This is deliberately minimal so you understand every line.
 Reuse the target from lesson 01 or build a new copy:
 
 ```bat
-cd lessons\win32_x86\01_crash_basics\src
+cd Learning\Win32_X86\01_crash_basics\src
 cl /nologo /W3 /Od /Zi /MT vuln_strcpy.c /link /OUT:..\..\02_fuzzing\src\vuln_strcpy_x86.exe
 ```
 
 ## Run Fuzzer (Windows)
 
-From `lessons\win32_x86\02_fuzzing\src`:
+From `Learning\Win32_X86\02_fuzzing\src`:
 
 ```bat
 py -3 fuzz_len.py --exe vuln_strcpy_x86.exe --max 2000 --step 50
 ```
 
-Artifacts are written to `lessons\win32_x86\02_fuzzing\artifacts\`.
+Artifacts are written to `Learning\Win32_X86\02_fuzzing\artifacts\`.
 
 ## Next Exercise
 

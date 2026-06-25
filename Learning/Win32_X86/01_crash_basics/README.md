@@ -12,7 +12,7 @@ This lesson uses a deliberately unsafe copy into a fixed-size stack buffer.
 ## Build (Windows, x86)
 
 ```bat
-cd lessons\win32_x86\01_crash_basics\src
+cd Learning\Win32_X86\01_crash_basics\src
 cl /nologo /W3 /Od /Zi /MT vuln_strcpy.c /link /OUT:vuln_strcpy_x86.exe
 ```
 
@@ -53,7 +53,7 @@ vuln_strcpy_x86.exe <contents_of_pattern.txt>
 For the file-driven target, write a binary payload and pass the filename:
 
 ```bash
-python lessons/win32_x86/tools/make_pattern_payload.py --length 600 --out payload.bin
+python Learning/Win32_X86/tools/make_pattern_payload.py --length 600 --out payload.bin
 ```
 
 ```bat

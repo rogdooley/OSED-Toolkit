@@ -1,10 +1,10 @@
 # WinDbg for OSED — x64 Companion
 
-This is a companion to [../windbg-x86/README.md](../windbg-x86/README.md).
+This is a companion to [../X86/README.md](../X86/README.md).
 Read the x86 series first. This series covers only the differences.
 
 For the full workflow guide, see [../windbg-cheatsheet.md](../windbg-cheatsheet.md).
-For ARM notes, see [../windbg-arm/README.md](../windbg-arm/README.md).
+For ARM notes, see [../ARM/README.md](../ARM/README.md).
 
 ## The three categories of x64 differences
 

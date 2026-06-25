@@ -254,7 +254,7 @@ workflow.
 WoW64 note: for OSED-style 32-bit exploitation, use the 32-bit PEB and 32-bit
 register model. The x64 companion is for the native 64-bit side only.
 
-ARM and ARM64 notes live in [windbg-arm/README.md](windbg-arm/README.md) as a
+ARM and ARM64 notes live in [ARM/README.md](ARM/README.md) as a
 separate delta sheet.
 
 ## 14. Suggested study order

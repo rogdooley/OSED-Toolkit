@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Client for lessons/win32_x86/06_network_overflow_lab.
+Client for Learning/Win32_X86/06_network_overflow_lab.
 
 Run on Windows:
   py -3 labclient.py --host 127.0.0.1 --port 9001 --cmd PING
