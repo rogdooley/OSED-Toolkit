@@ -1,0 +1,201 @@
+schema_version: 1
+profile_type: candidate
+
+target:
+  executable: vulnserver.exe
+  image_base: 0x00400000
+
+analysis:
+  generated_by: manual
+  generated_at: 2026-06-25
+  analyst: null
+  tools:
+    - IDA Pro
+
+# ---------------------------------------------------------------------------
+# Copy sites
+# ---------------------------------------------------------------------------
+# Same pattern as TRUN: imported strcpy via essfunc.dll. The LTER handler
+# calls a different function in essfunc.dll than TRUN, but the copy
+# mechanism and calling convention are the same.
+
+copy_sites:
+
+  - id: vulnserver.lter.copy.001
+
+    facts:
+      rva: null
+      note: >
+        RVA of the strcpy call site inside the LTER handler in vulnserver.exe.
+        Requires IDA analysis.
+
+      api:
+        name: strcpy
+        imported: true
+        dll: essfunc.dll
+
+      calling_convention:
+        type: cdecl
+
+      source_argument:
+        stack_offset: 8
+        note: >
+          Source pointer at esp+8 at strcpy entry. Points to the recv buffer
+          after the protocol prefix has been consumed and after any in-place
+          transforms have been applied.
+
+      destination_argument:
+        stack_offset: 4
+
+    inferences:
+
+      candidate_breakpoint:
+        expression: null
+        note: >
+          Same two options as TRUN: call site in vulnserver.exe, or strcpy
+          entry in essfunc.dll. Prefer strcpy entry (essfunc+<rva>) for
+          consistency with VulnApp2 pattern.
+
+      candidate_dump_exprs:
+
+        - expr: poi(@esp+8)
+          confidence: 0.95
+          rationale:
+            - source argument to strcpy
+            - points to recv data after transforms
+            - consistent with VulnApp2 and TRUN models
+
+        - expr: poi(@esp+4)
+          confidence: 0.55
+          rationale:
+            - destination buffer
+            - less useful pre-copy
+
+# ---------------------------------------------------------------------------
+# Transform sites
+# ---------------------------------------------------------------------------
+# SCHEMA FRICTION: This is where LTER breaks the VulnApp2 transform model.
+#
+# VulnApp2 had two independent single-byte replacements:
+#   0x3B → 0x00
+#   0x45 → 0x00
+# These are cleanly expressed as individual transform entries with
+# input_byte / output_byte.
+#
+# LTER filters entire byte ranges. The LTER handler restricts input to
+# a subset of ASCII — bytes outside the allowed range are either dropped
+# or replaced. The exact policy requires IDA verification, but two common
+# patterns in OSED exercises are:
+#   (a) reject all bytes > 0x7F (only low ASCII allowed)
+#   (b) reject all bytes outside a specific printable range (0x20–0x7E)
+#
+# The current per-byte schema cannot express this without enumerating
+# every byte in the rejected range — a 128-entry list for case (a).
+# That is technically possible but semantically wrong.
+#
+# PROPOSED SCHEMA EXTENSION needed before schema.py:
+#   transform:
+#     input_range: [0x80, 0xFF]      ← range form
+#     output_byte: null              ← null means "dropped, not replaced"
+#     operation: range_filter
+#
+# vs. the current individual-byte form:
+#   transform:
+#     input_byte: 0x3B
+#     output_byte: 0x00
+#     operation: in_place_replace
+#
+# Both forms need to coexist in the schema. This is a genuine discovery
+# from writing the second example.
+
+transform_sites:
+
+  - id: vulnserver.lter.transform.001
+
+    facts:
+      rva: null
+      note: >
+        Filtering loop in the LTER handler. Exact RVA requires IDA analysis.
+        Observed behavior: bytes in the upper range (likely 0x80–0xFF) do
+        not survive to the strcpy call site. Exact range TBD.
+
+      # SCHEMA NOTE: using a best-effort approximation in current schema.
+      # The range_filter form does not yet exist. Placeholder until
+      # schema.py is written and the range form is decided.
+      transform:
+        input_range: [0x80, 0xFF]
+        output_byte: null
+        operation: range_filter
+        note: >
+          Exact policy unverified. Requires IDA disassembly of the LTER
+          handler's loop body. Two candidates:
+            - all bytes >= 0x80 filtered (127 bad chars)
+            - all bytes outside 0x20–0x7E filtered (~161 bad chars + 0x7F)
+          Use the validator to confirm exact boundary.
+
+      affected_buffer: recv_buffer
+
+# ---------------------------------------------------------------------------
+# Protocol
+# ---------------------------------------------------------------------------
+
+protocol:
+  transport: tcp
+  port: 9999
+  prefix: "LTER /.:/ "
+  prefix_length: 10
+  recv_buffer_size: null
+  eip_offset: 2003
+  note: >
+    Same port and prefix structure as TRUN, different command. EIP offset
+    assumed identical — both handlers appear to use similarly-sized stack
+    frames. Requires verification.
+
+# ---------------------------------------------------------------------------
+# Known bad characters
+# ---------------------------------------------------------------------------
+# SCHEMA NOTE: VulnApp2's known_bad_chars listed individual bytes with
+# specific mechanisms. LTER's bad chars are a range. The per-byte list
+# form becomes unwieldy here (127+ entries). The schema may need a
+# bad_char_ranges field alongside known_bad_chars for range-based exclusions.
+
+known_bad_chars:
+
+  - byte: 0x00
+    mechanism: null_terminator
+    note: Implicit. strcpy stops at null.
+
+bad_char_ranges:
+  # SCHEMA NOTE: This field does not exist in the current schema.
+  # Adding it here as a discovered requirement from the LTER example.
+  # The validator needs to know the full exclusion set to build its
+  # candidate payload. A per-byte list of 127 entries is correct but
+  # unreadable. A range form is more honest about what the transform
+  # actually is.
+  - range: [0x80, 0xFF]
+    mechanism: transform_site_001
+    note: >
+      Upper ASCII filtered by LTER handler before strcpy. Exact boundary
+      unverified — 0x80 is the likely lower bound.
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+notes:
+  - >
+    LTER is the schema stress test. It exercises range-based filtering
+    rather than individual byte replacement. Writing this example discovered
+    two schema gaps: (1) transform_sites needs a range form alongside the
+    individual-byte form, and (2) known_bad_chars needs a range-based
+    companion field (bad_char_ranges or similar).
+
+  - >
+    These gaps are cheap to fix before schema.py is written. They would
+    be expensive to fix after Python classes are defined and the validator
+    consumes them.
+
+  - >
+    Once IDA analysis confirms the exact filter range and the transform
+    RVA, this profile should be updated and re-committed before the
+    validator is built.

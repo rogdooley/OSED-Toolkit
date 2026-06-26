@@ -1,0 +1,158 @@
+schema_version: 1
+profile_type: candidate
+
+target:
+  executable: vulnserver.exe
+  image_base: 0x00400000
+  # essfunc.dll is loaded at runtime and contains several of the vulnerable
+  # functions. RVAs below are relative to vulnserver.exe unless noted.
+
+analysis:
+  generated_by: manual
+  generated_at: 2026-06-25
+  analyst: null
+  tools:
+    - IDA Pro
+
+# ---------------------------------------------------------------------------
+# Copy sites
+# ---------------------------------------------------------------------------
+# SCHEMA NOTE: For VulnApp2 the copy_site IS the function we care about
+# (a custom internal routine). For TRUN the copy happens inside an imported
+# strcpy — the call site is in vulnserver.exe, but the actual copy routine
+# lives in essfunc.dll. The candidate breakpoint can be either:
+#   (a) the CALL instruction in vulnserver.exe (pre-copy, args visible)
+#   (b) the entry of strcpy in essfunc.dll (same args on stack)
+# Both are modeled below. The validator will confirm which is more reliable.
+# This reveals that "call_site" might be a cleaner field name than "rva"
+# when the copy routine is external.
+
+copy_sites:
+
+  - id: vulnserver.trun.copy.001
+
+    facts:
+      rva: null
+      note: >
+        RVA of the CALL to strcpy inside the TRUN handler in vulnserver.exe.
+        Requires IDA analysis to determine. The call passes the recv buffer
+        (post-prefix-strip) as the source argument.
+
+      api:
+        name: strcpy
+        imported: true
+        dll: essfunc.dll
+        note: >
+          strcpy provided by essfunc.dll, not MSVCRT. Same null-termination
+          behavior: copies until null byte encountered.
+
+      calling_convention:
+        type: cdecl
+
+      source_argument:
+        stack_offset: 8
+        note: >
+          Second argument to strcpy (src). Points to the portion of the recv
+          buffer starting after the protocol prefix "TRUN /.:/ " (10 bytes).
+          Confirmed by standard cdecl calling convention: strcpy(dst, src)
+          places dst at esp+4, src at esp+8 after the CALL.
+
+      destination_argument:
+        stack_offset: 4
+        note: >
+          First argument to strcpy (dst). Points to a fixed-size stack buffer
+          in the TRUN handler frame. Overflow occurs here.
+
+    inferences:
+
+      candidate_breakpoint:
+        expression: null
+        note: >
+          Requires RVA from IDA. Two options:
+          (a) vulnserver+<call_site_rva>: breakpoint before the CALL. Args
+              are in registers/stack at this point depending on compiler.
+          (b) essfunc+<strcpy_rva>: breakpoint at strcpy entry. Args are
+              cleanly at esp+4 (dst) and esp+8 (src) in cdecl.
+          Option (b) is preferred — consistent with VulnApp2 model.
+
+      candidate_dump_exprs:
+
+        - expr: poi(@esp+8)
+          confidence: 0.95
+          rationale:
+            - source argument to strcpy in cdecl
+            - points to recv data starting after protocol prefix
+            - same pattern as VulnApp2 copy_site_1
+
+        - expr: poi(@esp+4)
+          confidence: 0.60
+          rationale:
+            - destination buffer
+            - contains controlled data only after copy completes
+            - less useful for pre-copy bad-char analysis
+
+# ---------------------------------------------------------------------------
+# Transform sites
+# ---------------------------------------------------------------------------
+# TRUN has no known byte transformation loops. The recv buffer reaches
+# strcpy unmodified (modulo null termination). Absent transform_sites
+# means the only implicit bad char is 0x00.
+
+transform_sites: []
+
+# ---------------------------------------------------------------------------
+# Protocol
+# ---------------------------------------------------------------------------
+
+protocol:
+  transport: tcp
+  port: 9999
+  prefix: "TRUN /.:/ "
+  prefix_length: 10
+  # SCHEMA NOTE: VulnApp2 had prefix: null and prefix_length: 0.
+  # Vulnserver TRUN has a structured prefix: a command name ("TRUN"),
+  # a separator (" /.:/ "), and then the payload.
+  # The validator only needs prefix_length to compute dump offsets,
+  # but a future IDA frontend might want command and separator modeled
+  # separately to locate the command dispatcher in the binary.
+  # Leaving this as a flat string for now — revisit if the IDA frontend
+  # needs structured access.
+  recv_buffer_size: null
+  eip_offset: 2003
+  note: >
+    Command format: "TRUN /.:/ " followed by payload. EIP offset 2003
+    is measured from the start of the payload, i.e. from byte 0 after
+    the prefix has been consumed. Requires fuzzing verification.
+
+# ---------------------------------------------------------------------------
+# Known bad characters
+# ---------------------------------------------------------------------------
+
+known_bad_chars:
+
+  - byte: 0x00
+    mechanism: null_terminator
+    note: >
+      Implicit. strcpy stops at null. No other bad chars expected for TRUN —
+      this is the straightforward case.
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+notes:
+  - >
+    TRUN is intentionally the simplest Vulnserver exercise. No transforms,
+    no filtering, single bad char (0x00). It exercises the schema's
+    "copy_site with imported API" path that VulnApp2 (custom internal
+    routine) did not.
+
+  - >
+    The call site RVA and breakpoint expression are left null pending IDA
+    analysis. These are the fields most likely to be populated by the IDA
+    frontend in a future iteration.
+
+  - >
+    essfunc.dll base address varies by run unless ASLR is disabled. The
+    breakpoint expression should prefer module-relative notation:
+    essfunc+<rva> rather than a hardcoded VA.
