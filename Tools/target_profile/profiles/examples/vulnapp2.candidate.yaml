@@ -1,0 +1,195 @@
+schema_version: 1
+profile_type: candidate
+
+target:
+  executable: VulnApp2.exe
+  image_base: 0x14800000
+
+analysis:
+  generated_by: manual
+  generated_at: 2026-06-25
+  analyst: null
+  tools:
+    - IDA Pro
+
+# ---------------------------------------------------------------------------
+# Copy sites
+# ---------------------------------------------------------------------------
+# Locations where attacker-controlled data is copied to a destination buffer.
+# These are primary breakpoint candidates for dump-based analysis.
+
+copy_sites:
+
+  - id: copy_site_1
+
+    facts:
+      rva: 0x1000
+
+      api:
+        name: custom_strcpy
+        imported: false
+        note: >
+          Internal null-terminated copy routine. Not an imported API.
+          Behaves like strcpy: iterates source until null, copies to
+          destination including the terminating null.
+
+      calling_convention:
+        type: cdecl_like
+        note: Stack-based arguments at call site.
+
+      source_argument:
+        stack_offset: 8
+        note: >
+          poi(@esp+8) at function entry points to the recv buffer after
+          in-place transforms have been applied.
+
+      destination_argument:
+        stack_offset: 4
+        note: >
+          poi(@esp+4) at function entry points to the destination stack
+          buffer. Overflow occurs here when source exceeds the buffer.
+
+    inferences:
+
+      candidate_breakpoint:
+        expression: vulnapp2+0x1000
+        note: >
+          Function entry, before any copy occurs. Source buffer is
+          intact (transforms already applied upstream). This is the
+          correct location to dump the controlled input as the copy
+          routine sees it.
+
+      candidate_dump_exprs:
+
+        - expr: poi(@esp+8)
+          confidence: 0.95
+          rationale:
+            - source argument to copy routine
+            - points to recv buffer post-transform
+            - confirmed manually: magic bytes visible at this address
+              when breakpoint fires with a crafted payload
+
+        - expr: poi(@esp+4)
+          confidence: 0.65
+          rationale:
+            - destination buffer
+            - contains controlled data only after copy completes
+            - copy may be truncated at first null — less useful for
+              full bad-char analysis
+
+        - expr: poi(@esp+8)+0n2080
+          confidence: 0.20
+          rationale:
+            - displacement past EIP overwrite offset
+            - only relevant if dump of specific offset is needed
+            - not useful as primary bad-char dump expression
+
+# ---------------------------------------------------------------------------
+# Transform sites
+# ---------------------------------------------------------------------------
+# Locations where bytes are modified in-place on the recv buffer before
+# the copy routine is called. These produce implicit bad characters.
+
+transform_sites:
+
+  - id: transform_site_1
+
+    facts:
+      rva: null
+      note: >
+        Exact RVA not recorded during analysis. Occurs before the call
+        to copy_site_1. Verified by dynamic observation: 0x3B does not
+        appear in the recv buffer when copy_site_1 is reached.
+      transform:
+        input_byte: 0x3B
+        output_byte: 0x00
+        operation: in_place_replace
+      affected_buffer: recv_buffer
+
+  - id: transform_site_2
+
+    facts:
+      rva: null
+      note: >
+        Exact RVA not recorded during analysis. Occurs before the call
+        to copy_site_1. Verified by dynamic observation: 0x45 does not
+        appear in the recv buffer when copy_site_1 is reached.
+      transform:
+        input_byte: 0x45
+        output_byte: 0x00
+        operation: in_place_replace
+      affected_buffer: recv_buffer
+
+# ---------------------------------------------------------------------------
+# Protocol
+# ---------------------------------------------------------------------------
+
+protocol:
+  transport: tcp
+  port: 7002
+  prefix: null
+  prefix_length: 0
+  recv_buffer_size: 2096
+  eip_offset: 2080
+  note: >
+    No application-layer framing observed. Raw bytes sent directly over
+    TCP. VulnApp2 calls recv() once and processes the result. The recv
+    buffer is 0x830 (2096) bytes. EIP is overwritten at offset 2080.
+
+# ---------------------------------------------------------------------------
+# Known bad characters
+# ---------------------------------------------------------------------------
+# Recorded here as facts from manual analysis. The validator will
+# confirm these independently.
+
+known_bad_chars:
+
+  - byte: 0x00
+    mechanism: null_terminator
+    note: >
+      Implicit. Custom strcpy stops at null. Any 0x00 in the source
+      terminates the copy prematurely.
+
+  - byte: 0x0D
+    mechanism: protocol_rejection
+    note: >
+      Carriage return. Rejected or transformed during recv buffer
+      processing. Source: manual verification.
+
+  - byte: 0x3B
+    mechanism: transform_site_1
+    note: >
+      Semicolon. Replaced with 0x00 in-place before copy_site_1 is
+      reached. Confirmed by dynamic observation.
+
+  - byte: 0x45
+    mechanism: transform_site_2
+    note: >
+      Capital E (ASCII 69). Replaced with 0x00 in-place before
+      copy_site_1 is reached. Confirmed by dynamic observation.
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+notes:
+  - >
+    VulnApp2 displays a MessageBox on startup. Non-blocking: the
+    application continues to accept connections without user dismissal.
+
+  - >
+    Both transform loops (transform_site_1, transform_site_2) operate
+    in-place on the recv buffer before copy_site_1 is called. The copy
+    routine receives already-transformed bytes.
+
+  - >
+    Because custom_strcpy is null-terminated, any 0x00 produced by a
+    transform truncates the copy. Bad chars cascade: 0x3B at position N
+    prevents all bytes after N from reaching the destination.
+
+  - >
+    Payload layout for bad-char analysis: place magic marker at offset 0
+    of the send buffer, followed immediately by candidate bytes, then
+    filler to reach eip_offset, then magic again to overwrite EIP.
+    This ensures all candidates land within the recv window regardless
+    of how large eip_offset is.
