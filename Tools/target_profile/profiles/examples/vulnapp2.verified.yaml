@@ -1,0 +1,86 @@
+schema_version: 1
+
+profile:
+  type: verified
+
+produced_by:
+  stage: transformation_validation
+
+produced_from:
+  - vulnapp2.located.yaml
+
+provenance:
+  located:
+    path: vulnapp2.located.yaml
+    sha256: null  # populated by validator at runtime
+
+# ---------------------------------------------------------------------------
+# Transformation validation results
+# ---------------------------------------------------------------------------
+# Answers one question: how do bytes behave as modeled?
+# Each entry records whether the observed dump matched the predicted
+# transformation for that site. Uses scope/operation decomposition.
+
+verified_transformations:
+
+  - id: vulnapp2.transform.001
+    status: confirmed
+
+    scope:
+      type: byte
+      value: 0x3B
+
+    operation:
+      type: replace
+      value: 0x00
+
+    note: >
+      Predicted 0x3B → 0x00. Observed 0x00 at position corresponding
+      to 0x3B in the candidate payload. Match.
+
+  - id: vulnapp2.transform.002
+    status: confirmed
+
+    scope:
+      type: byte
+      value: 0x45
+
+    operation:
+      type: replace
+      value: 0x00
+
+    note: >
+      Predicted 0x45 → 0x00. Observed 0x00 at position corresponding
+      to 0x45 in the candidate payload. Match.
+
+  - id: vulnapp2.transform.003
+    status: unverified
+
+    scope:
+      type: byte
+      value: 0x0D
+
+    operation:
+      type: reject
+
+    note: >
+      0x0D was excluded from the candidate payload during validation runs.
+      Mechanism not confirmed dynamically. Static analysis suggests
+      protocol-layer rejection but exact location is unknown.
+      Marked unverified until a dedicated run includes 0x0D in candidates.
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+transformation_summary:
+  confirmed: [vulnapp2.transform.001, vulnapp2.transform.002]
+  unverified: [vulnapp2.transform.003]
+  not_observed: []
+
+status: verified_partial
+note: >
+  Two of three modeled transformations confirmed at runtime.
+  transform.003 (0x0D) remains unverified. A consumer requiring
+  complete confidence should treat this profile as partial until
+  transform.003 is confirmed or its mechanism is resolved in IDA.

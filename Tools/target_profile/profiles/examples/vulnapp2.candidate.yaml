@@ -1,5 +1,12 @@
 schema_version: 1
-profile_type: candidate
+
+profile:
+  type: candidate
+
+produced_by:
+  stage: static_analysis
+
+produced_from: []
 
 target:
   executable: VulnApp2.exe
