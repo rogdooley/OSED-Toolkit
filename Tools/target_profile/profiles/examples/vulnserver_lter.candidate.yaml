@@ -92,25 +92,32 @@ transformation_sites:
     facts:
       rva: null
       note: >
-        Filter loop in the LTER handler. Exact RVA requires IDA analysis.
-        Observed behavior: bytes in the upper range do not reach copy.001.
-        Boundary is likely 0x80 (bit 7 set) but exact range unverified.
+        Transformation loop in the LTER handler. Exact RVA requires IDA
+        analysis. Bytes in range 0x80–0xFF are not rejected — they are
+        remapped to 0x01–0x80 respectively. Bytes 0x01–0x7F pass through
+        unmodified. Verified by published write-ups: only \x01–\x7F arrive
+        at the copy site with their original values.
       affected_buffer: recv_buffer
       location: pre_copy
 
       transformation:
-        type: range_filter
+        type: range_remap
         range:
           start: 0x80
           end: 0xFF
-        action: reject
+        formula: "output = input - 0x7F"
+        examples:
+          - input: 0x80
+            output: 0x01
+          - input: 0x81
+            output: 0x02
+          - input: 0xFF
+            output: 0x80
         note: >
-          Exact boundary unverified. Two candidate policies from common
-          OSED exercise patterns:
-            - all bytes with bit 7 set (0x80–0xFF, 128 values)
-            - all bytes outside printable ASCII (0x20–0x7E)
-          Use the validator to confirm. Update range.start/end after
-          IDA analysis resolves the exact comparison.
+          Bytes 0x80–0xFF are bad chars because they arrive at the copy
+          site with different values, not because they are dropped.
+          This distinction matters for the validator: a dump showing 0x01
+          where 0x80 was sent is a remap, not a null truncation.
 
 # ---------------------------------------------------------------------------
 # Protocol
@@ -134,17 +141,17 @@ protocol:
 
 notes:
   - >
-    LTER is the schema stress test for transformation modeling. The filter
-    loop rejects an entire byte range, not individual bytes. Modeling this
-    as a range_filter (describing the transformation) rather than enumerating
-    128 individual byte_reject entries keeps the profile declarative and
-    honest about what the code actually does.
+    LTER is the schema stress test for transformation modeling. The loop
+    does not reject bytes — it remaps them. 0x80–0xFF arrive at the copy
+    site as 0x01–0x80 respectively (formula: output = input - 0x7F).
+    Modeling this as range_remap is more accurate than range_filter/reject
+    and captures what the code actually does rather than its practical effect.
 
   - >
     Bad chars implied by this profile (derivable, not stored):
     0x00 from copy.001 copy_semantics (null_terminated),
-    0x80–0xFF from transform.001 (range_filter, ~128 values depending on
-    exact boundary).
+    0x80–0xFF from transform.001 (range_remap — bytes arrive modified,
+    not dropped, but their values do not match what was sent).
 
   - >
     Once IDA confirms the exact filter range and the transform site RVA,
