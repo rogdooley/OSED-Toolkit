@@ -1,114 +1,129 @@
 # 06 - Network Overflow Lab (Win32/x86)
 
-Goal: practice the *repeatable* parts of stack overflow work in a network-shaped target:
+This is a small Windows x86 reverse-engineering lab built for WinDbg and IDA practice.
 
-- reproduce a crash via a single request
-- use a cyclic pattern to recover exact offset to EIP (when applicable)
-- confirm the vulnerable code path in IDA
-- learn the WinDbg “first response” muscle memory
+The service listens on TCP port `11460` and parses a fixed packet header followed by nested records.
+Only opcode `0x1337` reaches the intentional stack overflow in `copy_record_payload()`.
 
-This lesson intentionally stops at **crash + offset + root cause**.
+## Repository layout
 
-## Target Summary
+- `src/mini_proto_vuln/` - server source
+- `docs/` - walkthroughs and packet notes
+- `send_packet.py` - client for benign and crashing requests
 
-- Binary: `labsrv_overflow_x86.exe` (you build it)
-- Protocol: one-line commands over TCP
-- Vulnerable command: `OVER <bytes>\r\n`
-- Vulnerability: unsafe copy into fixed-size stack buffer
+## Lesson objectives
 
-## Build (Windows, x86)
+- break on `ws2_32!recv`
+- trace data through packet parsing
+- follow the dispatch path across multiple source files
+- distinguish safe copies from the vulnerable copy
+- observe the overflow in WinDbg
 
-From a VS Developer Command Prompt:
+## Build
 
-```bat
-cd Learning\Win32_X86\06_network_overflow_lab\src
-cl /nologo /W3 /Od /Zi /MT labsrv_overflow.c ws2_32.lib /link /OUT:labsrv_overflow_x86.exe
-```
+### MSVC x86 Native Tools Prompt
 
-Optional: build a “more realistic” variant with security features:
+From the lab root:
 
 ```bat
-cl /nologo /W3 /Od /Zi /MT /GS labsrv_overflow.c ws2_32.lib /link /OUT:labsrv_overflow_x86_GS.exe /DYNAMICBASE /NXCOMPAT
+cd Learning\Win32_X86\06_network_overflow_lab\src\mini_proto_vuln
+cl /nologo /W3 /Od /Zi /GS- /MT main.c network.c protocol.c commands.c util.c ^
+    /link /OUT:mini_proto_vuln.exe ws2_32.lib
 ```
 
-## Run (Windows)
-
-In one console:
+If you want explicit incremental-linker disablement during debugging:
 
 ```bat
-labsrv_overflow_x86.exe
+cl /nologo /W3 /Od /Zi /GS- /MT main.c network.c protocol.c commands.c util.c ^
+    /link /OUT:mini_proto_vuln.exe /DEBUG /INCREMENTAL:NO ws2_32.lib
 ```
 
-It listens on `127.0.0.1:9001`.
-
-## Send Requests
-
-From another console:
+### Optional MinGW build
 
 ```bat
-py -3 labclient.py --host 127.0.0.1 --port 9001 --cmd PING
+cd Learning\Win32_X86\06_network_overflow_lab\src\mini_proto_vuln
+gcc -m32 -O0 -g -fno-stack-protector main.c network.c protocol.c commands.c util.c ^
+    -o mini_proto_vuln.exe -lws2_32
 ```
 
-Crash attempt (length-based):
+## Run
+
+Start the server:
 
 ```bat
-py -3 labclient.py --host 127.0.0.1 --port 9001 --cmd OVER --len 600
+mini_proto_vuln.exe
 ```
 
-Pattern-based:
+It listens on `127.0.0.1:11460`.
 
-1) Generate a cyclic pattern on your host:
+## Send packets
 
-```bash
-python -m Tools.pattern.cli.pattern_create -l 800 > pattern.txt
-```
-
-2) Send it:
+From another terminal:
 
 ```bat
-py -3 labclient.py --host 127.0.0.1 --port 9001 --cmd OVER --pattern-file pattern.txt
+py -3 send_packet.py --host 127.0.0.1 --port 11460 --opcode 0x1001 --size 0 --copy-len 0 --pattern A
+py -3 send_packet.py --host 127.0.0.1 --port 11460 --opcode 0x1002 --size 32 --copy-len 16 --pattern B
+py -3 send_packet.py --host 127.0.0.1 --port 11460 --opcode 0x1337 --size 256 --copy-len 300 --pattern C
 ```
 
-## WinDbg Workflow (x86)
+The last command is the crash path.
 
-Launch the server under WinDbg and send the same crashing request.
+## Packet format overview
 
-After crash, run:
+- fixed `PacketHeader`
+- fixed `RecordHeader`
+- nested `RECORD_METADATA`, `RECORD_COMMAND`, and `RECORD_PAYLOAD`
+- payload record begins with `uint32 copy_length`
 
-```
-!analyze -v
-r
-r eip
+See `docs/packet_format.md` for the structure.
+
+## WinDbg checklist
+
+1. Launch the server under WinDbg.
+2. Set `bp ws2_32!recv`.
+3. Set `bp mini_proto_vuln!parse_protocol`.
+4. Set `bp mini_proto_vuln!dispatch_command`.
+5. Set `bp mini_proto_vuln!copy_record_payload`.
+6. `g`
+7. Send a benign packet first.
+8. Step through the parser and watch `eax` after `recv`.
+9. Send the `0x1337` packet and inspect the crash.
+
+Useful commands:
+
+```text
+bp ws2_32!recv
+g
+dd esp L5
+pt
 k
-dds esp L40
+dds esp L8
 ```
 
-Copy the crash text into `crash.txt` and triage:
+## IDA checklist
 
-```bash
-python -m Tools.crashtriage.cli.triage_crash -l 800 --input crash.txt
-```
+1. Open `mini_proto_vuln.exe`.
+2. Load the PDB if available.
+3. Find `receive_packet()`.
+4. Follow into `parse_protocol()`.
+5. Step through `validate_records()`.
+6. Compare the safe copy helpers to `copy_record_payload()`.
 
-Then compute the offset using the crashed EIP value:
+See `docs/ida_walkthrough.md` for the detailed workflow.
 
-```bash
-python -m Tools.pattern.cli.pattern_offset -l 800 -q <EIP_HEX>
-```
+## Expected crash behavior
 
-## IDA Exercise
+- opcode `0x1001`: `PONG`
+- opcode `0x1002`: safe echo response
+- opcode `0x1337`: stack corruption and crash after the vulnerable `memcpy`
 
-Open the EXE in IDA Free and find:
+## Quick checkpoint
 
-- `handle_client`
-- the handler for `OVER`
-- the local stack buffer size
-- the unsafe copy site
-
-Write a short note using:
-
-`Learning/Win32_X86/shared/notes_template.md`
-
-## Safety
-
-- Use only in your isolated lab VM.
-- This code is intentionally unsafe by design.
+1. Start the server.
+2. Launch WinDbg.
+3. Break on `ws2_32!recv`.
+4. Send a benign packet.
+5. Step back into the application.
+6. Locate `parse_protocol()`.
+7. Trace to `copy_record_payload()`.
+8. Trigger the overflow.
