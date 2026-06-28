@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Dict
 
 
-@dataclass
 @dataclass
 class Api:
     name: str
@@ -209,6 +209,10 @@ class CandidateProfile:
             notes=list(d.get("notes", [])),
         )
 
+    @property
+    def primary_copy_site(self) -> CopySite:
+        return self.copy_sites[0]
+
 
 @dataclass
 class ProducedBy:
@@ -222,7 +226,7 @@ class ProducedBy:
 @dataclass
 class Analysis:
     generated_by: str
-    generated_at: str
+    generated_at: date
     analyst: str | None
     tools: list
 

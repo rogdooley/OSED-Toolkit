@@ -24,7 +24,6 @@ analysis:
 # ---------------------------------------------------------------------------
 
 copy_sites:
-
   - id: vulnapp2.copy.001
 
     facts:
@@ -58,19 +57,17 @@ copy_sites:
         note: poi(@esp+4) points to the destination stack buffer.
 
     inferences:
-
       candidate_breakpoint:
         expression: vulnapp2+0x1000
         note: Function entry, before copy begins. Source buffer intact.
 
       candidate_dump_exprs:
-
         - expr: poi(@esp+8)
           confidence: 0.95
           rationale:
             - source argument to copy routine
             - points to recv buffer after in-place transforms
-            - confirmed manually: magic bytes visible at this address
+            - "confirmed manually: magic bytes visible at this address"
 
         - expr: poi(@esp+4)
           confidence: 0.65
@@ -93,7 +90,6 @@ copy_sites:
 # separate known_bad_chars field is needed.
 
 transformation_sites:
-
   - id: vulnapp2.transform.001
 
     facts:
