@@ -1,0 +1,3 @@
+def build_magic_payload(magic: bytes, eip_offset: int, prefix_length: int = 0) -> bytes:
+    # [magic][filler*(eip_offset - prefix_length - len(magic))][magic]
+    ...
