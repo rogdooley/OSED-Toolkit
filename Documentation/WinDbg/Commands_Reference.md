@@ -753,6 +753,15 @@ ba w 4 0x0012ff6c   ; break when 4 bytes at 0x0012ff6c are written
 **Width parameter:**
 The width must be `1`, `2`, or `4` bytes (hardware limitation). For execution breakpoints, width is always `1`.
 
+**Alignment gotcha (common exam-day trap):**
+The address must be **aligned to the width**: a 4-byte data breakpoint needs a 4-byte-aligned
+address, a 2-byte needs a 2-byte-aligned address. The check is deferred — `ba` accepts the command,
+but when you `g`, WinDbg refuses to run and reports an error along the lines of *"Unable to set
+breakpoints ... breakpoint ... not properly aligned."* So `ba w 4 0x0012ff6c` is valid (`0x...6c`
+is 4-aligned), but `ba w 4 0x0012ff6d` will error out at run time. If a data breakpoint won't let
+the target run, check alignment first — either align the address down, or use a `1`-byte breakpoint
+(any address is 1-aligned) on the specific byte you care about.
+
 **Why hardware breakpoints for shellcode:**
 
 Hardware breakpoints use the CPU's debug registers (DR0-DR3 for addresses, DR7 for control). No code modification happens — the memory at the breakpoint address is completely unmodified. This means:

@@ -310,16 +310,20 @@ ln 7c91e920
 !exchain
 
 ; If you see something like:
-; 0012ff50: 41414141  ← invalid handler address (AAAA)
+; 0012ff50: 42424242  ← Handler overwritten (here 'BBBB' from a test payload)
 ;   Invalid exception handler
 
 ; Check the record
 dd 0012ff50 L2
-; 0012ff50  ebebeb90  41414141
-;            ^Next (corrupted with pattern)  ^Handler (AAAA = uncontrolled overflow)
+; 0012ff50  eb069090  42424242
+;            ^Next = \xEB\x06\x90\x90 (our short jump)   ^Handler = 0x42424242 (our value)
+;
+; During offset discovery you would instead see cyclic-pattern bytes in BOTH fields, e.g.:
+; 0012ff50  35714134  71413572   ← 4-byte pattern slices; feed the Handler slice to
+;                                    msf-pattern_offset to get the offset to Handler
 
-; Determine offset: subtract the record address from the start of the overflow buffer
-; Then use a De Bruijn pattern to find the exact offset to Handler
+; Determine offset: use a De Bruijn pattern, read the 4 bytes that landed in Handler,
+; and map them back with msf-pattern_offset; offset_to_nSEH = that offset - 4
 ```
 
 ### Set Breakpoint to Watch Handler Being Called

@@ -86,14 +86,16 @@ Before calling each handler, `RtlDispatchException` performs safety checks:
 
 ### Step 5: Handler Return Values
 
-Each handler function returns one of three values defined in `<excpt.h>`:
+Each handler function returns one of four `EXCEPTION_DISPOSITION` values defined in
+`<excpt.h>`. The first two are what you see during normal exception dispatch; the
+last two only arise during the unwind phase:
 
 | Value | Meaning |
 |---|---|
 | `ExceptionContinueExecution` (0) | Handler fixed the problem; resume at faulting instruction |
 | `ExceptionContinueSearch` (1) | Handler declines; continue walking the chain |
-| `ExceptionNestedException` (2) | A nested exception occurred during handling |
-| `ExceptionCollidedUnwind` (3) | Used during unwind operations |
+| `ExceptionNestedException` (2) | A nested exception occurred during handling (unwind) |
+| `ExceptionCollidedUnwind` (3) | Used during unwind operations (unwind) |
 
 If a handler returns `ExceptionContinueSearch`, `RtlDispatchException` moves to the `Next` record and repeats.
 
@@ -207,6 +209,40 @@ For MSVC's extended `__except` frames (which include a scope table for nested tr
 
 ---
 
+## Why You Cannot Point Handler Straight at Your Shellcode
+
+Before SafeSEH, there is a more fundamental check that explains the entire shape of the
+technique — and it is the question every learner should ask: *if I control the `Handler` field,
+why not just put the address of my shellcode there and skip the POP POP RETN dance entirely?*
+
+The answer is that on Windows XP SP2 and every later version, the OS validates a candidate handler
+**before** calling it. Two layers do this, and it helps to keep them separate:
+
+1. **The handler points into the stack → rejected.** This check lives in `RtlDispatchException`
+   itself (not in the SafeSEH machinery), and it fires regardless of SafeSEH or DEP: if the handler
+   address falls inside the current thread's stack, dispatch is aborted. Your shellcode sits on the
+   stack — so a handler pointing at it is rejected outright. **This single check is why you cannot
+   name your buffer directly**, even on a target with no SafeSEH and no DEP.
+2. **DEP: the handler is in non-image memory that isn't executable → rejected.** `RtlIsValidHandler`
+   checks, when DEP is enabled (`ExecuteDispatchEnable` in the process flags), that a handler in
+   non-image memory (heap, non-executable mapping) lives on an executable page. If not, it raises
+   an access violation instead of calling it.
+3. **SafeSEH: the handler is in a SafeSEH-registered module but absent from that module's handler
+   table → rejected.** Also enforced by `RtlIsValidHandler` (via a lookup through the module's
+   registered-handler table). This is the check detailed in the section below.
+
+Put together, these force the indirection: you need a handler address that is **inside a loaded
+module image** (so it passes the stack and region checks) and **not covered by a SafeSEH table**
+(so it passes check 3). A `POP POP RETN` sequence in such a module satisfies both — and, by the
+stack layout at handler entry, its `RETN` lands EIP back on `EstablisherFrame`, i.e., on your
+`EXCEPTION_REGISTRATION_RECORD` on the stack. In other words, the OS won't let you *name* the
+stack as a handler, so you borrow a legal module address that *returns you to* the stack.
+
+This reframes POP POP RETN from "a recipe you memorize" to "the forced consequence of two
+validation checks." Everything in the SafeSEH section below is really check 3 in detail.
+
+---
+
 ## SafeSEH: OS-Level Validation of Handler Addresses
 
 Introduced with Windows XP SP2 and MSVC /GS+ (Visual C++ 2003), SafeSEH adds a **valid handler table** to PE images. When the linker builds a SafeSEH-aware image, it embeds a sorted list of valid exception handler addresses in the `IMAGE_LOAD_CONFIG_DIRECTORY` structure (specifically in `SEHandlerTable` and `SEHandlerCount`).
@@ -238,7 +274,7 @@ Introduced in Windows Vista SP1, SEHOP (Structured Exception Handling Overwrite 
 
 ### How SEHOP Works
 
-When an exception is about to be dispatched, the OS walks the entire SEH chain forward, following every `Next` pointer. If the chain does not terminate at `ntdll!FinalExceptionHandlerPad` (a known sentinel record registered at thread creation time in ntdll), SEHOP considers the chain corrupted and terminates the process.
+When an exception is about to be dispatched, the OS walks the entire SEH chain forward, following every `Next` pointer. If the chain does not terminate at the known ntdll sentinel record (`ntdll!FinalExceptionHandler`, registered at thread creation time — the exact symbol name and address vary by OS build), SEHOP considers the chain corrupted and terminates the process.
 
 The sentinel node has a known address (varies per OS version but is predictable within a given process). SEHOP requires that the last `Next` pointer in the attacker's chain equals this sentinel address.
 

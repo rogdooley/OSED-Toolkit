@@ -169,13 +169,20 @@ continues from the next page. This is larger but portable across all x86 Windows
 Understanding where mapped memory exists helps set expectations about how long the egghunter
 takes to find the egg and which regions it passes through.
 
+**Schematic only — do not treat these addresses as literal.** Actual addresses vary by
+process, OS build, and run; the point is the *pattern* (mapped islands separated by large
+unmapped gaps), not the exact ranges. In particular the main-thread stack usually lives much
+higher than shown here (commonly around `0x0012xxxx` on XP), and the low `0x00010000` region is
+typically PEB/TEB and initial heap, not the stack. Confirm any real layout with `!address` or
+`!vadump` on the live target.
+
 ```
-Virtual Address         Typical Content / Status
+Virtual Address         Typical Content / Status  (SCHEMATIC — not literal addresses)
 ──────────────────────  ────────────────────────────────────────────────────────
 0x00000000–0x0000FFFF   NULL page: unmapped (reserved to catch null pointer dereferences)
-0x00010000–0x0002FFFF   Thread stack (main thread, default 1MB reserved, grows down)
-                          Includes stack guard page at bottom of commit
+0x00010000–0x0002FFFF   PEB / TEB / initial heap region (low allocations)
 0x00030000–0x0005FFFF   Heap segment 0 (process heap, initial commit)
+0x0012xxxx              Main-thread stack typically lives up here (grows down)
 0x00060000–0x000FFFFF   Often unmapped (heap may expand into here)
 0x00100000–0x001FFFFF   Additional heap segments (allocated as process grows)
     ... gaps of unmapped pages between heap allocations ...

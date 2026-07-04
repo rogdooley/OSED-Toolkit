@@ -172,7 +172,11 @@ void vuln(int sock, char *attacker_input) {
   existence; large buffers live here.
 - **SEH frame setup** (`push offset handler / push fs:[0] / mov fs:[0], esp`) =
   structured exception handling on the stack; an overflow may target the SEH record
-  instead of the return address (a whole separate technique).
+  instead of the return address (a whole separate technique). Recognizing this
+  prologue statically is the precursor to SEH exploitation — see the repo's
+  [SEH internals](../Windows/SEH/SEH_Internals.md) and
+  [SEH exploitation](../Windows/SEH/SEH_Exploitation.md) notes for what to do once
+  you've spotted it.
 
 ## 8. Common mistakes
 
