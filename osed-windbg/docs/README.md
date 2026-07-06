@@ -50,6 +50,7 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
   - Confirm `dist/osed.js` exists and path is correct.
 - `@$osed` is missing:
   - Re-run `.scriptload` and confirm `initializeScript()` executed.
+  - If the script reports `functionAlias` registration failure, use the fallback global object directly: `dx osed.help()` or `dx osed.reload()`.
 - Command returns validation errors:
   - Use `dx @$osed().help("<name>")` and match schema exactly.
 - Memory read failures:

@@ -3,7 +3,8 @@
 ## Registry Pattern
 
 - Each command is a `Command` object registered centrally.
-- `initializeScript()` builds registry, publishes `osed`, and registers an alias so calls use `@$osed().<command>(...)`.
+- `initializeScript()` builds registry, publishes `osed`, and tries to register an alias so calls use `@$osed().<command>(...)`.
+- If alias registration is rejected by the host, the script still loads and exposes the fallback global object.
 - `@$osed().<command>(...)` dispatches through `registry.execute`.
 - Shared `validation.ts` enforces schema and unknown-key rejection.
 

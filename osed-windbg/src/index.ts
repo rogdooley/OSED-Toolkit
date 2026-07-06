@@ -275,7 +275,18 @@ export function initializeScript(): unknown[] {
   initialize();
 
   if (hostAny.functionAlias) {
-    registrations.push(new hostAny.functionAlias(() => osed, "osed"));
+    try {
+      registrations.push(new hostAny.functionAlias(() => osed, "osed"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const globalObject = getGlobalObject();
+      if (globalObject) {
+        globalObject.osed = osed;
+      }
+      if (typeof host !== "undefined" && host.diagnostics && typeof host.diagnostics.debugLog === "function") {
+        host.diagnostics.debugLog(`osed: functionAlias registration failed, using global object fallback: ${message}\n`);
+      }
+    }
   }
 
   return registrations;
