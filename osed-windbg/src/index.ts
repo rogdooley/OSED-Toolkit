@@ -202,12 +202,20 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
     case "pivots":
     case "retn":
     case "add_esp":
-      return {
-        module: args[0],
-        maxResults: args[1],
-        executableOnly: args[2],
-        mode: args[3],
-      };
+      return commandName === "rop_suggest"
+        ? {
+            module: args[0],
+            maxResults: args[1],
+            executableOnly: args[2],
+            mode: args[3],
+            engine: args[4],
+          }
+        : {
+            module: args[0],
+            maxResults: args[1],
+            executableOnly: args[2],
+            mode: args[3],
+          };
     case "nop":
       return { length: args[0], byte: args[1] };
     case "rop_template":

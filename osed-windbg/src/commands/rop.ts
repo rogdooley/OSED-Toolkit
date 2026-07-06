@@ -2,14 +2,30 @@ import { Command, CommandResult, ValidationFlags } from "../core/registry";
 import * as out from "../core/output";
 import { getPointerSize, readMemory, tryReadMemory } from "../core/memory";
 import { scanPattern } from "../core/scan_engine";
-import { knownPatterns, validateInstructionCandidate } from "../logic/instruction_validation";
-import { listModulesWithMitigations } from "./modules";
+import { knownPatterns, type GadgetPattern, validateInstructionCandidate } from "../logic/instruction_validation";
+import { buildRopIndexFromSequences } from "../rop";
+import { parseInstruction } from "../semantics";
+import { SEMANTIC_SCHEMA_VERSION, type InstructionSequence, type InstructionSequenceSource, type Provenance } from "../semantics/types";
+import { findModuleByAddress, listModulesWithMitigations } from "./modules";
 
 type ScanOptions = {
   module?: string;
   executableOnly: boolean;
   maxResults: number;
   mode: "fast" | "thorough";
+};
+
+type RopEngine = "legacy" | "semantic";
+
+type RopSuggestOptions = ScanOptions & {
+  engine: RopEngine;
+};
+
+type ValidatedPatternHit = {
+  address: bigint;
+  pattern: GadgetPattern;
+  mnemonic: string;
+  bytes: number[];
 };
 
 function readCandidate(address: bigint, size: number): Uint8Array | undefined {
@@ -29,12 +45,18 @@ function normalizeScan(options: Record<string, unknown>): ScanOptions {
   };
 }
 
+function normalizeRopSuggest(options: Record<string, unknown>): RopSuggestOptions {
+  return {
+    ...normalizeScan(options),
+    engine: (options.engine as RopEngine | undefined) ?? "legacy",
+  };
+}
+
 function validationPass(flags: ValidationFlags): boolean {
   return flags.decoded && Boolean(flags.mnemonicMatch) && flags.executable;
 }
 
-function scanForPattern(name: string, bytes: number[], options: ScanOptions): CommandResult {
-  const pointerSize = getPointerSize();
+function collectValidatedPatternHits(pattern: GadgetPattern, options: ScanOptions): { hits: ValidatedPatternHit[]; warnings: string[]; stats: Record<string, number> } {
   const scan = scanPattern(
     {
       module: options.module,
@@ -42,14 +64,13 @@ function scanForPattern(name: string, bytes: number[], options: ScanOptions): Co
       maxResults: options.maxResults,
       chunkSize: options.mode === "thorough" ? 0x1000 : 0x4000,
     },
-    Uint8Array.from(bytes),
+    Uint8Array.from(pattern.bytes),
   );
 
-  const findings: unknown[] = [];
-  const rows: Array<Record<string, string>> = [];
+  const hits: ValidatedPatternHit[] = [];
 
   for (const hit of scan.hits) {
-    const candidate = readCandidate(hit, bytes.length);
+    const candidate = readCandidate(hit, pattern.bytes.length);
     if (!candidate) {
       continue;
     }
@@ -59,22 +80,38 @@ function scanForPattern(name: string, bytes: number[], options: ScanOptions): Co
       continue;
     }
 
-    findings.push({
+    hits.push({
       address: hit,
-      bytes,
-      mnemonic: validated.mnemonic,
-      flags: validated.flags,
-    });
-
-    rows.push({
-      address: out.formatAddress(hit, pointerSize),
-      mnemonic: validated.mnemonic ?? "unknown",
-      bytes: bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" "),
-      py: `0x${hit.toString(16).toUpperCase()}`,
+      pattern,
+      mnemonic: validated.mnemonic ?? pattern.mnemonic,
+      bytes: pattern.bytes,
     });
   }
 
-  rows.sort((a, b) => (a.address < b.address ? -1 : 1));
+  return {
+    hits,
+    warnings: scan.warnings.map((warning) => `${warning.region}: ${warning.message}`),
+    stats: scan.stats,
+  };
+}
+
+function scanForPattern(name: string, pattern: GadgetPattern, options: ScanOptions): CommandResult {
+  const pointerSize = getPointerSize();
+  const { hits, warnings, stats } = collectValidatedPatternHits(pattern, options);
+  const findings: unknown[] = hits.map((hit) => ({
+    address: hit.address,
+    bytes: hit.bytes,
+    mnemonic: hit.mnemonic,
+    pattern: hit.pattern.name,
+  }));
+  const rows = hits
+    .map((hit) => ({
+      address: out.formatAddress(hit.address, pointerSize),
+      mnemonic: hit.mnemonic,
+      bytes: hit.bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" "),
+      py: `0x${hit.address.toString(16).toUpperCase()}`,
+    }))
+    .sort((a, b) => (a.address < b.address ? -1 : 1));
 
   out.section(name);
   out.table(
@@ -92,9 +129,117 @@ function scanForPattern(name: string, bytes: number[], options: ScanOptions): Co
     args: options as unknown as Record<string, unknown>,
     success: true,
     findings,
-    warnings: scan.warnings.map((warning) => `${warning.region}: ${warning.message}`),
+    warnings,
     errors: [],
-    stats: scan.stats,
+    stats,
+  };
+}
+
+function buildSequenceFromHit(hit: ValidatedPatternHit): InstructionSequence {
+  const instructions = hit.pattern.mnemonic
+    .split(" ; ")
+    .map((part) => parseInstruction(part));
+  const moduleInfo = findModuleByAddress(hit.address);
+  const provenance: Provenance = {
+    module: moduleInfo?.name,
+    section: moduleInfo ? ".text" : undefined,
+    virtualAddress: Number(hit.address & BigInt(0xffffffff)),
+    fileOffset: undefined,
+    executable: "EXACT",
+    writable: "UNKNOWN",
+    aslr: "UNKNOWN",
+    rebaseable: "UNKNOWN",
+  };
+  const source: InstructionSequenceSource = {
+    kind: "rop-suggest",
+    name: "semantic-backend",
+    format: "synthetic",
+    version: "v1",
+  };
+
+  return {
+    schemaVersion: SEMANTIC_SCHEMA_VERSION,
+    id: `rop-suggest:${hit.pattern.name}:${hit.address.toString(16)}:${instructions.map((instruction) => instruction.normalizedText).join(" | ")}`,
+    source,
+    originalText: hit.pattern.mnemonic,
+    instructions,
+    provenance,
+  };
+}
+
+function runSemanticRopSuggest(options: RopSuggestOptions): CommandResult {
+  const pointerSize = getPointerSize();
+  const combinedWarnings: string[] = [];
+  const allHits: ValidatedPatternHit[] = [];
+  let combinedStats: Record<string, number> = { sectionsScanned: 0, chunksRead: 0, chunksSkipped: 0, results: 0, stoppedEarly: 0 };
+
+  for (const pattern of knownPatterns()) {
+    const result = collectValidatedPatternHits(pattern, options);
+    allHits.push(...result.hits);
+    combinedWarnings.push(...result.warnings);
+    combinedStats = {
+      sectionsScanned: combinedStats.sectionsScanned + (result.stats?.sectionsScanned ?? 0),
+      chunksRead: combinedStats.chunksRead + (result.stats?.chunksRead ?? 0),
+      chunksSkipped: combinedStats.chunksSkipped + (result.stats?.chunksSkipped ?? 0),
+      results: combinedStats.results + (result.stats?.results ?? 0),
+      stoppedEarly: combinedStats.stoppedEarly + (result.stats?.stoppedEarly ?? 0),
+    };
+  }
+
+  const index = buildRopIndexFromSequences(allHits.map((hit) => buildSequenceFromHit(hit)));
+  const gadgets = [...index.gadgets].sort((left, right) => {
+    if (left.score !== right.score) {
+      return right.score - left.score;
+    }
+
+    const leftAddress = left.locations[0]?.virtualAddress ?? 0;
+    const rightAddress = right.locations[0]?.virtualAddress ?? 0;
+    return leftAddress - rightAddress;
+  });
+
+  const rows = gadgets.map((gadget, index) => {
+    const firstLocation = gadget.locations[0];
+    const address = BigInt(firstLocation?.virtualAddress ?? 0);
+    return {
+      rank: `${index + 1}`,
+      address: out.formatAddress(address, pointerSize),
+      mnemonic: gadget.instructions.map((instruction) => instruction.normalizedText || instruction.originalText).join(" ; "),
+      category: gadget.categories[0] ?? "UNKNOWN",
+      score: `${gadget.score}`,
+      python: `0x${address.toString(16).toUpperCase()}`,
+      locations: `${gadget.locations.length}`,
+    };
+  });
+
+  out.section("ROP Suggestions (semantic)");
+  if (rows.length === 0) {
+    out.print("No semantic gadget suggestions found.");
+  } else {
+    out.table(
+      [
+        { key: "rank", header: "Rank", width: 6 },
+        { key: "address", header: "Address", width: 18 },
+        { key: "mnemonic", header: "Mnemonic", width: 28 },
+        { key: "category", header: "Category", width: 18 },
+        { key: "score", header: "Score", width: 6 },
+        { key: "locations", header: "Locs", width: 6 },
+        { key: "python", header: "Python", width: 14 },
+      ],
+      rows,
+    );
+  }
+
+  out.info("Semantic backend selected; duplicate gadgets are merged by canonical IR.");
+  out.whyItMatters("Semantic gadget suggestions improve ranking, deduplication, and explainability.");
+
+  return {
+    command: "rop_suggest",
+    args: options,
+    success: true,
+    findings: gadgets,
+    warnings: combinedWarnings,
+    errors: [],
+    stats: { ...combinedStats, canonicalResults: gadgets.length },
   };
 }
 
@@ -202,22 +347,31 @@ export function createRopCommands(): Command[] {
   const ropSuggest: Command = {
     name: "rop_suggest",
     description: "Suggest common exploit-friendly gadget patterns.",
-    usage: "dx @$osed.rop_suggest({ module: 'essfunc' })",
-    examples: ["dx @$osed.rop_suggest({ module: 'essfunc' })", "dx @$osed.rop_suggest({ mode: 'thorough' })"],
+    usage: "dx @$osed.rop_suggest({ module: 'essfunc', engine: 'semantic' })",
+    examples: [
+      "dx @$osed.rop_suggest({ module: 'essfunc' })",
+      "dx @$osed.rop_suggest({ module: 'essfunc', engine: 'semantic' })",
+      "dx @$osed.rop_suggest({ mode: 'thorough', engine: 'legacy' })",
+    ],
     schema: {
       module: { type: "string" },
       executableOnly: { type: "boolean", default: true },
       maxResults: { type: "number", min: 1, max: 200, default: 50 },
       mode: { type: "string", enum: ["fast", "thorough"], default: "fast" },
+      engine: { type: "string", enum: ["legacy", "semantic"], default: "legacy" },
     },
     execute(options: Record<string, unknown>): CommandResult {
-      const scanOptions = normalizeScan(options);
+      const scanOptions = normalizeRopSuggest(options);
+      if (scanOptions.engine === "semantic") {
+        return runSemanticRopSuggest(scanOptions);
+      }
+
       const combinedFindings: unknown[] = [];
       const combinedWarnings: string[] = [];
       let combinedStats: Record<string, number> = { sectionsScanned: 0, chunksRead: 0, chunksSkipped: 0, results: 0, stoppedEarly: 0 };
 
       for (const pattern of knownPatterns()) {
-        const result = scanForPattern(`ROP Suggest: ${pattern.name}`, pattern.bytes, scanOptions);
+        const result = scanForPattern(`ROP Suggest: ${pattern.name}`, pattern, scanOptions);
         combinedFindings.push(
           ...result.findings.map((finding) => ({ ...(finding as Record<string, unknown>), pattern: pattern.name })),
         );

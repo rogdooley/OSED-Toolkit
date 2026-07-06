@@ -140,12 +140,15 @@ Alias namespace:
 
 ## rop_suggest
 
-- Syntax: `dx @$osed().rop_suggest(module?, maxResults?, executableOnly?, mode?)`
+- Syntax: `dx @$osed().rop_suggest(module?, maxResults?, executableOnly?, mode?, engine?)`
+- Engines:
+  - `legacy`
+  - `semantic`
 - Description: Validated common gadget suggestions.
 - Example 1: `dx @$osed().rop_suggest("essfunc")`
   - Expected output: validated pop/push/xchg gadget candidates.
-- Example 2: `dx @$osed().rop_suggest(undefined, 50, true, "thorough")`
-  - Expected output: stricter scan with richer stats.
+- Example 2: `dx @$osed().rop_suggest(undefined, 50, true, "thorough", "semantic")`
+  - Expected output: semantic deduplication, scoring, and explanation output.
 
 ## pivots
 

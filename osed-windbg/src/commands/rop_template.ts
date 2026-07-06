@@ -10,7 +10,7 @@ function vpTemplate(mod: string): void {
   out.print(`  VirtualProtect addr:   dx @$osed.sc.iat_find("VirtualProtect")`);
   out.print(`  jmp esp (dispatch):    dx @$osed.find_bytes({ module: "${mod}", bytes: [0xFF, 0xE4] })`);
   out.print(`  pushad ; ret:          dx @$osed.find_bytes({ module: "${mod}", bytes: [0x60, 0xC3] })`);
-  out.print(`  Gadgets (pop/inc/neg): dx @$osed.rop_suggest({ module: "${mod}" })`);
+  out.print(`  Gadgets (pop/inc/neg): dx @$osed.rop_suggest({ module: "${mod}", engine: "semantic" })`);
   out.print(`  Stack adjustments:     dx @$osed.add_esp({ module: "${mod}" })`);
   out.print(`  Writable addr:         dx @$osed.modules()  -- pick a .data section address`);
 
@@ -88,7 +88,7 @@ function wpmTemplate(mod: string): void {
   out.print(`  WriteProcessMemory:  dx @$osed.sc.iat_find("WriteProcessMemory")`);
   out.print(`  Writable addr:       dx @$osed.modules()  -- any .data section`);
   out.print(`  Executable target:   dx @$osed.modules()  -- any .text section address`);
-  out.print(`  Gadgets:             dx @$osed.rop_suggest({ module: "${mod}" })`);
+  out.print(`  Gadgets:             dx @$osed.rop_suggest({ module: "${mod}", engine: "semantic" })`);
 
   out.section("Python skeleton");
   out.print("import struct");

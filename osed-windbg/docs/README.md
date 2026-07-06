@@ -28,6 +28,7 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().seh()`
 - `dx @$osed().seh.visualize()`
 - `dx @$osed().triage()`
+- `dx @$osed().rop_suggest({ module: "essfunc", engine: "semantic" })`
 - `dx @$osed().sc.peb()`
 - `dx @$osed().sc.modules()`
 - `dx @$osed().sc.base("kernel")`
