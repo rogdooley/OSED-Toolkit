@@ -30,36 +30,42 @@ Frame: `mov ebp, esp` / `add esp, 0xfffffb00` (0x500 bytes reserved)
 
 | Offset | API | Module |
 |--------|-----|--------|
-| `[ebp-0x28]` | CreateProcessA | kernel32.dll |
-| `[ebp-0x2c]` | LoadLibraryA | kernel32.dll |
-| `[ebp-0x30]` | GetProcAddress | kernel32.dll |
-| `[ebp-0x34]` | ExitProcess | kernel32.dll |
-| `[ebp-0x38]` | WinExec | kernel32.dll |
-| `[ebp-0x3c]` | WSAStartup | ws2_32.dll |
-| `[ebp-0x40]` | WSASocketA | ws2_32.dll |
-| `[ebp-0x44]` | connect | ws2_32.dll |
+| `[ebp-0x28]` | LoadLibraryA | kernel32.dll |
+| `[ebp-0x2c]` | WSAStartup | ws2_32.dll |
+| `[ebp-0x30]` | WSASocketA | ws2_32.dll |
+| `[ebp-0x34]` | connect | ws2_32.dll |
+| `[ebp-0x38]` | recv | ws2_32.dll |
+| `[ebp-0x3c]` | closesocket | ws2_32.dll |
+| `[ebp-0x40]` | VirtualAlloc | kernel32.dll |
+| `[ebp-0x44]` | CreateFileA | kernel32.dll |
+| `[ebp-0x48]` | WriteFile | kernel32.dll |
+| `[ebp-0x4c]` | CloseHandle | kernel32.dll |
+| `[ebp-0x50]` | WinExec | kernel32.dll |
+| `[ebp-0x54]` | ExitProcess | kernel32.dll |
 
 ## Variables
 
 | Offset | Variable | Size |
 |--------|----------|------|
-| `[ebp-0x48]` | socket_handle | 4 |
+| `[ebp-0x58]` | socket_handle | 4 |
+| `[ebp-0x5c]` | file_handle | 4 |
+| `[ebp-0x60]` | virt_buf | 4 |
+| `[ebp-0x64]` | bytes_total | 4 |
+| `[ebp-0x68]` | bytes_recvd | 4 |
 
 ## Structures
 
 | Offset | Structure | Size |
 |--------|-----------|------|
-| `[ebp-0x80]` | STARTUPINFOA | 0x44 |
-| `[ebp-0xc4]` | PROCESS_INFORMATION | 0x10 |
-| `[ebp-0xd4]` | WSADATA | 0x190 |
-| `[ebp-0x264]` | sockaddr_in | 0x10 |
+| `[ebp-0x80]` | WSADATA | 0x190 |
+| `[ebp-0x210]` | sockaddr_in | 0x10 |
 
 ## Strings
 
 | Offset | Label | Value | Size |
 |--------|-------|-------|------|
-| `[ebp-0x274]` | cmd | cmd.exe | 8 |
-| `[ebp-0x27c]` | ws2_dll | ws2_32.dll | 12 |
+| `[ebp-0x220]` | ws2_dll | ws2_32.dll | 12 |
+| `[ebp-0x22c]` | dst_path | C:\Windows\Temp\payload.exe | 28 |
 
 ---
 
@@ -73,43 +79,19 @@ Resolution: PEB walk
 
 | API | Hash | Slot | Category |
 |-----|------|------|----------|
-| CreateProcessA | `0x16b3fe72` | `[ebp-0x28]` | process |
-| LoadLibraryA | `0xec0e4e8e` | `[ebp-0x2c]` | library |
-| GetProcAddress | `0x7c0dfcaa` | `[ebp-0x30]` | library |
-| ExitProcess | `0x73e2d87e` | `[ebp-0x34]` | process |
-| WinExec | `0x0e8afe98` | `[ebp-0x38]` | process |
+| LoadLibraryA | `0xec0e4e8e` | `[ebp-0x28]` | library |
+| VirtualAlloc | `0x91afca54` | `[ebp-0x40]` | memory |
+| CreateFileA | `0x7c0017a5` | `[ebp-0x44]` | filesystem |
+| WriteFile | `0xe80a791f` | `[ebp-0x48]` | filesystem |
+| CloseHandle | `0x0ffd97fb` | `[ebp-0x4c]` | synchronization |
+| WinExec | `0x0e8afe98` | `[ebp-0x50]` | process |
+| ExitProcess | `0x73e2d87e` | `[ebp-0x54]` | process |
 
 ### API Details
 
-#### CreateProcessA
-
-**Slot:** `[ebp-0x28]`
-**Hash:** `0x16b3fe72`
-**Module:** kernel32.dll
-**Category:** process
-
-```c
-BOOL CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation)
-```
-
-| # | Parameter | Type | Notes |
-|---|-----------|------|-------|
-| 1 | lpApplicationName | LPCSTR | NULL; command in lpCommandLine |
-| 2 | lpCommandLine | LPSTR | pointer to cmd string, e.g. cmd.exe |
-| 3 | lpProcessAttributes | LPSECURITY_ATTRIBUTES | NULL |
-| 4 | lpThreadAttributes | LPSECURITY_ATTRIBUTES | NULL |
-| 5 | bInheritHandles | BOOL | TRUE for stdio redirection |
-| 6 | dwCreationFlags | DWORD | NULL |
-| 7 | lpEnvironment | LPVOID | NULL |
-| 8 | lpCurrentDirectory | LPCSTR | NULL |
-| 9 | lpStartupInfo | LPSTARTUPINFOA | cb=0x44, STARTF_USESTDHANDLES |
-| 10 | lpProcessInformation | LPPROCESS_INFORMATION | output; zero before call |
-
----
-
 #### LoadLibraryA
 
-**Slot:** `[ebp-0x2c]`
+**Slot:** `[ebp-0x28]`
 **Hash:** `0xec0e4e8e`
 **Module:** kernel32.dll
 **Category:** library
@@ -124,44 +106,90 @@ HMODULE LoadLibraryA(LPCSTR lpLibFileName)
 
 ---
 
-#### GetProcAddress
+#### VirtualAlloc
 
-**Slot:** `[ebp-0x30]`
-**Hash:** `0x7c0dfcaa`
+**Slot:** `[ebp-0x40]`
+**Hash:** `0x91afca54`
 **Module:** kernel32.dll
-**Category:** library
+**Category:** memory
 
 ```c
-FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
 ```
 
 | # | Parameter | Type | Notes |
 |---|-----------|------|-------|
-| 1 | hModule | HMODULE | base address of loaded module |
-| 2 | lpProcName | LPCSTR | function name string |
+| 1 | lpAddress | LPVOID | NULL to let OS choose; or preferred address |
+| 2 | dwSize | SIZE_T | size of region in bytes |
+| 3 | flAllocationType | DWORD | MEM_COMMIT|MEM_RESERVE = 0x3000 |
+| 4 | flProtect | DWORD | PAGE_EXECUTE_READWRITE = 0x40 |
 
 ---
 
-#### ExitProcess
+#### CreateFileA
 
-**Slot:** `[ebp-0x34]`
-**Hash:** `0x73e2d87e`
+**Slot:** `[ebp-0x44]`
+**Hash:** `0x7c0017a5`
 **Module:** kernel32.dll
-**Category:** process
+**Category:** filesystem
 
 ```c
-VOID ExitProcess(UINT uExitCode)
+HANDLE CreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 ```
 
 | # | Parameter | Type | Notes |
 |---|-----------|------|-------|
-| 1 | uExitCode | UINT | 0 for clean exit |
+| 1 | lpFileName | LPCSTR |  |
+| 2 | dwDesiredAccess | DWORD | GENERIC_READ=0x80000000, GENERIC_WRITE=0x40000000 |
+| 3 | dwShareMode | DWORD | 0 for exclusive |
+| 4 | lpSecurityAttributes | LPSECURITY_ATTRIBUTES | NULL |
+| 5 | dwCreationDisposition | DWORD | OPEN_EXISTING=3, CREATE_ALWAYS=2 |
+| 6 | dwFlagsAndAttributes | DWORD | FILE_ATTRIBUTE_NORMAL=0x80 |
+| 7 | hTemplateFile | HANDLE | NULL |
+
+---
+
+#### WriteFile
+
+**Slot:** `[ebp-0x48]`
+**Hash:** `0xe80a791f`
+**Module:** kernel32.dll
+**Category:** filesystem
+
+```c
+BOOL WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
+```
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | hFile | HANDLE | handle from CreateFileA |
+| 2 | lpBuffer | LPCVOID | pointer to source buffer |
+| 3 | nNumberOfBytesToWrite | DWORD | number of bytes to write |
+| 4 | lpNumberOfBytesWritten | LPDWORD | pointer to DWORD for bytes written; NULL if lpOverlapped set |
+| 5 | lpOverlapped | LPOVERLAPPED | NULL for synchronous I/O |
+
+---
+
+#### CloseHandle
+
+**Slot:** `[ebp-0x4c]`
+**Hash:** `0x0ffd97fb`
+**Module:** kernel32.dll
+**Category:** synchronization
+
+```c
+BOOL CloseHandle(HANDLE hObject)
+```
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | hObject | HANDLE | handle to close; returns nonzero on success |
 
 ---
 
 #### WinExec
 
-**Slot:** `[ebp-0x38]`
+**Slot:** `[ebp-0x50]`
 **Hash:** `0x0e8afe98`
 **Module:** kernel32.dll
 **Category:** process
@@ -177,6 +205,23 @@ UINT WinExec(LPCSTR lpCmdLine, UINT uCmdShow)
 
 ---
 
+#### ExitProcess
+
+**Slot:** `[ebp-0x54]`
+**Hash:** `0x73e2d87e`
+**Module:** kernel32.dll
+**Category:** process
+
+```c
+VOID ExitProcess(UINT uExitCode)
+```
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | uExitCode | UINT | 0 for clean exit |
+
+---
+
 ## ws2_32.dll
 
 Resolution: `LoadLibraryA("ws2_32.dll")` → base stored at `[ebp-0x24]`
@@ -185,15 +230,17 @@ Resolution: `LoadLibraryA("ws2_32.dll")` → base stored at `[ebp-0x24]`
 
 | API | Hash | Slot | Category |
 |-----|------|------|----------|
-| WSAStartup | `0x3bfcedcb` | `[ebp-0x3c]` | network |
-| WSASocketA | `0xadf509d9` | `[ebp-0x40]` | network |
-| connect | `0x60aaf9ec` | `[ebp-0x44]` | network |
+| WSAStartup | `0x3bfcedcb` | `[ebp-0x2c]` | network |
+| WSASocketA | `0xadf509d9` | `[ebp-0x30]` | network |
+| connect | `0x60aaf9ec` | `[ebp-0x34]` | network |
+| recv | `0xe71819b6` | `[ebp-0x38]` | network |
+| closesocket | `0x79c679e7` | `[ebp-0x3c]` | network |
 
 ### API Details
 
 #### WSAStartup
 
-**Slot:** `[ebp-0x3c]`
+**Slot:** `[ebp-0x2c]`
 **Hash:** `0x3bfcedcb`
 **Module:** ws2_32.dll
 **Category:** network
@@ -211,7 +258,7 @@ int WSAStartup(WORD wVersionRequested, LPWSADATA lpWSAData)
 
 #### WSASocketA
 
-**Slot:** `[ebp-0x40]`
+**Slot:** `[ebp-0x30]`
 **Hash:** `0xadf509d9`
 **Module:** ws2_32.dll
 **Category:** network
@@ -233,7 +280,7 @@ SOCKET WSASocketA(int af, int type, int protocol, LPWSAPROTOCOL_INFOA lpProtocol
 
 #### connect
 
-**Slot:** `[ebp-0x44]`
+**Slot:** `[ebp-0x34]`
 **Hash:** `0x60aaf9ec`
 **Module:** ws2_32.dll
 **Category:** network
@@ -250,38 +297,46 @@ int connect(SOCKET s, const struct sockaddr *name, int namelen)
 
 ---
 
+#### recv
+
+**Slot:** `[ebp-0x38]`
+**Hash:** `0xe71819b6`
+**Module:** ws2_32.dll
+**Category:** network
+
+```c
+int recv(SOCKET s, char *buf, int len, int flags)
+```
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | s | SOCKET | connected socket handle |
+| 2 | buf | char * | pointer to receive buffer |
+| 3 | len | int | size of buffer in bytes |
+| 4 | flags | int | 0 for default behaviour |
+
+---
+
+#### closesocket
+
+**Slot:** `[ebp-0x3c]`
+**Hash:** `0x79c679e7`
+**Module:** ws2_32.dll
+**Category:** network
+
+```c
+int closesocket(SOCKET s)
+```
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | s | SOCKET | socket handle to close |
+
+---
+
 ---
 
 # Structure Layouts
-
-## STARTUPINFOA
-
-**Size:** `0x44`
-**Required by:** CreateProcessA
-
-| Offset | Field | Size | Notes |
-|--------|-------|------|-------|
-| `+0x00` | cb | 4 | must be 0x44 |
-| `+0x2c` | dwFlags | 4 | STARTF_USESTDHANDLES = 0x100 |
-| `+0x38` | hStdInput | 4 | socket handle |
-| `+0x3c` | hStdOutput | 4 | socket handle |
-| `+0x40` | hStdError | 4 | socket handle |
-
----
-
-## PROCESS_INFORMATION
-
-**Size:** `0x10`
-**Required by:** CreateProcessA
-
-| Offset | Field | Size | Notes |
-|--------|-------|------|-------|
-| `+0x00` | hProcess | 4 | populated by Windows |
-| `+0x04` | hThread | 4 | populated by Windows |
-| `+0x08` | dwProcessId | 4 | populated by Windows |
-| `+0x0c` | dwThreadId | 4 | populated by Windows |
-
----
 
 ## WSADATA
 

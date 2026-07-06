@@ -263,10 +263,13 @@ def _try_assemble(asm: str) -> tuple[bytes, str] | tuple[None, None]:
 def _load_template(name: str) -> PayloadTemplate:
     """Load a payload template by short name."""
     registry = {
-        "reverse_shell": "Tools.emitter.payload_templates.reverse_shell.ReverseShellTemplate",
-        "run_command":   "Tools.emitter.payload_templates.run_command.RunCommandTemplate",
-        "copy_file":     "Tools.emitter.payload_templates.copy_file.CopyFileTemplate",
-        "bind_shell":    "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
+        "reverse_shell":  "Tools.emitter.payload_templates.reverse_shell.ReverseShellTemplate",
+        "run_command":    "Tools.emitter.payload_templates.run_command.RunCommandTemplate",
+        "copy_file":      "Tools.emitter.payload_templates.copy_file.CopyFileTemplate",
+        "copy_then_run":  "Tools.emitter.payload_templates.copy_then_run.CopyThenRunTemplate",
+        "tcp_download":   "Tools.emitter.payload_templates.tcp_download.TcpDownloadTemplate",
+        "tcp_stager":     "Tools.emitter.payload_templates.tcp_stager.TcpStagerTemplate",
+        "bind_shell":     "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
     }
     if name not in registry:
         raise ValueError(
@@ -397,6 +400,7 @@ def build(
     manifest = load_manifest(manifest_path)
     layout = build_layout(manifest)
     config = config or TemplateConfig()
+    config.badchars = manifest.badchars   # manifest is authoritative
 
     template = _load_template(template_name) if template_name else None
     asm = compose_asm(manifest, layout, manifest_path, template, config)
@@ -449,7 +453,7 @@ def main() -> None:
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(
         "--template",
-        choices=["reverse_shell", "run_command", "copy_file", "bind_shell"],
+        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "tcp_download", "tcp_stager", "bind_shell"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default="127.0.0.1")

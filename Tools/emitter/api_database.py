@@ -358,6 +358,28 @@ API_DATABASE: dict[str, APIRecord] = {
         prototype="int WSACleanup(void)",
         arguments=[],
     ),
+    "send": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int send(SOCKET s, const char *buf, int len, int flags)",
+        arguments=[
+            Argument("s",     "SOCKET",       "connected socket handle"),
+            Argument("buf",   "const char *", "pointer to data to send"),
+            Argument("len",   "int",           "number of bytes to send"),
+            Argument("flags", "int",           "0 for default behaviour"),
+        ],
+    ),
+    "recv": APIRecord(
+        module="ws2_32.dll",
+        category="network",
+        prototype="int recv(SOCKET s, char *buf, int len, int flags)",
+        arguments=[
+            Argument("s",     "SOCKET",  "connected socket handle"),
+            Argument("buf",   "char *",  "pointer to receive buffer"),
+            Argument("len",   "int",     "size of buffer in bytes"),
+            Argument("flags", "int",     "0 for default behaviour"),
+        ],
+    ),
 }
 
 

