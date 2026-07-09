@@ -7,12 +7,12 @@ function vpTemplate(mod: string): void {
   out.print("Goal:      mark shellcode region PAGE_EXECUTE_READWRITE (flNewProtect = 0x40)");
 
   out.section("Step 1 — find addresses");
-  out.print(`  VirtualProtect addr:   dx @$osed.sc.iat_find("VirtualProtect")`);
-  out.print(`  jmp esp (dispatch):    dx @$osed.find_bytes({ module: "${mod}", bytes: [0xFF, 0xE4] })`);
-  out.print(`  pushad ; ret:          dx @$osed.find_bytes({ module: "${mod}", bytes: [0x60, 0xC3] })`);
-  out.print(`  Gadgets (pop/inc/neg): dx @$osed.rop_suggest({ module: "${mod}", engine: "semantic" })`);
-  out.print(`  Stack adjustments:     dx @$osed.add_esp({ module: "${mod}" })`);
-  out.print(`  Writable addr:         dx @$osed.modules()  -- pick a .data section address`);
+  out.print(`  VirtualProtect addr:   dx @$osed().sc.iat_find("VirtualProtect")`);
+  out.print(`  jmp esp (dispatch):    dx @$osed().find_bytes({ module: "${mod}", bytes: [0xFF, 0xE4] })`);
+  out.print(`  pushad ; ret:          dx @$osed().find_bytes({ module: "${mod}", bytes: [0x60, 0xC3] })`);
+  out.print(`  Gadgets (pop/inc/neg): dx @$osed().rop_suggest({ module: "${mod}", engine: "semantic" })`);
+  out.print(`  Stack adjustments:     dx @$osed().add_esp({ module: "${mod}" })`);
+  out.print(`  Writable addr:         dx @$osed().modules()  -- pick a .data section address`);
 
   out.section("Step 2 — PUSHAD technique register map");
   out.print("  After PUSHAD ; RET, the stack looks like:");
@@ -30,9 +30,9 @@ function vpTemplate(mod: string): void {
   out.print("def p32(v): return struct.pack('<I', v)");
   out.print("");
   out.print("OFFSET   = ???           # bytes from buffer start to EIP control");
-  out.print("VP       = 0x????????    # VirtualProtect  dx @$osed.sc.iat_find(\"VirtualProtect\")");
-  out.print("JMP_ESP  = 0x????????    # jmp esp         dx @$osed.find_bytes({bytes:[0xFF,0xE4]})");
-  out.print("WRITABLE = 0x????????    # writable addr   dx @$osed.modules() -> .data section");
+  out.print("VP       = 0x????????    # VirtualProtect  dx @$osed().sc.iat_find(\"VirtualProtect\")");
+  out.print("JMP_ESP  = 0x????????    # jmp esp         dx @$osed().find_bytes({bytes:[0xFF,0xE4]})");
+  out.print("WRITABLE = 0x????????    # writable addr   dx @$osed().modules() -> .data section");
   out.print("LP_ADDR  = 0x????????    # shellcode addr  compute from ESP (see step 4)");
   out.print("");
   out.print("rop_chain = b\"\"");
@@ -60,12 +60,12 @@ function vpTemplate(mod: string): void {
   out.print("rop_chain += p32(0x90909090)");
   out.print("");
   out.print("rop_chain += p32(0x????????)  # pushad ; ret");
-  out.print("                               #   dx @$osed.find_bytes({bytes:[0x60,0xC3]})");
+  out.print("                               #   dx @$osed().find_bytes({bytes:[0x60,0xC3]})");
   out.print("");
   out.print("# ── NOP sled + shellcode ──");
-  out.print("nop_sled  = b\"\\x90\" * 16    # dx @$osed.nop(16)");
+  out.print("nop_sled  = b\"\\x90\" * 16    # dx @$osed().nop(16)");
   out.print("shellcode = nop_sled + b\"\\xfc\\xe8...\"  # your payload");
-  out.print("                               # dx @$osed.encode({shellcode:\"...\",exclude:[0,10,13]})");
+  out.print("                               # dx @$osed().encode({shellcode:\"...\",exclude:[0,10,13]})");
   out.print("");
   out.print("payload = b\"A\" * OFFSET + rop_chain + shellcode");
 
@@ -74,8 +74,8 @@ function vpTemplate(mod: string): void {
   out.print("  To find LP_ADDR (EBP = shellcode location on stack):");
   out.print("  1. Run exploit with 'CC' shellcode; check EBP at VirtualProtect breakpoint.");
   out.print("  2. Or: prepend gadgets to capture ESP and add the chain-to-shellcode offset:");
-  out.print("       dx @$osed.rop_suggest(...)  ->  push esp ; pop eax ; ret");
-  out.print("       dx @$osed.add_esp(...)      ->  add eax, N ; ret   (N = measured offset)");
+  out.print("       dx @$osed().rop_suggest(...)  ->  push esp ; pop eax ; ret");
+  out.print("       dx @$osed().add_esp(...)      ->  add eax, N ; ret   (N = measured offset)");
   out.print("     Then use a  mov [writable], eax ; ret  gadget and patch EBP from that addr.");
 }
 
@@ -85,17 +85,17 @@ function wpmTemplate(mod: string): void {
   out.print("Goal:      copy shellcode into a known-executable .text section, then jump to it.");
 
   out.section("Find addresses");
-  out.print(`  WriteProcessMemory:  dx @$osed.sc.iat_find("WriteProcessMemory")`);
-  out.print(`  Writable addr:       dx @$osed.modules()  -- any .data section`);
-  out.print(`  Executable target:   dx @$osed.modules()  -- any .text section address`);
-  out.print(`  Gadgets:             dx @$osed.rop_suggest({ module: "${mod}", engine: "semantic" })`);
+  out.print(`  WriteProcessMemory:  dx @$osed().sc.iat_find("WriteProcessMemory")`);
+  out.print(`  Writable addr:       dx @$osed().modules()  -- any .data section`);
+  out.print(`  Executable target:   dx @$osed().modules()  -- any .text section address`);
+  out.print(`  Gadgets:             dx @$osed().rop_suggest({ module: "${mod}", engine: "semantic" })`);
 
   out.section("Python skeleton");
   out.print("import struct");
   out.print("def p32(v): return struct.pack('<I', v)");
   out.print("");
   out.print("OFFSET      = ???          # EIP control offset");
-  out.print("WPM         = 0x????????   # WriteProcessMemory  dx @$osed.sc.iat_find(...)");
+  out.print("WPM         = 0x????????   # WriteProcessMemory  dx @$osed().sc.iat_find(...)");
   out.print("EXEC_TARGET = 0x????????   # executable .text address to write shellcode into");
   out.print("WRITABLE    = 0x????????   # .data writable addr");
   out.print("SC_SRC      = 0x????????   # shellcode source (stack addr — compute dynamically)");
