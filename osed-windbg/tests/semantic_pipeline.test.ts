@@ -155,4 +155,35 @@ describe("semantic pipeline", () => {
     const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
     expect(capabilityIndex.query({ preserves: ["eax"] }).length).toBe(0);
   });
+
+  test("memoryWrite: false excludes gadgets with unknown memory effects", async () => {
+    const provider = new RPPlusProvider("0x1000: mul eax ; ret ;");
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    // mul is unsupported → memory-write behavior is unknown → must not satisfy a
+    // "no memory writes" constraint, since an unproven gadget might write memory.
+    expect(capabilityIndex.query({ memoryWrite: false }).length).toBe(0);
+  });
+
+  test("memoryWrite: false includes gadgets with proven-empty memory effects", async () => {
+    const provider = new RPPlusProvider("0x1000: pop eax ; ret ;");
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    expect(capabilityIndex.query({ memoryWrite: false }).length).toBe(1);
+  });
+
+  test("memoryWrite: true matches a proven memory-write gadget", async () => {
+    const provider = new RPPlusProvider("0x1000: mov [ecx], eax ; ret ;");
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    expect(capabilityIndex.query({ memoryWrite: true }).length).toBe(1);
+    expect(capabilityIndex.query({ memoryWrite: false }).length).toBe(0);
+  });
+
+  test("memoryRead: false excludes gadgets with unknown memory effects", async () => {
+    const provider = new RPPlusProvider("0x1000: mul eax ; ret ;");
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    expect(capabilityIndex.query({ memoryRead: false }).length).toBe(0);
+  });
 });

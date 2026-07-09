@@ -63,6 +63,13 @@ function hasKnownValues<T>(field: SemanticField<T> | undefined): boolean {
   return !!field && !field.values.unknown && (field.values.exact.size > 0 || field.values.conservative.size > 0);
 }
 
+// True only when the field is known AND empty — i.e. the gadget definitely has no
+// effect of this kind. An unknown field fails this check so that a negative
+// constraint (e.g. memoryWrite: false) excludes gadgets whose effect is unproven.
+function isDefinitelyEmpty<T>(field: SemanticField<T> | undefined): boolean {
+  return !!field && !field.values.unknown && field.values.exact.size === 0 && field.values.conservative.size === 0;
+}
+
 function matchesStackDelta(field: SemanticField<number> | undefined, expected: number[]): boolean {
   return fieldMatchesAny(field, expected);
 }
@@ -126,15 +133,17 @@ export function queryRopGadgets(gadgets: RopGadget[], query: RopQuery): RopGadge
     }
 
     if (memoryReads !== undefined) {
-      const hasMemoryReads = hasKnownValues(gadget.semanticSummary.summary.memoryReads);
-      if (memoryReads ? !hasMemoryReads : hasMemoryReads) {
+      const field = gadget.semanticSummary.summary.memoryReads;
+      // memoryReads: true  requires proven reads; memoryReads: false requires proven absence.
+      // Unknown fails both, so an unproven gadget never satisfies either constraint.
+      if (memoryReads ? !hasKnownValues(field) : !isDefinitelyEmpty(field)) {
         return false;
       }
     }
 
     if (memoryWrites !== undefined) {
-      const hasMemoryWrites = hasKnownValues(gadget.semanticSummary.summary.memoryWrites);
-      if (memoryWrites ? !hasMemoryWrites : hasMemoryWrites) {
+      const field = gadget.semanticSummary.summary.memoryWrites;
+      if (memoryWrites ? !hasKnownValues(field) : !isDefinitelyEmpty(field)) {
         return false;
       }
     }
