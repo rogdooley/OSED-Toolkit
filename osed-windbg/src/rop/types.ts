@@ -24,6 +24,8 @@ export type CapabilityKind =
   | "MEMORY_READ"
   | "MEMORY_WRITE";
 
+export type TerminatorKind = "RETURN" | "CALL" | "JUMP";
+
 export interface AnalysisReason {
   rule: string;
   message: string;
@@ -49,6 +51,20 @@ export interface RopCapability {
   evidence: string[];
 }
 
+export interface RopQuery {
+  reads?: string[];
+  writes?: string[];
+  preserves?: string[];
+  stackDelta?: number | number[];
+  capability?: CapabilityKind | CapabilityKind[];
+  terminator?: TerminatorKind | TerminatorKind[];
+  memoryReads?: boolean;
+  memoryWrites?: boolean;
+  memoryRead?: boolean;
+  memoryWrite?: boolean;
+  executableOnly?: boolean;
+}
+
 export interface RopGadget {
   schemaVersion: typeof ROP_SCHEMA_VERSION;
   canonicalId: string;
@@ -66,4 +82,3 @@ export interface RopIndex {
   gadgets: RopGadget[];
   byCanonicalId: Map<string, RopGadget>;
 }
-

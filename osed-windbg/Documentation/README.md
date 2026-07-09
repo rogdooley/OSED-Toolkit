@@ -2,6 +2,29 @@
 
 TypeScript-based WinDbg Preview data-model script for exploit-development helpers.
 
+## Try It
+
+If you only want to see the built JavaScript do something useful, use this path:
+
+1. Load the bundle in WinDbg Preview:
+   - `.scriptload <full path>\\osed-windbg\\dist\\osed.js`
+2. Confirm the command surface:
+   - `dx @$osed().help()`
+3. Pick a loaded module and inspect its mitigation state:
+   - `dx @$osed().modules("kernel32")`
+4. Find a classic import target:
+   - `dx @$osed().sc.iat_find("VirtualProtect")`
+5. Print a ready-made exploit skeleton:
+   - `dx @$osed().rop_template("VirtualProtect", "essfunc")`
+6. Load RP++ output into the semantic ROP index:
+   - `dx @$osed().rop.scan("0x1000: pop eax ; ret ;")`
+7. Inspect the semantic capability catalog:
+   - `dx @$osed().rop.capabilities()`
+8. Query the loaded corpus:
+   - `dx @$osed().rop.query({ writes: ["eax"], capability: "LOAD_REGISTER" })`
+
+That sequence shows the script’s value without requiring any prior setup beyond a live debug target.
+
 ## Prerequisites
 
 - WinDbg Preview (modern JavaScript provider)
@@ -29,6 +52,9 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().seh.visualize()`
 - `dx @$osed().triage()`
 - `dx @$osed().rop_suggest({ module: "essfunc", engine: "semantic" })`
+- `dx @$osed().rop.scan("0x1000: pop eax ; ret ;")`
+- `dx @$osed().rop.query({ capability: "STACK_PIVOT", executableOnly: true })`
+- `dx @$osed().rop.capabilities()`
 - `dx @$osed().sc.peb()`
 - `dx @$osed().sc.modules()`
 - `dx @$osed().sc.module_pages("kernel32")`

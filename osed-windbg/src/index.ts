@@ -41,6 +41,10 @@ import { createEncodeCommand } from "./commands/encode";
 import { createNopCommand } from "./commands/nop";
 import { createRopTemplateCommand } from "./commands/rop_template";
 import { createShellcodeNamespace } from "./shellcode";
+import { buildCapabilityIndexFromRpPlusText, summarizeCapabilities, type CapabilityIndex, type RopQuery } from "./rop";
+import { RPPlusProviderOptions } from "./semantics/rpplus-provider";
+import { formatAddress } from "./core/output";
+import { getPointerSize } from "./core/memory";
 
 type OsedApi = {
   [name: string]: unknown;
@@ -49,6 +53,7 @@ type OsedApi = {
 const registry = new CommandRegistry();
 let osed: OsedApi = {};
 let lastResult: CommandResult | undefined;
+let currentRopCorpus: CapabilityIndex | undefined;
 
 function getGlobalObject(): Record<string, unknown> | undefined {
   if (typeof globalThis !== "undefined") {
@@ -98,11 +103,188 @@ function bindApi(): OsedApi {
     lastResult = result;
     return result.success;
   };
+  const setResult = (result: CommandResult): void => {
+    lastResult = result;
+  };
+
+  const formatSet = (values: Set<unknown>): string => {
+    return [...values].map((value) => String(value)).join(", ");
+  };
+
+  const formatSemanticField = (field: { confidence: string; values: { exact: Set<unknown>; conservative: Set<unknown>; unknown: boolean } }): string => {
+    if (field.values.unknown) {
+      return "unknown";
+    }
+
+    const parts: string[] = [];
+    if (field.values.exact.size > 0) {
+      parts.push(`exact=${formatSet(field.values.exact)}`);
+    }
+    if (field.values.conservative.size > 0) {
+      parts.push(`conservative=${formatSet(field.values.conservative)}`);
+    }
+    return parts.length > 0 ? `${field.confidence.toLowerCase()}(${parts.join("; ")})` : "none";
+  };
+
+  const queryRows = (query: RopQuery): Array<Record<string, string>> => {
+    if (!currentRopCorpus) {
+      return [{ Error: "No RP++ corpus loaded. Run rop.scan(...) first." }];
+    }
+
+    const gadgets = currentRopCorpus.query(query);
+    const pointerSize = getPointerSize();
+    return gadgets.map((gadget) => {
+      const location = gadget.locations[0];
+      return {
+        Address: location?.virtualAddress !== undefined ? formatAddress(BigInt(location.virtualAddress), pointerSize) : "n/a",
+        Module: location?.module ?? "n/a",
+        Score: gadget.score.toString(),
+        Terminator: [...gadget.semanticSummary.summary.flowEffects.values.exact].join(", ") || "none",
+        Reads: formatSemanticField(gadget.semanticSummary.summary.reads),
+        Writes: formatSemanticField(gadget.semanticSummary.summary.writes),
+        MemoryReads: formatSemanticField(gadget.semanticSummary.summary.memoryReads),
+        MemoryWrites: formatSemanticField(gadget.semanticSummary.summary.memoryWrites),
+        StackDelta: formatSemanticField(gadget.semanticSummary.summary.stackDelta),
+        Capabilities: gadget.capabilities.map((capability) => capability.kind).join(", "),
+        Sequence: gadget.instructions.map((instruction) => instruction.normalizedText || instruction.originalText).join(" ; "),
+      };
+    });
+  };
+
+  const capabilityRows = (): Array<Record<string, string>> => {
+    if (!currentRopCorpus) {
+      return [{ Error: "No RP++ corpus loaded. Run rop.scan(...) first." }];
+    }
+    return summarizeCapabilities(currentRopCorpus);
+  };
+
+  const scanCorpus = (text: string, options: RPPlusProviderOptions = {}): Array<Record<string, string>> => {
+    currentRopCorpus = buildCapabilityIndexFromRpPlusText(text, options);
+    const rows = summarizeCapabilities(currentRopCorpus);
+    setResult({
+      command: "rop.scan",
+      args: { text, ...options },
+      success: true,
+      findings: [{ gadgets: currentRopCorpus.gadgets.length, capabilities: rows.length }],
+      warnings: [],
+      errors: [],
+    });
+    return [
+      {
+        Corpus: "loaded",
+        Gadgets: currentRopCorpus.gadgets.length.toString(),
+        Capabilities: rows.length.toString(),
+      },
+    ];
+  };
+
+  const executeRopScan = (...args: unknown[]): Array<Record<string, string>> => {
+    if (args.length === 0) {
+      const rows = [{ Error: "rop.scan requires RP++ text input." }];
+      setResult({
+        command: "rop.scan",
+        args: {},
+        success: false,
+        findings: [],
+        warnings: [],
+        errors: ["RP++ text input is required."],
+      });
+      return rows;
+    }
+
+    if (args.length === 1 && typeof args[0] === "string") {
+      return scanCorpus(args[0]);
+    }
+
+    const options = isPlainObject(args[0]) ? args[0] : {};
+    const text = (options.text ?? options.output ?? options.value ?? args[0]) as string | undefined;
+    if (typeof text !== "string" || text.trim().length === 0) {
+      const rows = [{ Error: "rop.scan requires a text property containing RP++ output." }];
+      setResult({
+        command: "rop.scan",
+        args: options,
+        success: false,
+        findings: [],
+        warnings: [],
+        errors: ["RP++ text input is required."],
+      });
+      return rows;
+    }
+
+    return scanCorpus(text, {
+      source: options.source as RPPlusProviderOptions["source"],
+      provenance: options.provenance as RPPlusProviderOptions["provenance"],
+      preserveEmptyLines: options.preserveEmptyLines as boolean | undefined,
+    });
+  };
+
+  const executeRopQuery = (...args: unknown[]): Array<Record<string, string>> => {
+    const query = isPlainObject(args[0]) ? (args[0] as RopQuery) : undefined;
+    if (!query) {
+      const rows = [{ Error: "rop.query requires a query object." }];
+      setResult({
+        command: "rop.query",
+        args: {},
+        success: false,
+        findings: [],
+        warnings: [],
+        errors: ["Query object is required."],
+      });
+      return rows;
+    }
+    if (!currentRopCorpus) {
+      const rows = [{ Error: "No RP++ corpus loaded. Run rop.scan(...) first." }];
+      setResult({
+        command: "rop.query",
+        args: query as Record<string, unknown>,
+        success: false,
+        findings: [],
+        warnings: [],
+        errors: ["No RP++ corpus loaded."],
+      });
+      return rows;
+    }
+
+    const gadgets = currentRopCorpus.query(query);
+    const rows = queryRows(query);
+    setResult({
+      command: "rop.query",
+      args: query as Record<string, unknown>,
+      success: true,
+      findings: gadgets,
+      warnings: [],
+      errors: [],
+    });
+    return rows;
+  };
+
+  const executeRopCapabilities = (): Array<Record<string, string>> => {
+    const rows = capabilityRows();
+    setResult({
+      command: "rop.capabilities",
+      args: {},
+      success: currentRopCorpus !== undefined,
+      findings: currentRopCorpus ? currentRopCorpus.gadgets : [],
+      warnings: [],
+      errors: currentRopCorpus ? [] : ["No RP++ corpus loaded."],
+    });
+    return rows;
+  };
 
   for (const command of registry.getAll()) {
     api[command.name] = (...args: unknown[]) => {
       return invoke(command.name, args);
     };
+  }
+
+  const ropInvoke = api.rop as ((...args: unknown[]) => boolean) | undefined;
+  if (typeof ropInvoke === "function") {
+    const ropNamespace = Object.assign(ropInvoke, {
+      scan: executeRopScan,
+      query: executeRopQuery,
+      capabilities: executeRopCapabilities,
+    });
+    api.rop = ropNamespace;
   }
 
   api.pattern = {
@@ -261,7 +443,9 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
 }
 
 function initialize(): void {
+  currentRopCorpus = undefined;
   registry.setReloader(() => {
+    currentRopCorpus = undefined;
     registerAll();
     osed = bindApi();
     publishOsed();

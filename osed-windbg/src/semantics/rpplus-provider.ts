@@ -63,56 +63,62 @@ function isBannerLine(line: string): boolean {
   return false;
 }
 
+export function parseRpPlusSequences(text: string, options: RPPlusProviderOptions = {}): InstructionSequence[] {
+  const lines = text.split(/\r?\n/);
+  const source = { ...defaultSource(), ...options.source };
+  const provenance = { ...defaultProvenance(), ...options.provenance };
+
+  const sequences: InstructionSequence[] = [];
+  for (const line of lines) {
+    if (isBannerLine(line)) {
+      if (options.preserveEmptyLines && line.trim().length === 0) {
+        continue;
+      }
+      if (!/^0x[0-9a-fA-F]+\s*:/.test(line.trim())) {
+        continue;
+      }
+    }
+
+    const address = parseAddress(line);
+    if (address === undefined) {
+      continue;
+    }
+
+    const parts = splitInstructionParts(line);
+    if (parts.length === 0) {
+      continue;
+    }
+
+    const instructions = parts.map((part) => parseInstruction(part));
+    const canonical = canonicalizeTextSequence(parts.join(" ; "));
+    sequences.push({
+      schemaVersion: SEMANTIC_SCHEMA_VERSION,
+      id: `rp++:${address.toString(16).padStart(8, "0")}:${canonical}`,
+      source,
+      originalText: line.trim(),
+      instructions,
+      provenance: {
+        ...provenance,
+        virtualAddress: address,
+      },
+    });
+  }
+
+  return sequences;
+}
+
 export class RPPlusProvider implements InstructionSequenceProvider {
-  private readonly lines: string[];
-  private readonly source: InstructionSequenceSource;
-  private readonly provenance: Provenance;
-  private readonly preserveEmptyLines: boolean;
+  private readonly text: string;
+  private readonly options: RPPlusProviderOptions;
 
   constructor(text: string, options: RPPlusProviderOptions = {}) {
-    this.lines = text.split(/\r?\n/);
-    this.source = { ...defaultSource(), ...options.source };
-    this.provenance = { ...defaultProvenance(), ...options.provenance };
-    this.preserveEmptyLines = options.preserveEmptyLines ?? false;
+    this.text = text;
+    this.options = options;
   }
 
   async *load(): AsyncIterable<InstructionSequence> {
-    for (const line of this.lines) {
-      if (isBannerLine(line)) {
-        if (this.preserveEmptyLines && line.trim().length === 0) {
-          continue;
-        }
-        if (!/^0x[0-9a-fA-F]+\s*:/.test(line.trim())) {
-          continue;
-        }
-      }
-
-      const address = parseAddress(line);
-      if (address === undefined) {
-        continue;
-      }
-
-      const parts = splitInstructionParts(line);
-      if (parts.length === 0) {
-        continue;
-      }
-
-      const instructions = parts.map((part) => parseInstruction(part));
-      const canonical = canonicalizeTextSequence(parts.join(" ; "));
-      const provenance = {
-        ...this.provenance,
-        virtualAddress: address,
-      };
-      const sequence: InstructionSequence = {
-        schemaVersion: SEMANTIC_SCHEMA_VERSION,
-        id: `rp++:${address.toString(16).padStart(8, "0")}:${canonical}`,
-        source: this.source,
-        originalText: line.trim(),
-        instructions,
-        provenance,
-      };
+    for (const sequence of parseRpPlusSequences(this.text, this.options)) {
       yield sequence;
     }
   }
 }
-

@@ -4,7 +4,7 @@ import { canonicalizeInstructionSequence, normalizeInstructionText } from "../sr
 import { composeSemanticSequence } from "../src/semantics/compose";
 import { RPPlusProvider } from "../src/semantics/rpplus-provider";
 import { analyzeInstruction } from "../src/semantics/instruction-semantics";
-import { buildCapabilityIndex, buildRopGadgetFromSequence, buildRopIndexFromProvider } from "../src/rop";
+import { buildCapabilityIndex, buildCapabilityIndexFromRpPlusText, buildRopGadgetFromSequence, buildRopIndexFromProvider, buildRopIndexFromSequences } from "../src/rop";
 
 const fixture = readFileSync(new URL("./fixtures/rpplus/basic.txt", import.meta.url), "utf8");
 
@@ -119,5 +119,40 @@ describe("semantic pipeline", () => {
     const capabilityIndex = buildCapabilityIndex(index);
     expect(capabilityIndex.loadRegister("eax").length).toBeGreaterThan(0);
     expect(capabilityIndex.stackPivotCandidates().length).toBeGreaterThan(0);
+  });
+
+  test("RP++ text builds a capability index and supports semantic queries", () => {
+    const capabilityIndex = buildCapabilityIndexFromRpPlusText(fixture, {
+      provenance: {
+        executable: "EXACT",
+        writable: "CONSERVATIVE",
+        aslr: "CONSERVATIVE",
+        rebaseable: "CONSERVATIVE",
+      },
+    });
+    expect(capabilityIndex.gadgets.length).toBeGreaterThan(0);
+    expect(capabilityIndex.query({ capability: "STACK_PIVOT", executableOnly: true }).length).toBeGreaterThan(0);
+  });
+
+  test("query writes matches exact register writes", async () => {
+    const provider = new RPPlusProvider("0x1000: pop eax ; ret ;", {
+      provenance: {
+        executable: "EXACT",
+        writable: "CONSERVATIVE",
+        aslr: "CONSERVATIVE",
+        rebaseable: "CONSERVATIVE",
+      },
+    });
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    expect([...capabilityIndex.gadgets[0].semanticSummary.summary.writes.values.exact]).toContain("eax");
+    expect(capabilityIndex.query({ writes: ["eax"] }).length).toBe(1);
+  });
+
+  test("preserves does not treat unknown semantics as preserved", async () => {
+    const provider = new RPPlusProvider("0x1000: mul eax ; ret ;");
+    const sequences = await loadAll(provider);
+    const capabilityIndex = buildCapabilityIndex(buildRopIndexFromSequences(sequences));
+    expect(capabilityIndex.query({ preserves: ["eax"] }).length).toBe(0);
   });
 });

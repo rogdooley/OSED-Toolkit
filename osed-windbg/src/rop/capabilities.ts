@@ -1,7 +1,9 @@
 import { SemanticSequence } from "../semantics/types";
-import { AnalysisReason, CapabilityKind, RopCapability, RopGadget, RopIndex, RopCategory } from "./types";
+import { AnalysisReason, CapabilityKind, RopCapability, RopGadget, RopIndex, RopCategory, RopQuery } from "./types";
+import { queryRopGadgets, summarizeCapabilities } from "./query";
 
 export interface CapabilityIndex {
+  gadgets: RopGadget[];
   loadRegister(register: string): RopGadget[];
   zeroRegister(register: string): RopGadget[];
   moveIntoRegister(register: string): RopGadget[];
@@ -9,6 +11,7 @@ export interface CapabilityIndex {
   stackPivotCandidates(): RopGadget[];
   memoryReadCandidates(): RopGadget[];
   memoryWriteCandidates(): RopGadget[];
+  query(query: RopQuery): RopGadget[];
   capabilityMap: Map<string, RopGadget[]>;
 }
 
@@ -46,6 +49,7 @@ export function buildCapabilities(gadgets: RopGadget[]): CapabilityIndex {
   }
 
   return {
+    gadgets,
     capabilityMap,
     loadRegister(register: string): RopGadget[] {
       return capabilityMap.get(key("LOAD_REGISTER", register)) ?? [];
@@ -67,6 +71,9 @@ export function buildCapabilities(gadgets: RopGadget[]): CapabilityIndex {
     },
     memoryWriteCandidates(): RopGadget[] {
       return capabilityMap.get(key("MEMORY_WRITE")) ?? [];
+    },
+    query(query: RopQuery): RopGadget[] {
+      return queryRopGadgets(gadgets, query);
     },
   };
 }
@@ -109,3 +116,5 @@ export function deriveCapabilities(semantic: SemanticSequence, categories: RopCa
   }
   return capabilities;
 }
+
+export { summarizeCapabilities };

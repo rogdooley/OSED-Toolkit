@@ -2,10 +2,12 @@ export * from "./types";
 export * from "./classifier";
 export * from "./scoring";
 export * from "./capabilities";
+export * from "./query";
 
 import { canonicalizeSequenceForPolicy, composeSemanticSequence } from "../semantics/compose";
 import { InstructionSequence, InstructionSequenceSource } from "../semantics/types";
 import { InstructionSequenceProvider } from "../semantics/provider";
+import { RPPlusProviderOptions, parseRpPlusSequences } from "../semantics/rpplus-provider";
 import { AnalysisReason, RopGadget, RopIndex, ROP_SCHEMA_VERSION } from "./types";
 import { buildRopGadget } from "./classifier";
 import { scoreSemanticSequence } from "./scoring";
@@ -74,7 +76,14 @@ export async function buildRopIndexFromProvider(provider: InstructionSequencePro
   return buildRopIndexFromSequences(sequences);
 }
 
+export function buildRopIndexFromRpPlusText(text: string, options: RPPlusProviderOptions = {}): RopIndex {
+  return buildRopIndexFromSequences(parseRpPlusSequences(text, options));
+}
+
+export function buildCapabilityIndexFromRpPlusText(text: string, options: RPPlusProviderOptions = {}) {
+  return buildCapabilityIndex(buildRopIndexFromRpPlusText(text, options));
+}
+
 export function buildCapabilityIndex(index: RopIndex) {
   return buildCapabilities(index.gadgets);
 }
-
