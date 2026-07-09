@@ -34,6 +34,7 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().sc.module_pages("kernel32")`
 - `dx @$osed().sc.page_summary("kernel32")`
 - `dx @$osed().sc.base("kernel")`
+- `dx @$osed().sc.pe("kernel32")`
 - `dx @$osed().sc.hashes("kernel32", "crc32")`
 - `dx @$osed().sc.hash("WinExec", "ROR13")`
 - `dx @$osed().sc.hashresolve("kernel32", 0x7c0dfcaa, "ROR13")`
@@ -46,6 +47,8 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().sc.iat("app.exe")`
 - `dx @$osed().sc.iat_find("VirtualAlloc")`
 - `dx @$osed().sc.iat_ptr("app.exe", "VirtualAlloc")`
+
+For the full command matrix, see `Documentation/COMMANDS.md`.
 
 ## Troubleshooting
 

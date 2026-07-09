@@ -19,7 +19,7 @@
 7. Return structured `CommandResult`.
 8. Add deterministic output table/section text.
 9. Register command in `src/index.ts`.
-10. Document it in `docs/COMMANDS.md`.
+10. Document it in `Documentation/COMMANDS.md`.
 
 ## Rebuild and Reload During Live Debugging
 
