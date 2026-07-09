@@ -729,6 +729,73 @@ class ShellcodeHelper {
     }));
   }
 
+  public modulePages(moduleName: string): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+
+    const pageSize = BigInt(0x1000);
+    const pages = lookup.module.size === BigInt(0)
+      ? BigInt(0)
+      : (lookup.module.size + pageSize - BigInt(1)) / pageSize;
+
+    return [
+      {
+        Module: lookup.module.name,
+        Base: toDmlAddress(lookup.module.base, "db"),
+        End: toDmlAddress(lookup.module.end, "db"),
+        Size: `0x${lookup.module.size.toString(16).toUpperCase()}`,
+        PageSize: `0x${pageSize.toString(16).toUpperCase()}`,
+        Pages: pages.toString(),
+      },
+    ];
+  }
+
+  public pageSummary(moduleName: string): Array<Record<string, string>> {
+    const lookup = this.findModule(moduleName);
+    if (lookup.kind !== "ok") {
+      return this.lookupFailureRows(lookup);
+    }
+
+    const summary = this.collectPageProtections(lookup.module);
+    const pageSize = BigInt(0x1000);
+    const totalPages = Array.from(summary.values()).reduce((sum, count) => sum + count, 0);
+    const executablePages = Array.from(summary.entries()).reduce((sum, [protect, count]) => {
+      return sum + (this.isExecutableProtect(protect) ? count : 0);
+    }, 0);
+
+    const rows: Array<Record<string, string>> = [
+      {
+        Module: lookup.module.name,
+        Base: toDmlAddress(lookup.module.base, "db"),
+        End: toDmlAddress(lookup.module.end, "db"),
+        Size: `0x${lookup.module.size.toString(16).toUpperCase()}`,
+        PageSize: `0x${pageSize.toString(16).toUpperCase()}`,
+        TotalPages: totalPages.toString(),
+        ExecutablePages: executablePages.toString(),
+      },
+      {
+        Protect: "TOTAL",
+        Name: "TOTAL",
+        Pages: totalPages.toString(),
+        ExecutablePages: executablePages.toString(),
+      },
+      ...[...summary.entries()].sort((left, right) => left[0] - right[0]).map(([protect, count]) => {
+        const decoded = decodeProtectValue(protect);
+        return {
+          Protect: `0x${protect.toString(16).toUpperCase().padStart(2, "0")}`,
+          Name: decoded.name,
+          Pages: count.toString(),
+          Executable: decoded.executable ? "yes" : "no",
+          Writable: decoded.writable ? "yes" : "no",
+        };
+      }),
+    ];
+
+    return rows;
+  }
+
   public base(name: string): Array<Record<string, string>> {
     const lookup = this.findModule(name);
     if (lookup.kind === "ok") {
@@ -1276,6 +1343,29 @@ class ShellcodeHelper {
       .sort((a, b) => (a.base < b.base ? -1 : 1));
   }
 
+  private collectPageProtections(module: ModuleInfo): Map<number, number> {
+    const counts = new Map<number, number>();
+    const pageSize = BigInt(0x1000);
+    for (let page = module.base; page < module.end; page += pageSize) {
+      const protect = this.readPageProtection(page);
+      counts.set(protect, (counts.get(protect) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  private readPageProtection(address: bigint): number {
+    const output = executeDebuggerCommand(`!vprot ${formatAddress(address, this.pointerSize)}`);
+    const parsed = parseProtectFromVprot(output);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+    throw new Error(`Unable to parse !vprot output for ${formatAddress(address, this.pointerSize)}.`);
+  }
+
+  private isExecutableProtect(protect: number): boolean {
+    return (protect & 0xff) === 0x10 || (protect & 0xff) === 0x20 || (protect & 0xff) === 0x40 || (protect & 0xff) === 0x80;
+  }
+
   private moduleCandidatesRows(candidates: ModuleInfo[]): Array<Record<string, string>> {
     return candidates.map((module) => ({
       Base: toDmlAddress(module.base, "db"),
@@ -1309,6 +1399,63 @@ function toArray(value: unknown): unknown[] {
     }
   }
   return [];
+}
+
+function executeDebuggerCommand(command: string): string[] {
+  const hostAny = host as unknown as {
+    namespace?: {
+      Debugger?: {
+        Utility?: {
+          Control?: {
+            ExecuteCommand?: (input: string) => unknown;
+          };
+        };
+      };
+    };
+  };
+
+  const exec = hostAny.namespace?.Debugger?.Utility?.Control?.ExecuteCommand;
+  if (typeof exec !== "function") {
+    throw new Error("WinDbg command execution is unavailable in this host.");
+  }
+
+  const control = hostAny.namespace?.Debugger?.Utility?.Control;
+  const result = exec.call(control, command);
+  return toArray(result).map((line) => String(line));
+}
+
+function parseProtectFromVprot(lines: string[]): number | undefined {
+  for (const line of lines) {
+    const match = line.match(/^\s*Protect:\s+([0-9a-f`]+)\s+/i);
+    if (match) {
+      return Number(BigInt(`0x${match[1].replace(/`/g, "")}`) & BigInt(0xffffffff));
+    }
+  }
+  return undefined;
+}
+
+function decodeProtectValue(value: number): { name: string; executable: boolean; writable: boolean } {
+  const protect = value & 0xff;
+  switch (protect) {
+    case 0x01:
+      return { name: "PAGE_NOACCESS", executable: false, writable: false };
+    case 0x02:
+      return { name: "PAGE_READONLY", executable: false, writable: false };
+    case 0x04:
+      return { name: "PAGE_READWRITE", executable: false, writable: true };
+    case 0x08:
+      return { name: "PAGE_WRITECOPY", executable: false, writable: true };
+    case 0x10:
+      return { name: "PAGE_EXECUTE", executable: true, writable: false };
+    case 0x20:
+      return { name: "PAGE_EXECUTE_READ", executable: true, writable: false };
+    case 0x40:
+      return { name: "PAGE_EXECUTE_READWRITE", executable: true, writable: true };
+    case 0x80:
+      return { name: "PAGE_EXECUTE_WRITECOPY", executable: true, writable: true };
+    default:
+      return { name: `0x${protect.toString(16).toUpperCase().padStart(2, "0")}`, executable: false, writable: false };
+  }
 }
 
 function tryToBigInt(value: unknown): bigint | undefined {
@@ -1424,6 +1571,8 @@ function parseHashValue(value: string | number | bigint): number | undefined {
 export function createShellcodeNamespace(): {
   peb: () => unknown[];
   modules: () => unknown[];
+  module_pages: (name: string) => unknown[];
+  page_summary: (name: string) => unknown[];
   base: (name: string) => unknown[];
   pe: (name: string) => unknown[];
   exports: (name: string, filter?: string) => unknown[];
@@ -1444,6 +1593,8 @@ export function createShellcodeNamespace(): {
   return {
     peb: () => toDxRows(helper.peb()),
     modules: () => toDxRows(helper.modules()),
+    module_pages: (name: string) => toDxRows(helper.modulePages(name)),
+    page_summary: (name: string) => toDxRows(helper.pageSummary(name)),
     base: (name: string) => toDxRows(helper.base(name)),
     pe: (name: string) => toDxRows(helper.pe(name)),
     exports: (name: string, filter?: string) => toDxRows(helper.exports(name, filter)),

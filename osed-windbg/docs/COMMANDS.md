@@ -119,6 +119,20 @@ Alias namespace:
 - Example 2: `dx @$osed().modules("essfunc")`
   - Expected output: filtered module rows.
 
+## module_pages
+
+- Syntax: `dx @$osed().sc.module_pages(name)`
+- Description: Returns the module size and estimated 4 KiB page count.
+- Example 1: `dx @$osed().sc.module_pages("manual_getprocaddr")`
+  - Expected output: one row with `Size`, `PageSize`, and `Pages`.
+
+## page_summary
+
+- Syntax: `dx @$osed().sc.page_summary(name)`
+- Description: Buckets each 4 KiB page in a module by `!vprot` protection value.
+- Example 1: `dx @$osed().sc.page_summary("manual_getprocaddr")`
+  - Expected output: summary row plus per-protection page counts.
+
 ## rop
 
 - Syntax: `dx @$osed().rop(module?, maxResults?, executableOnly?, mode?)`

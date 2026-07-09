@@ -31,6 +31,8 @@ TypeScript-based WinDbg Preview data-model script for exploit-development helper
 - `dx @$osed().rop_suggest({ module: "essfunc", engine: "semantic" })`
 - `dx @$osed().sc.peb()`
 - `dx @$osed().sc.modules()`
+- `dx @$osed().sc.module_pages("kernel32")`
+- `dx @$osed().sc.page_summary("kernel32")`
 - `dx @$osed().sc.base("kernel")`
 - `dx @$osed().sc.hashes("kernel32", "crc32")`
 - `dx @$osed().sc.hash("WinExec", "ROR13")`

@@ -2,6 +2,8 @@
 Shellcode helper usage:
 dx @$osed().sc.peb()
 dx @$osed().sc.modules()
+dx @$osed().sc.module_pages("kernel32")
+dx @$osed().sc.page_summary("kernel32")
 dx @$osed().sc.base("kernel")
 dx @$osed().sc.exports("kernel32")
 dx @$osed().sc.resolve("kernel32","WinExec")
