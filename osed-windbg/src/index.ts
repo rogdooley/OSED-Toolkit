@@ -40,6 +40,7 @@ import { createTriageCommand } from "./commands/triage";
 import { createEncodeCommand } from "./commands/encode";
 import { createNopCommand } from "./commands/nop";
 import { createRopTemplateCommand } from "./commands/rop_template";
+import { createFmtCommands } from "./commands/fmtstr";
 import { createShellcodeNamespace } from "./shellcode";
 import { buildCapabilityIndexFromRpPlusText, summarizeCapabilities, type CapabilityIndex, type RopQuery } from "./rop";
 import { RPPlusProviderOptions } from "./semantics/rpplus-provider";
@@ -86,6 +87,7 @@ function registerAll(): void {
     createEncodeCommand(),
     createNopCommand(),
     createRopTemplateCommand(),
+    ...createFmtCommands(),
     createExploitCommand(),
     createHelpCommand(registry),
     createReloadCommand(registry),
@@ -294,6 +296,10 @@ function bindApi(): OsedApi {
   api.seh = {
     visualize: (...args: unknown[]) => invoke("seh", args),
   };
+  api.fmt = {
+    build: (...args: unknown[]) => invoke("fmt_build", args),
+    offset: (...args: unknown[]) => invoke("fmt_offset", args),
+  };
 
   api.last_result = () => lastResult;
   api.last_summary = () => {
@@ -405,6 +411,18 @@ function normalizeInvocation(commandName: string, args: unknown[]): Record<strin
       return { length: args[0], byte: args[1] };
     case "rop_template":
       return { api: args[0], module: args[1] };
+    case "fmt_build":
+      // Positional single-write form for the dx REPL, which cannot pass object/array literals.
+      // Multi-write callers use the object form (handled by the isPlainObject passthrough above).
+      return {
+        writes: [{ addr: args[0], value: args[1] }],
+        argIndex: args[2],
+        width: args[3],
+        exclude: parseHexByteList(args[4]),
+        prefix: args[5],
+      };
+    case "fmt_offset":
+      return { marker: args[0], count: args[1], firstArg: args[2] };
     case "encode":
       return {
         shellcode: args[0],
