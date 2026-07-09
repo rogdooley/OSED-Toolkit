@@ -37,3 +37,9 @@ class CopyFileTemplate(PayloadTemplate):
             f"    call dword ptr {copyfile}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Source path", config.src_path),
+            ("Destination path", config.dst_path),
+        ]

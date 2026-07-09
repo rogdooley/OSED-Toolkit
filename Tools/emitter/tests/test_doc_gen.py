@@ -105,3 +105,54 @@ def test_full_contract_contains_all_sections(revshell_doc):
     assert "# Stack Layout" in revshell_doc
     assert "# API Contracts" in revshell_doc
     assert "# Structure Layouts" in revshell_doc
+
+
+# --- Cheatsheet tests ---
+
+
+def test_cheatsheet_present_when_template_provided(revshell_doc_with_cheatsheet):
+    assert "# Operational Cheatsheet" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_absent_without_template(revshell_doc):
+    assert "# Operational Cheatsheet" not in revshell_doc
+
+
+def test_cheatsheet_contains_listener_command(revshell_doc_with_cheatsheet):
+    assert "nc -lnvp 9001" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_contains_target_info(revshell_doc_with_cheatsheet):
+    assert "192.168.1.100:9001" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_contains_shellcode_size(revshell_doc_with_cheatsheet):
+    assert "512 bytes" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_contains_bad_chars(revshell_doc_with_cheatsheet):
+    assert "`0x00`" in revshell_doc_with_cheatsheet
+    assert "`0x0a`" in revshell_doc_with_cheatsheet
+    assert "`0x0d`" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_contains_msfvenom(revshell_doc_with_cheatsheet):
+    assert "msfvenom" in revshell_doc_with_cheatsheet
+    assert "shikata_ga_nai" in revshell_doc_with_cheatsheet
+
+
+def test_cheatsheet_no_trailing_whitespace(revshell_doc_with_cheatsheet):
+    for i, line in enumerate(revshell_doc_with_cheatsheet.splitlines(), 1):
+        assert line == line.rstrip(), f"Trailing whitespace on line {i}: {line!r}"
+
+
+def test_cheatsheet_standalone_emitter():
+    from Tools.emitter.doc_gen import emit_cheatsheet_md
+    from Tools.emitter.payload_templates.tcp_stager import TcpStagerTemplate
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    template = TcpStagerTemplate()
+    config = TemplateConfig(lhost="10.0.0.1", lport=8080)
+    result = emit_cheatsheet_md(template, config, shellcode_size=256)
+    assert "tcp_stage_server.py" in result
+    assert "10.0.0.1" in result
+    assert "8080" in result

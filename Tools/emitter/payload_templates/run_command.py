@@ -48,3 +48,8 @@ class RunCommandTemplate(PayloadTemplate):
             f"    add  esp, 0x{n_bytes:02x}        ; pop command string from stack",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Command executed on target", config.command),
+        ]

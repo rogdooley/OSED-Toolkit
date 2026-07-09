@@ -243,3 +243,46 @@ def test_build_assembler_set_when_assembled(manifest_dir, tmp_path):
     result = build(str(manifest_dir / "calc.yaml"), assemble=True, out_dir=str(tmp_path))
     if result.assembler is not None:
         assert result.assembler in ("keystone", "nasm")
+
+
+# ---------------------------------------------------------------------------
+# test harness generation
+# ---------------------------------------------------------------------------
+
+
+def test_harness_generated_when_assembled(manifest_dir, tmp_path):
+    import shutil
+    if not shutil.which("nasm"):
+        pytest.skip("nasm not available")
+    from Tools.emitter.build import build, write_outputs
+    result = build(str(manifest_dir / "calc.yaml"), assemble=True, out_dir=str(tmp_path))
+    if result.shellcode_bytes is None:
+        pytest.skip("no assembler produced output")
+    assert result.test_harness is not None
+    write_outputs(result, str(tmp_path))
+    harness_path = tmp_path / "bin" / "test_harness.py"
+    assert harness_path.exists()
+    content = harness_path.read_text()
+    assert "VirtualAlloc" in content
+    assert "shellcode.bin" in content
+    assert str(len(result.shellcode_bytes)) in content
+
+
+def test_harness_none_when_no_assemble(manifest_dir, tmp_path):
+    from Tools.emitter.build import build
+    result = build(str(manifest_dir / "calc.yaml"), assemble=False, out_dir=str(tmp_path))
+    assert result.test_harness is None
+
+
+def test_harness_is_valid_python(manifest_dir, tmp_path):
+    from Tools.emitter.build import _generate_test_harness
+    import ast
+    harness = _generate_test_harness(256)
+    ast.parse(harness)
+
+
+def test_harness_contains_breakpoint_hint():
+    from Tools.emitter.build import _generate_test_harness
+    harness = _generate_test_harness(100)
+    assert "bp" in harness.lower()
+    assert "WinDbg" in harness

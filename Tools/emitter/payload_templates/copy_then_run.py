@@ -47,3 +47,9 @@ class CopyThenRunTemplate(PayloadTemplate):
             f"    call dword ptr {winexec}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Source path", config.src_path),
+            ("Destination path (also executed)", config.dst_path),
+        ]

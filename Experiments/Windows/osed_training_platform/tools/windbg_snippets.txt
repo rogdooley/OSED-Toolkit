@@ -1,0 +1,5 @@
+bp ws2_32!recv
+bp osedtp_service!service_dispatch_frame
+bp osedtp_service!service_handle_auth
+bp osedtp_service!service_handle_diag
+g

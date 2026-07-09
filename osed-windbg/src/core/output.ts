@@ -47,7 +47,14 @@ export function formatHexByte(byte: number): string {
 }
 
 export function table(columns: TableColumn[], rows: Array<Record<string, string>>): void {
-  if (rows.length === 0) {
+  const hasVisibleValues = rows.some((row) =>
+    columns.some((column) => {
+      const value = row[column.key];
+      return value !== undefined && value !== "";
+    }),
+  );
+
+  if (rows.length === 0 || !hasVisibleValues) {
     write("(no rows)");
     return;
   }

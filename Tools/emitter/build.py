@@ -145,6 +145,7 @@ class BuildResult:
     hex_str: str | None = None
     py_bytes: str | None = None
     c_array: str | None = None
+    test_harness: str | None = None
     layout: StackLayout | None = None
     assembler: str | None = None
 
@@ -177,6 +178,77 @@ def _dll_load_block(dll: str, manifest: Manifest, layout: StackLayout) -> str:
         "    call save_export_context",
         "",
     ])
+
+
+def _generate_test_harness(shellcode_len: int) -> str:
+    """Generate a standalone Python test harness for Windows x86 shellcode."""
+    return f'''\
+#!/usr/bin/env python3
+"""Test harness for emitter-generated shellcode.
+
+Copy this file and shellcode.bin to the Windows lab VM, then:
+  python test_harness.py
+
+Attach WinDbg before pressing Enter. The shellcode address is printed
+so you can set a breakpoint:
+  bp <address>
+"""
+import ctypes
+import sys
+from pathlib import Path
+
+SHELLCODE_LEN = {shellcode_len}
+
+
+def main():
+    bin_path = Path(__file__).with_name("shellcode.bin")
+    if not bin_path.exists():
+        print(f"[-] {{bin_path}} not found", file=sys.stderr)
+        sys.exit(1)
+
+    shellcode = bytearray(bin_path.read_bytes())
+    if len(shellcode) != SHELLCODE_LEN:
+        print(
+            f"[!] Expected {{SHELLCODE_LEN}} bytes, got {{len(shellcode)}}",
+            file=sys.stderr,
+        )
+
+    kernel32 = ctypes.windll.kernel32
+
+    kernel32.VirtualAlloc.restype = ctypes.c_void_p
+    kernel32.VirtualAlloc.argtypes = [
+        ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong,
+    ]
+    kernel32.RtlMoveMemory.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+    ]
+    kernel32.CreateThread.restype = ctypes.c_void_p
+
+    ptr = kernel32.VirtualAlloc(None, len(shellcode), 0x3000, 0x40)
+    if not ptr:
+        print("[-] VirtualAlloc failed", file=sys.stderr)
+        sys.exit(1)
+
+    buf = (ctypes.c_char * len(shellcode)).from_buffer(shellcode)
+    kernel32.RtlMoveMemory(ptr, ctypes.addressof(buf), len(shellcode))
+
+    print(f"[+] Shellcode: {{len(shellcode)}} bytes")
+    print(f"[+] Address:   {{ptr:#010x}}")
+    print(f"[+] WinDbg:    bp {{ptr:#010x}}")
+    print()
+    input("... attach WinDbg, then press Enter to execute ...")
+
+    ht = kernel32.CreateThread(None, 0, ptr, None, 0, None)
+    if not ht:
+        print("[-] CreateThread failed", file=sys.stderr)
+        sys.exit(1)
+
+    kernel32.WaitForSingleObject(ht, -1)
+
+
+if __name__ == "__main__":
+    main()
+'''
 
 
 def _bytes_to_hex_str(raw: bytes) -> str:
@@ -404,12 +476,16 @@ def build(
 
     template = _load_template(template_name) if template_name else None
     asm = compose_asm(manifest, layout, manifest_path, template, config)
-    contract_md = emit_full_contract_md(manifest, layout)
 
     raw: bytes | None = None
     assembler: str | None = None
     if assemble:
         raw, assembler = _try_assemble(asm)
+
+    contract_md = emit_full_contract_md(
+        manifest, layout, template, config,
+        shellcode_size=len(raw) if raw else None,
+    )
 
     return BuildResult(
         manifest_path=manifest_path,
@@ -419,6 +495,7 @@ def build(
         hex_str=_bytes_to_hex_str(raw) if raw else None,
         py_bytes=_bytes_to_py(raw) if raw else None,
         c_array=_bytes_to_c(raw) if raw else None,
+        test_harness=_generate_test_harness(len(raw)) if raw else None,
         layout=layout,
         assembler=assembler,
     )
@@ -439,6 +516,8 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
         (base / "bin" / "shellcode.hex").write_text(result.hex_str or "")
         (base / "bin" / "shellcode.py").write_text(result.py_bytes or "")
         (base / "bin" / "shellcode.c").write_text(result.c_array or "")
+        if result.test_harness:
+            (base / "bin" / "test_harness.py").write_text(result.test_harness)
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +566,7 @@ def main() -> None:
         print(f"[+] Assembler: {result.assembler}")
         print(f"[+] Shellcode: {len(result.shellcode_bytes)} bytes")
         print(f"[+] Hex:       {args.out}/bin/shellcode.{{bin,hex,py,c}}")
+        print(f"[+] Harness:   {args.out}/bin/test_harness.py")
     else:
         print("[*] Assembly skipped (no assembler available or --no-assemble)")
 

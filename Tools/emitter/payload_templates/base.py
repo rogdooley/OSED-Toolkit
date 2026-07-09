@@ -36,3 +36,11 @@ class PayloadTemplate(ABC):
         Returns a string of assembly text with a comment header.
         All [ebp-0xNN] references must come from layout.slot(name).ebp_ref.
         """
+
+    def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        """Return attacker-side operational commands as (description, command) pairs.
+
+        Override in subclasses to provide template-specific setup instructions.
+        Default returns an empty list.
+        """
+        return []
