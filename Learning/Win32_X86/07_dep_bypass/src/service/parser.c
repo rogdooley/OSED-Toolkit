@@ -11,6 +11,8 @@
  *   parse_config_set()    sscanf "set %s %s"       NO WIDTH        -> BUG
  */
 
+#define WIN32_LEAN_AND_MEAN   /* service.h pulls winsock2.h; keep windows.h from
+                                 dragging in the conflicting Winsock 1 headers */
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>

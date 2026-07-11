@@ -4,6 +4,9 @@
 #ifndef VULNSVC_SERVICE_H
 #define VULNSVC_SERVICE_H
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN   /* winsock2.h must win over the legacy winsock.h */
+#endif
 #include <winsock2.h>
 #include <stdint.h>
 #include "protocol.h"

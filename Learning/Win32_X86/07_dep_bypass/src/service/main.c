@@ -10,10 +10,12 @@
  * 0x00400000. See BUILD.md.
  */
 
+#define WIN32_LEAN_AND_MEAN   /* stop windows.h pulling in Winsock 1 (winsock.h) */
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <process.h>
 
 #include "service.h"

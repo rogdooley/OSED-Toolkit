@@ -6,6 +6,7 @@
  * (OP_CONFIG_SET, and only after OP_AUTH) reaches the vulnerable parser.
  */
 
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
 #include <stdlib.h>

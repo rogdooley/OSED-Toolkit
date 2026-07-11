@@ -16,6 +16,7 @@
  * OP_AUTH. Everything else is there to make triage feel like real software.
  */
 
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
