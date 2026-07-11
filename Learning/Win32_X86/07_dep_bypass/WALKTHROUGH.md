@@ -242,8 +242,9 @@ in it has a `0x00` high byte:
 
 `0x00` is a bad character (it terminates the `%s`). Try three gadget addresses
 and you will notice the pattern: they all start with `00`. You cannot source a
-single gadget from the main executable. *(This is exactly the FastBack lesson —
-the vulnerable EXE at `0x00400000` is unusable, forcing you to a DLL.)*
+single gadget from the main executable. *(This is the classic
+default-image-base problem: a vulnerable EXE at `0x00400000` is unusable as a
+gadget source, forcing you to a companion DLL.)*
 
 **`helper.dll` — REJECTED (ASLR).** You will find it first and love it: clean
 `pop eax ; ret`, `mov [esi], eax ; ret`, `xchg eax, ebp ; ret`. Then you restart
@@ -954,8 +955,8 @@ change three things:
 > executable. The OS only observes: `RW → (some API) → RWX → ret → execute`.
 > Whether that API is VirtualProtect, VirtualAlloc, or `NtProtectVirtualMemory`
 > is almost incidental. The workflow — resolve import, patch placeholders, pivot,
-> return — is the reusable skill; the API is a detail. This is why FastBack's
-> VirtualAlloc chain and our VirtualProtect chain are 90% the same code.
+> return — is the reusable skill; the API is a detail. This is why a
+> VirtualAlloc chain and our VirtualProtect chain are ~90% the same code.
 
 Build it as a second exercise; you will reuse most gadgets from Chapter 9.
 
@@ -1207,5 +1208,5 @@ Work these before reading Appendix B's corresponding lines.
 
 ---
 
-*Scope: defensive exploit-development coursework against a lab target you built
+*Scope: defensive exploit-development practice against a lab target you built
 and control. The methodology transfers; the specific addresses do not.*
