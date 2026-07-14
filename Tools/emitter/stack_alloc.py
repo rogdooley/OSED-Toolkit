@@ -150,21 +150,20 @@ def build_layout(manifest: Manifest) -> StackLayout:
     struct_cursor = STRUCT_ZONE_START
     for struct_name in ordered_structs:
         struct_rec = STRUCT_DATABASE[struct_name]
-        # Align to 4-byte boundary before each struct
         struct_cursor = _ceil4(struct_cursor)
+        struct_cursor += struct_rec.size
         slots.append(
             Slot(name=struct_name, offset=struct_cursor, size=struct_rec.size, category="structure")
         )
-        struct_cursor += struct_rec.size
 
     # --- Zone 5: string slots ---
     string_cursor = _ceil4(struct_cursor)
     for entry in manifest.strings:
         raw_len = len(entry.value.encode("ascii")) + 1  # +1 for null terminator
         slot_size = _ceil4(raw_len)
+        string_cursor += slot_size
         slots.append(
             Slot(name=entry.label, offset=string_cursor, size=slot_size, category="string")
         )
-        string_cursor += slot_size
 
     return StackLayout(slots)
