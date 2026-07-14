@@ -153,7 +153,7 @@ def test_build_layout_returned(manifest_dir, tmp_path):
         assemble=False,
     )
     assert result.layout is not None
-    assert result.layout.slot("WSAStartup").offset == 0x3c
+    assert result.layout.slot("WSAStartup").offset == 0x30
     si = result.layout.slot("STARTUPINFOA")
     assert si.offset - si.size >= 0x80
 

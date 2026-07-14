@@ -5,8 +5,6 @@ return strings.
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from .api_database import API_DATABASE, STRUCT_DATABASE, MODULE_LOAD_ORDER
 from .hash_gen import ror13
 from .payload_templates.base import PayloadTemplate, TemplateConfig

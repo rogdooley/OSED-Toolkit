@@ -48,21 +48,17 @@ def test_module_base_offsets(revshell_layout):
 
 # ---------------------------------------------------------------------------
 # API slot offset assertions
-# revshell.yaml declares 8 functions in order:
-#   CreateProcessA, LoadLibraryA, GetProcAddress, ExitProcess, WinExec,
-#   WSAStartup, WSASocketA, connect
+# revshell.yaml declares 5 functions in order:
+#   CreateProcessA, LoadLibraryA, WSAStartup, WSASocketA, connect
 # Module bases occupy 0x20 and 0x24 (2 slots), so API slots start at 0x28.
 # ---------------------------------------------------------------------------
 
 def test_api_slot_offsets(revshell_layout):
     assert revshell_layout.slot("CreateProcessA").offset == 0x28
     assert revshell_layout.slot("LoadLibraryA").offset == 0x2c
-    assert revshell_layout.slot("GetProcAddress").offset == 0x30
-    assert revshell_layout.slot("ExitProcess").offset == 0x34
-    assert revshell_layout.slot("WinExec").offset == 0x38
-    assert revshell_layout.slot("WSAStartup").offset == 0x3c
-    assert revshell_layout.slot("WSASocketA").offset == 0x40
-    assert revshell_layout.slot("connect").offset == 0x44
+    assert revshell_layout.slot("WSAStartup").offset == 0x30
+    assert revshell_layout.slot("WSASocketA").offset == 0x34
+    assert revshell_layout.slot("connect").offset == 0x38
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +103,7 @@ def test_slots_by_category_api(revshell_layout):
     apis = revshell_layout.slots_by_category("api")
     names = [s.name for s in apis]
     assert names == [
-        "CreateProcessA", "LoadLibraryA", "GetProcAddress", "ExitProcess",
-        "WinExec", "WSAStartup", "WSASocketA", "connect",
+        "CreateProcessA", "LoadLibraryA", "WSAStartup", "WSASocketA", "connect",
     ]
 
 

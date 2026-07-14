@@ -4,9 +4,6 @@ badchars: ["00", "0a", "0d"]
 functions:
   - CreateProcessA
   - LoadLibraryA
-  - GetProcAddress
-  - ExitProcess
-  - WinExec
   - WSAStartup
   - WSASocketA
   - connect
