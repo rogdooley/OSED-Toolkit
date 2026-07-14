@@ -154,6 +154,8 @@ def test_build_layout_returned(manifest_dir, tmp_path):
     )
     assert result.layout is not None
     assert result.layout.slot("WSAStartup").offset == 0x3c
+    si = result.layout.slot("STARTUPINFOA")
+    assert si.offset - si.size >= 0x80
 
 
 def test_build_no_assemble_skips_keystone(manifest_dir, tmp_path):
