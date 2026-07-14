@@ -6,6 +6,6 @@ functions:
   - ExitProcess
 
 strings:
-  - label: calc
+  - label: cmd
     value: calc.exe
-    method: push
+    method: mov

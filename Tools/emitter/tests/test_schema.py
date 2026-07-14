@@ -21,9 +21,9 @@ def test_load_calc(manifest_dir):
     assert m.functions == ["WinExec", "ExitProcess"]
     assert 0x00 in m.badchars
     assert len(m.strings) == 1
-    assert m.strings[0].label == "calc"
+    assert m.strings[0].label == "cmd"
     assert m.strings[0].value == "calc.exe"
-    assert m.strings[0].method == "push"
+    assert m.strings[0].method == "mov"
 
 
 def test_unknown_api_raises(tmp_path):

@@ -106,14 +106,38 @@ def test_run_command_uses_cmd_slot_when_available(manifest_dir, default_config):
     assert "lea  eax" in asm
 
 
-def test_run_command_inline_push_fallback(calc_layout):
+def test_run_command_inline_push_fallback():
     from Tools.emitter.payload_templates.run_command import RunCommandTemplate
     from Tools.emitter.payload_templates.base import TemplateConfig
+    from Tools.emitter.schema import Manifest
+    from Tools.emitter.stack_alloc import build_layout
     t = RunCommandTemplate()
-    # calc manifest has 'calc' slot, not 'cmd' — triggers inline push fallback
+    layout = build_layout(Manifest(
+        badchars={0x00},
+        functions=["WinExec"],
+        strings=[],
+    ))
     config = TemplateConfig(command="calc.exe", badchars={0x00})
-    asm = t.emit(calc_layout, config)
-    assert calc_layout.slot("WinExec").ebp_ref in asm
+    asm = t.emit(layout, config)
+    assert layout.slot("WinExec").ebp_ref in asm
+    assert "Command: calc.exe (inline push)" in asm
+
+
+def test_calc_uses_initialized_cmd_slot(manifest_dir, tmp_path):
+    from Tools.emitter.build import build
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    result = build(
+        str(manifest_dir / "calc.yaml"),
+        template_name="run_command",
+        config=TemplateConfig(),
+        out_dir=str(tmp_path),
+        assemble=False,
+    )
+    cmd_slot = result.layout.slot("cmd")
+    assert cmd_slot.category == "string"
+    assert "Command: calc.exe (from 'cmd' slot" in result.asm
+    assert f"lea  eax, {cmd_slot.ebp_ref}" in result.asm
+    assert "Command: cmd.exe" not in result.asm
 
 
 def test_reverse_shell_cmd_slot_referenced(revshell_layout, default_config):
