@@ -285,11 +285,11 @@ CODE = r"""
 """
 
 
-def strip_comments(asm):
+def strip_non_ascii(asm):
     lines = []
     for line in asm.splitlines():
         line = line.split("#")[0]
-        line = line.split(";")[0]
+        line = line.encode("ascii", "replace").decode("ascii")
         lines.append(line)
     return "\\n".join(lines)
 
@@ -297,7 +297,7 @@ def strip_comments(asm):
 def main():
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
     try:
-        encoding, count = ks.asm(strip_comments(CODE))
+        encoding, count = ks.asm(strip_non_ascii(CODE))
     except Exception as e:
         print(f"[-] Assembly failed: {{e}}", file=sys.stderr)
         sys.exit(1)
@@ -541,19 +541,20 @@ def _merge_template_requirements(
     config: TemplateConfig,
 ) -> Manifest:
     """Probe the template to discover slot references, then return a new
-    Manifest with any missing API functions and variables auto-added.
+    Manifest with any missing API functions auto-added.
 
     Classification of each probed slot name:
       - In API_DATABASE         → function (auto-add if missing)
       - In STRUCT_DATABASE      → structure (auto-derived from functions)
       - In MODULE_LOAD_ORDER    → module base (auto-derived from functions)
-      - Matches a manifest string label → string (already present)
-      - Otherwise               → variable (auto-add if missing)
+      - Matches a manifest string label or variable → already present
+      - Otherwise               → ignored (optional probe or manifest error)
+
+    Variables are not auto-added because the probe cannot distinguish
+    required variables from optional slot lookups guarded by try/except.
+    Variables must be declared in the manifest YAML.
 
     Non-kernel32 functions trigger automatic addition of LoadLibraryA.
-
-    Raises ValueError listing any names that reference an unknown API
-    (in API_DATABASE but belonging to an unknown module).
     """
     probed = template.probe_slots(config)
 
@@ -561,10 +562,8 @@ def _merge_template_requirements(
     existing_vars = {v.name for v in manifest.variables}
     string_labels = {e.label for e in manifest.strings}
     dll_names = {m.dll for m in MODULE_LOAD_ORDER}
-    module_for_dll = {m.dll: m for m in MODULE_LOAD_ORDER}
 
     new_funcs: list[str] = []
-    new_vars: list[str] = []
 
     for name in probed:
         if name in existing_funcs or name in existing_vars or name in string_labels:
@@ -574,9 +573,6 @@ def _merge_template_requirements(
         if name in API_DATABASE:
             new_funcs.append(name)
             existing_funcs.add(name)
-        else:
-            new_vars.append(name)
-            existing_vars.add(name)
 
     # Non-kernel32 APIs need LoadLibraryA for module loading
     all_funcs = list(manifest.functions) + new_funcs
@@ -588,14 +584,14 @@ def _merge_template_requirements(
     if needs_loadlib and "LoadLibraryA" not in existing_funcs:
         new_funcs.insert(0, "LoadLibraryA")
 
-    if not new_funcs and not new_vars:
+    if not new_funcs:
         return manifest
 
     return Manifest(
         badchars=manifest.badchars,
         functions=list(manifest.functions) + new_funcs,
         strings=manifest.strings,
-        variables=list(manifest.variables) + [VariableEntry(name=n) for n in new_vars],
+        variables=manifest.variables,
     )
 
 

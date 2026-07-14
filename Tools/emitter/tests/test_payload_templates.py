@@ -178,10 +178,10 @@ class TestProbeSlots:
 
 
 class TestMergeTemplateRequirements:
-    """_merge_template_requirements auto-adds missing APIs and variables."""
+    """_merge_template_requirements auto-adds missing APIs only."""
 
     def test_adds_missing_api(self, manifest_dir):
-        from Tools.emitter.schema import load, Manifest
+        from Tools.emitter.schema import load
         from Tools.emitter.build import _merge_template_requirements
         from Tools.emitter.payload_templates.run_command import RunCommandTemplate
         from Tools.emitter.payload_templates.base import TemplateConfig
@@ -191,16 +191,15 @@ class TestMergeTemplateRequirements:
         merged = _merge_template_requirements(manifest, RunCommandTemplate(), config)
         assert "WinExec" in merged.functions
 
-    def test_adds_missing_variable(self, manifest_dir):
-        from Tools.emitter.schema import load, Manifest
+    def test_does_not_auto_add_variables(self, manifest_dir):
+        from Tools.emitter.schema import load
         from Tools.emitter.build import _merge_template_requirements
         from Tools.emitter.payload_templates.bind_shell import BindShellTemplate
         from Tools.emitter.payload_templates.base import TemplateConfig
         manifest = load(str(manifest_dir / "revshell.yaml"))
-        assert "bind_socket" not in {v.name for v in manifest.variables}
         config = TemplateConfig()
         merged = _merge_template_requirements(manifest, BindShellTemplate(), config)
-        assert "bind_socket" in {v.name for v in merged.variables}
+        assert merged.variables == manifest.variables
 
     def test_does_not_duplicate_existing(self, manifest_dir):
         from Tools.emitter.schema import load
