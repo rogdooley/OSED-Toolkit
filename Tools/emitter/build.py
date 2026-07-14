@@ -260,6 +260,7 @@ def _generate_debug_runner(asm: str) -> str:
     allocates RWX memory, prints the address for WinDbg, pauses, then
     executes. The assembly is embedded so it can be edited directly.
     """
+    asm = asm.replace(";", "#")
     escaped_asm = asm.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
     return f'''\
 #!/usr/bin/env python3

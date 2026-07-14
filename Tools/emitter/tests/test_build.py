@@ -207,11 +207,12 @@ def test_strip_comments_removes_unicode_box_drawing():
     assert "push eax" in out
 
 
-def test_debug_runner_preserves_semicolon_comments():
+def test_debug_runner_converts_semicolons_to_hash():
     from Tools.emitter.build import _generate_debug_runner
-    runner = _generate_debug_runner("; comment line\n    xor eax, eax")
-    assert "strip_non_ascii" in runner
-    assert "; comment line" in runner
+    runner = _generate_debug_runner("; comment line\n    xor eax, eax ; note")
+    assert "; comment line" not in runner
+    assert "# comment line" in runner
+    assert "# note" in runner
 
 
 def test_to_nasm_removes_dword_ptr():
