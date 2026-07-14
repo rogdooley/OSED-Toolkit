@@ -703,6 +703,28 @@ def compose_asm(
 # ---------------------------------------------------------------------------
 
 
+_CONFIG_STRING_OVERRIDES: dict[str, str] = {
+    "src_path": "src_path",
+    "dst_path": "dst_path",
+}
+
+
+def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> None:
+    """Override manifest string values with CLI-provided config values.
+
+    Only overrides strings whose label matches a known config field AND whose
+    config value differs from the TemplateConfig default (i.e., was explicitly set).
+    """
+    defaults = TemplateConfig()
+    for entry in manifest.strings:
+        attr = _CONFIG_STRING_OVERRIDES.get(entry.label)
+        if attr is None:
+            continue
+        cli_value = getattr(config, attr)
+        if cli_value != getattr(defaults, attr):
+            entry.value = cli_value
+
+
 def build(
     manifest_path: str,
     template_name: str | None = None,
