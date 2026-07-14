@@ -10,8 +10,6 @@ from Tools.strings import emit_push, to_dwords
 
 
 class RunCommandTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = ("WinExec",)
-    REQUIRED_VARIABLES = ()
 
     def emit(self, layout, config: TemplateConfig) -> str:
         winexec = layout.slot("WinExec").ebp_ref

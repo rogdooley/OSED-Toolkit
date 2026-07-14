@@ -9,8 +9,6 @@ from .base import PayloadTemplate, TemplateConfig
 
 
 class CopyFileTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = ("CopyFileA",)
-    REQUIRED_VARIABLES = ()
 
     def emit(self, layout, config: TemplateConfig) -> str:
         copyfile = layout.slot("CopyFileA").ebp_ref

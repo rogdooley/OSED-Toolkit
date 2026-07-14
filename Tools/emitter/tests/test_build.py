@@ -423,3 +423,111 @@ def test_debug_runner_written_to_disk(manifest_dir, tmp_path):
     runner_path = tmp_path / "asm" / "debug_runner.py"
     assert runner_path.exists()
     assert "VirtualAlloc" in runner_path.read_text()
+
+
+# ---------------------------------------------------------------------------
+# CLI override precedence: _apply_config_overrides
+# ---------------------------------------------------------------------------
+
+
+class TestConfigOverrides:
+    """CLI config fields override manifest strings with correct precedence."""
+
+    def test_omitted_preserves_manifest_value(self, manifest_dir, tmp_path):
+        """When config field is None, manifest string value is preserved."""
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig()  # all overridable fields are None
+        result = build(
+            str(manifest_dir / "tcp_download.yaml"),
+            template_name="tcp_download",
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "C:\\Windows\\Temp\\payload.exe" in result.asm
+        assert config.dst_path == "C:\\Windows\\Temp\\payload.exe"
+
+    def test_explicit_override_replaces_manifest(self, manifest_dir, tmp_path):
+        """Non-None config value overrides the manifest string."""
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(dst_path="C:\\evil.exe")
+        result = build(
+            str(manifest_dir / "tcp_download.yaml"),
+            template_name="tcp_download",
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "C:\\evil.exe" in result.asm
+        assert "C:\\Windows\\Temp\\payload.exe" not in result.asm
+
+    def test_explicit_value_matching_default_still_overrides(self, manifest_dir, tmp_path):
+        """Passing a value that equals the old TemplateConfig default still overrides."""
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(dst_path="C:\\dest.txt")
+        result = build(
+            str(manifest_dir / "tcp_download.yaml"),
+            template_name="tcp_download",
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "C:\\dest.txt" in result.asm
+        assert "C:\\Windows\\Temp\\payload.exe" not in result.asm
+
+    def test_changed_string_length_affects_layout(self, manifest_dir):
+        """Override with a different-length string produces a different slot size."""
+        from Tools.emitter.schema import load
+        from Tools.emitter.stack_alloc import build_layout
+        from Tools.emitter.build import _apply_config_overrides
+        from Tools.emitter.payload_templates.base import TemplateConfig
+
+        manifest = load(str(manifest_dir / "tcp_download.yaml"))
+        original_layout = build_layout(manifest)
+        orig_size = original_layout.slot("dst_path").size
+
+        config = TemplateConfig(dst_path="X")
+        overridden = _apply_config_overrides(manifest, config)
+        new_layout = build_layout(overridden)
+        new_size = new_layout.slot("dst_path").size
+
+        assert new_size < orig_size
+
+    def test_contract_consistent_with_override(self, manifest_dir, tmp_path):
+        """Contract doc reflects the overridden value, not the manifest original."""
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(dst_path="C:\\pwned.exe")
+        result = build(
+            str(manifest_dir / "tcp_download.yaml"),
+            template_name="tcp_download",
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "C:\\pwned.exe" in result.contract_md
+
+    def test_backfill_populates_config_from_manifest(self, manifest_dir):
+        """Config fields left None are backfilled from manifest strings."""
+        from Tools.emitter.schema import load
+        from Tools.emitter.build import _apply_config_overrides
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        manifest = load(str(manifest_dir / "copy_then_run.yaml"))
+        config = TemplateConfig()
+        _apply_config_overrides(manifest, config)
+        assert config.src_path == "C:\\source\\payload.exe"
+        assert config.dst_path == "C:\\Windows\\Temp\\payload.exe"
+
+    def test_fallback_when_no_manifest_string(self, manifest_dir):
+        """Config fields with no matching manifest string get hardcoded fallbacks."""
+        from Tools.emitter.schema import load
+        from Tools.emitter.build import _apply_config_overrides
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        manifest = load(str(manifest_dir / "revshell.yaml"))
+        config = TemplateConfig()
+        _apply_config_overrides(manifest, config)
+        assert config.src_path == "C:\\source.txt"
+        assert config.dst_path == "C:\\dest.txt"

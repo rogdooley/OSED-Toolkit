@@ -72,6 +72,28 @@ class StackLayout:
         return list(self._slots)
 
 
+class RecordingLayout:
+    """Dummy layout that records every slot() call without needing a real manifest.
+
+    Used by PayloadTemplate.probe_slots() to discover which slot names
+    a template's emit() actually references.  Returns a valid Slot
+    (with a placeholder offset) for any name, so emit() runs to completion.
+    """
+
+    def __init__(self) -> None:
+        self._accessed: list[str] = []
+        self._counter = 0x100
+
+    def slot(self, name: str) -> Slot:
+        self._accessed.append(name)
+        self._counter += 4
+        return Slot(name=name, offset=self._counter, size=4, category="api")
+
+    @property
+    def accessed(self) -> list[str]:
+        return list(self._accessed)
+
+
 def build_layout(manifest: Manifest) -> StackLayout:
     """Given a Manifest, produce a fully-populated StackLayout.
 

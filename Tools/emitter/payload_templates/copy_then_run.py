@@ -12,8 +12,6 @@ from .base import PayloadTemplate, TemplateConfig
 
 
 class CopyThenRunTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = ("CopyFileA", "WinExec")
-    REQUIRED_VARIABLES = ()
 
     def emit(self, layout, config: TemplateConfig) -> str:
         copyfile = layout.slot("CopyFileA").ebp_ref

@@ -13,13 +13,6 @@ from ..encode import safe_push_word_as_dword
 
 
 class BindShellTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = (
-        "LoadLibraryA",
-        "WSAStartup",
-        "WSASocketA",
-        "CreateProcessA",
-    )
-    REQUIRED_VARIABLES = ("socket_handle", "bind_socket")
 
     def emit(self, layout, config: TemplateConfig) -> str:
         wsa_start = layout.slot("WSAStartup").ebp_ref

