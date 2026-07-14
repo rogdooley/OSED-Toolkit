@@ -288,3 +288,76 @@ def test_harness_contains_breakpoint_hint():
     harness = _generate_test_harness(100)
     assert "bp" in harness.lower()
     assert "WinDbg" in harness
+
+
+# ---------------------------------------------------------------------------
+# assembler diagnostics
+# ---------------------------------------------------------------------------
+
+
+def test_try_assemble_collects_backend_errors(monkeypatch):
+    import Tools.emitter.build as build_module
+
+    monkeypatch.setattr(
+        build_module,
+        "_try_assemble_keystone",
+        lambda asm: (None, "keystone: invalid operand"),
+    )
+    monkeypatch.setattr(
+        build_module,
+        "_try_assemble_nasm",
+        lambda asm: (None, "nasm: parser: instruction expected"),
+    )
+
+    raw, assembler, errors = build_module._try_assemble("invalid asm")
+
+    assert raw is None
+    assert assembler is None
+    assert errors == [
+        "keystone: invalid operand",
+        "nasm: parser: instruction expected",
+    ]
+
+
+def test_build_exposes_assembler_errors(monkeypatch, manifest_dir, tmp_path):
+    import Tools.emitter.build as build_module
+
+    expected = ["keystone: invalid operand"]
+    monkeypatch.setattr(
+        build_module,
+        "_try_assemble",
+        lambda asm: (None, None, expected),
+    )
+
+    result = build_module.build(
+        str(manifest_dir / "calc.yaml"),
+        assemble=True,
+        out_dir=str(tmp_path),
+    )
+
+    assert result.shellcode_bytes is None
+    assert result.assembler is None
+    assert result.asm_errors == expected
+
+
+def test_cli_prints_assembler_errors(monkeypatch, capsys, tmp_path):
+    import Tools.emitter.build as build_module
+
+    result = build_module.BuildResult(
+        manifest_path="manifest.yaml",
+        asm="",
+        contract_md="",
+        asm_errors=["keystone: invalid operand"],
+    )
+    monkeypatch.setattr(build_module, "build", lambda *args, **kwargs: result)
+    monkeypatch.setattr(build_module, "write_outputs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["emitter", "manifest.yaml", "--out", str(tmp_path)],
+    )
+
+    build_module.main()
+
+    output = capsys.readouterr().out
+    assert "[!] Assembly failed:" in output
+    assert "keystone: invalid operand" in output

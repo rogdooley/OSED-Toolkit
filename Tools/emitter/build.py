@@ -148,6 +148,7 @@ class BuildResult:
     test_harness: str | None = None
     layout: StackLayout | None = None
     assembler: str | None = None
+    asm_errors: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -288,22 +289,24 @@ def _to_nasm(asm: str) -> str:
     return "\n".join(lines)
 
 
-def _try_assemble_keystone(asm: str) -> bytes | None:
+def _try_assemble_keystone(asm: str) -> tuple[bytes | None, str | None]:
+    """Try keystone. Returns (bytes, None) on success or (None, error_msg)."""
     try:
         import keystone
     except ImportError:
-        return None
+        return None, None
     try:
         ks = keystone.Ks(keystone.KS_ARCH_X86, keystone.KS_MODE_32)
         encoding, _ = ks.asm(_strip_hash_comments(asm))
-        return bytes(encoding)
-    except Exception:
-        return None
+        return bytes(encoding), None
+    except Exception as e:
+        return None, f"keystone: {e}"
 
 
-def _try_assemble_nasm(asm: str) -> bytes | None:
+def _try_assemble_nasm(asm: str) -> tuple[bytes | None, str | None]:
+    """Try nasm. Returns (bytes, None) on success or (None, error_msg)."""
     if not shutil.which("nasm"):
-        return None
+        return None, None
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             src = pathlib.Path(tmpdir) / "shellcode.asm"
@@ -315,21 +318,26 @@ def _try_assemble_nasm(asm: str) -> bytes | None:
                 text=True,
             )
             if result.returncode != 0:
-                return None
-            return out.read_bytes()
-    except Exception:
-        return None
+                return None, f"nasm: {result.stderr.strip()}"
+            return out.read_bytes(), None
+    except Exception as e:
+        return None, f"nasm: {e}"
 
 
-def _try_assemble(asm: str) -> tuple[bytes, str] | tuple[None, None]:
-    """Try keystone, then nasm. Returns (bytes, assembler_name) or (None, None)."""
-    raw = _try_assemble_keystone(asm)
+def _try_assemble(asm: str) -> tuple[bytes, str, list[str]] | tuple[None, None, list[str]]:
+    """Try keystone, then nasm. Returns (bytes, assembler_name, errors) or (None, None, errors)."""
+    errors: list[str] = []
+    raw, err = _try_assemble_keystone(asm)
     if raw is not None:
-        return raw, "keystone"
-    raw = _try_assemble_nasm(asm)
+        return raw, "keystone", errors
+    if err:
+        errors.append(err)
+    raw, err = _try_assemble_nasm(asm)
     if raw is not None:
-        return raw, "nasm"
-    return None, None
+        return raw, "nasm", errors
+    if err:
+        errors.append(err)
+    return None, None, errors
 
 
 def _load_template(name: str) -> PayloadTemplate:
@@ -479,8 +487,9 @@ def build(
 
     raw: bytes | None = None
     assembler: str | None = None
+    asm_errors: list[str] = []
     if assemble:
-        raw, assembler = _try_assemble(asm)
+        raw, assembler, asm_errors = _try_assemble(asm)
 
     contract_md = emit_full_contract_md(
         manifest, layout, template, config,
@@ -498,6 +507,7 @@ def build(
         test_harness=_generate_test_harness(len(raw)) if raw else None,
         layout=layout,
         assembler=assembler,
+        asm_errors=asm_errors if asm_errors else None,
     )
 
 
@@ -568,7 +578,12 @@ def main() -> None:
         print(f"[+] Hex:       {args.out}/bin/shellcode.{{bin,hex,py,c}}")
         print(f"[+] Harness:   {args.out}/bin/test_harness.py")
     else:
-        print("[*] Assembly skipped (no assembler available or --no-assemble)")
+        if result.asm_errors:
+            print("[!] Assembly failed:")
+            for err in result.asm_errors:
+                print(f"    {err}")
+        else:
+            print("[*] Assembly skipped (no assembler available or --no-assemble)")
 
 
 if __name__ == "__main__":
