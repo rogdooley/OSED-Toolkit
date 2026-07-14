@@ -285,14 +285,19 @@ CODE = r"""
 """
 
 
-def strip_hash_comments(asm):
-    return "\\n".join(line.split("#")[0] for line in asm.splitlines())
+def strip_comments(asm):
+    lines = []
+    for line in asm.splitlines():
+        line = line.split("#")[0]
+        line = line.split(";")[0]
+        lines.append(line)
+    return "\\n".join(lines)
 
 
 def main():
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
     try:
-        encoding, count = ks.asm(strip_hash_comments(CODE))
+        encoding, count = ks.asm(strip_comments(CODE))
     except Exception as e:
         print(f"[-] Assembly failed: {{e}}", file=sys.stderr)
         sys.exit(1)
@@ -355,8 +360,14 @@ def _bytes_to_c(raw: bytes) -> str:
     return f"unsigned char shellcode[] = {{\n{body}\n}};\n// Length: {len(raw)} bytes"
 
 
-def _strip_hash_comments(asm: str) -> str:
-    return "\n".join(line.split("#")[0] for line in asm.splitlines())
+def _strip_comments(asm: str) -> str:
+    """Strip both # and ; comments so non-ASCII decoration never reaches the assembler."""
+    lines = []
+    for line in asm.splitlines():
+        line = line.split("#")[0]
+        line = line.split(";")[0]
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _to_nasm(asm: str) -> str:
@@ -364,13 +375,15 @@ def _to_nasm(asm: str) -> str:
 
     Differences handled:
     - Prepend 'BITS 32' so nasm knows the mode
-    - Strip # comments (emitter uses these for notes)
+    - Strip # and ; comments (may contain non-ASCII decoration)
     - 'dword/word/byte ptr [...]' → 'dword/word/byte [...]'
     - 'fs:[...]' → '[fs:...]'  (segment register syntax)
     """
     lines = ["BITS 32"]
     for line in asm.splitlines():
-        line = line.split("#")[0].rstrip()
+        line = line.split("#")[0]
+        line = line.split(";")[0]
+        line = line.rstrip()
         line = re.sub(r'\bfs:\[', '[fs:', line)
         line = re.sub(r'\b(dword|word|byte)\s+ptr\b', r'\1', line, flags=re.IGNORECASE)
         lines.append(line)
@@ -385,7 +398,7 @@ def _try_assemble_keystone(asm: str) -> tuple[bytes | None, str | None]:
         return None, None
     try:
         ks = keystone.Ks(keystone.KS_ARCH_X86, keystone.KS_MODE_32)
-        encoding, _ = ks.asm(_strip_hash_comments(asm))
+        encoding, _ = ks.asm(_strip_comments(asm))
         return bytes(encoding), None
     except Exception as e:
         return None, f"keystone: {e}"

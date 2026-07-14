@@ -191,6 +191,22 @@ def test_to_nasm_strips_hash_comments():
     assert "mov eax, 1" in out
 
 
+def test_to_nasm_strips_semicolon_comments():
+    from Tools.emitter.build import _to_nasm
+    out = _to_nasm("; ── Framework Stubs ────────────────\n    xor eax, eax")
+    assert "─" not in out
+    assert "xor eax, eax" in out
+
+
+def test_strip_comments_removes_unicode_box_drawing():
+    from Tools.emitter.build import _strip_comments
+    asm = "; ── Payload ─────────────────────\n    push eax  # note"
+    out = _strip_comments(asm)
+    assert "─" not in out
+    assert "#" not in out
+    assert "push eax" in out
+
+
 def test_to_nasm_removes_dword_ptr():
     from Tools.emitter.build import _to_nasm
     out = _to_nasm("call dword ptr [ebp-0x28]")
