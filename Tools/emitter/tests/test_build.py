@@ -361,3 +361,65 @@ def test_cli_prints_assembler_errors(monkeypatch, capsys, tmp_path):
     output = capsys.readouterr().out
     assert "[!] Assembly failed:" in output
     assert "keystone: invalid operand" in output
+
+
+# ---------------------------------------------------------------------------
+# debug runner generation
+# ---------------------------------------------------------------------------
+
+
+def test_debug_runner_is_valid_python():
+    from Tools.emitter.build import _generate_debug_runner
+    import ast
+    runner = _generate_debug_runner("xor eax, eax\nret")
+    ast.parse(runner)
+
+
+def test_debug_runner_contains_keystone_import():
+    from Tools.emitter.build import _generate_debug_runner
+    runner = _generate_debug_runner("nop")
+    assert "from keystone" in runner
+
+
+def test_debug_runner_contains_virtualalloc():
+    from Tools.emitter.build import _generate_debug_runner
+    runner = _generate_debug_runner("nop")
+    assert "VirtualAlloc" in runner
+
+
+def test_debug_runner_embeds_assembly():
+    from Tools.emitter.build import _generate_debug_runner
+    asm = "mov eax, 0x42\npush eax\nret"
+    runner = _generate_debug_runner(asm)
+    assert "mov eax, 0x42" in runner
+    assert "push eax" in runner
+
+
+def test_debug_runner_contains_breakpoint_hint():
+    from Tools.emitter.build import _generate_debug_runner
+    runner = _generate_debug_runner("nop")
+    assert "bp" in runner.lower()
+    assert "WinDbg" in runner
+
+
+def test_debug_runner_always_generated(manifest_dir, tmp_path):
+    from Tools.emitter.build import build
+    result = build(
+        str(manifest_dir / "calc.yaml"),
+        assemble=False,
+        out_dir=str(tmp_path),
+    )
+    assert result.debug_runner is not None
+
+
+def test_debug_runner_written_to_disk(manifest_dir, tmp_path):
+    from Tools.emitter.build import build, write_outputs
+    result = build(
+        str(manifest_dir / "calc.yaml"),
+        assemble=False,
+        out_dir=str(tmp_path),
+    )
+    write_outputs(result, str(tmp_path))
+    runner_path = tmp_path / "asm" / "debug_runner.py"
+    assert runner_path.exists()
+    assert "VirtualAlloc" in runner_path.read_text()

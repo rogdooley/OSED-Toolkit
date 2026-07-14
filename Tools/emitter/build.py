@@ -146,6 +146,7 @@ class BuildResult:
     py_bytes: str | None = None
     c_array: str | None = None
     test_harness: str | None = None
+    debug_runner: str | None = None
     layout: StackLayout | None = None
     assembler: str | None = None
     asm_errors: list[str] | None = None
@@ -236,6 +237,93 @@ def main():
     print(f"[+] Shellcode: {{len(shellcode)}} bytes")
     print(f"[+] Address:   {{ptr:#010x}}")
     print(f"[+] WinDbg:    bp {{ptr:#010x}}")
+    print()
+    input("... attach WinDbg, then press Enter to execute ...")
+
+    ht = kernel32.CreateThread(None, 0, ptr, None, 0, None)
+    if not ht:
+        print("[-] CreateThread failed", file=sys.stderr)
+        sys.exit(1)
+
+    kernel32.WaitForSingleObject(ht, -1)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _generate_debug_runner(asm: str) -> str:
+    """Generate a self-contained Python debug script with inline assembly.
+
+    The script assembles the shellcode with keystone on the Windows lab VM,
+    allocates RWX memory, prints the address for WinDbg, pauses, then
+    executes. The assembly is embedded so it can be edited directly.
+    """
+    escaped_asm = asm.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+    return f'''\
+#!/usr/bin/env python3
+"""Debug runner for emitter-generated shellcode.
+
+Copy this file to the Windows lab VM, then:
+  python debug_runner.py
+
+The assembly source is embedded below — edit it directly to experiment.
+Requires: pip install keystone-engine
+
+Attach WinDbg before pressing Enter. The shellcode address is printed
+so you can set a breakpoint:
+  bp <address>
+"""
+import ctypes
+import sys
+
+from keystone import KS_ARCH_X86, KS_MODE_32, Ks
+
+CODE = r"""
+{escaped_asm}
+"""
+
+
+def strip_hash_comments(asm):
+    return "\\n".join(line.split("#")[0] for line in asm.splitlines())
+
+
+def main():
+    ks = Ks(KS_ARCH_X86, KS_MODE_32)
+    try:
+        encoding, count = ks.asm(strip_hash_comments(CODE))
+    except Exception as e:
+        print(f"[-] Assembly failed: {{e}}", file=sys.stderr)
+        sys.exit(1)
+
+    shellcode = bytearray(encoding)
+
+    kernel32 = ctypes.windll.kernel32
+
+    kernel32.VirtualAlloc.restype = ctypes.c_void_p
+    kernel32.VirtualAlloc.argtypes = [
+        ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong,
+    ]
+    kernel32.RtlMoveMemory.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+    ]
+    kernel32.CreateThread.restype = ctypes.c_void_p
+
+    ptr = kernel32.VirtualAlloc(None, len(shellcode), 0x3000, 0x40)
+    if not ptr:
+        print("[-] VirtualAlloc failed", file=sys.stderr)
+        sys.exit(1)
+
+    buf = (ctypes.c_char * len(shellcode)).from_buffer(shellcode)
+    kernel32.RtlMoveMemory(ptr, ctypes.addressof(buf), len(shellcode))
+
+    print(f"[+] Instructions: {{count}}")
+    print(f"[+] Shellcode:    {{len(shellcode)}} bytes")
+    print(f"[+] Address:      {{ptr:#010x}}")
+    print(f"[+] WinDbg:       bp {{ptr:#010x}}")
+    print()
+    print(f'shellcode = b"' + "".join(f"\\\\x{{b:02x}}" for b in shellcode) + '"')
     print()
     input("... attach WinDbg, then press Enter to execute ...")
 
@@ -505,6 +593,7 @@ def build(
         py_bytes=_bytes_to_py(raw) if raw else None,
         c_array=_bytes_to_c(raw) if raw else None,
         test_harness=_generate_test_harness(len(raw)) if raw else None,
+        debug_runner=_generate_debug_runner(asm),
         layout=layout,
         assembler=assembler,
         asm_errors=asm_errors if asm_errors else None,
@@ -518,6 +607,7 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
     (base / "Documentation").mkdir(parents=True, exist_ok=True)
 
     (base / "asm" / "generated.asm").write_text(result.asm)
+    (base / "asm" / "debug_runner.py").write_text(result.debug_runner)
     (base / "Documentation" / "contract.md").write_text(result.contract_md)
 
     if result.shellcode_bytes:
@@ -571,6 +661,7 @@ def main() -> None:
     write_outputs(result, args.out)
 
     print(f"[+] Generated: {args.out}/asm/generated.asm")
+    print(f"[+] Debug:     {args.out}/asm/debug_runner.py")
     print(f"[+] Contract:  {args.out}/Documentation/contract.md")
     if result.shellcode_bytes:
         print(f"[+] Assembler: {result.assembler}")
