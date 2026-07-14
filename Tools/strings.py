@@ -444,7 +444,7 @@ def emit_push(
                 encoded = (dw ^ key_dword) & 0xFFFFFFFF
             asm_block = [
                 f"    push {fmt_dword(encoded)}",
-                f"    xor  dword [esp], {fmt_dword(key_dword)}",
+                f"    xor  dword ptr [esp], {fmt_dword(key_dword)}",
             ]
             vfy_block = [
                 f"    mov  eax, {fmt_dword(encoded)}",

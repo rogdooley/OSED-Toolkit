@@ -17,7 +17,7 @@ Modules/*
 *.pdb
 
 # macOS
-.DS_Store
+*.DS_Store
 
 .codex
 .agents

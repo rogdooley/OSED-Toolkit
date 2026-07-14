@@ -59,9 +59,9 @@ def test_reverse_shell_lhost_as_hex(revshell_layout, default_config):
     from Tools.emitter.payload_templates.reverse_shell import ReverseShellTemplate
     t = ReverseShellTemplate()
     lhost = default_config.lhost
-    ip_be = struct.unpack(">I", socket.inet_aton(lhost))[0]
+    ip_le = struct.unpack("<I", socket.inet_aton(lhost))[0]
     asm = t.emit(revshell_layout, default_config)
-    assert f"0x{ip_be:08x}" in asm
+    assert f"0x{ip_le:08x}" in asm
 
 
 def test_reverse_shell_lport_as_hex(revshell_layout, default_config):

@@ -4,6 +4,7 @@
  * exploitable; it is triage noise that the analyst must read and dismiss.
  */
 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>

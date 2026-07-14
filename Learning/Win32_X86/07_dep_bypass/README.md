@@ -1,12 +1,20 @@
-# VulnSvc — DEP-Bypass Training Lab
+# VulnSvc — 32-bit Windows Stack-Overflow & DEP-Bypass Lab
 
 A deliberately vulnerable 32-bit Windows TCP service, its companion DLLs, and a
 complete from-source exploit-development walkthrough. Built to teach the
 *decisions* behind a DEP bypass — module selection, bug triage, gadget choice —
 not just to hand over a finished script.
 
-> **Lab use only.** `service.exe` is intentionally insecure. Build and run it
-> only inside a throwaway Windows VM that is not on a network you care about.
+**Original, independent educational material** teaching public, decades-old
+techniques (ROP, DEP bypass, IAT API resolution) with a purpose-built target and
+its own addresses. Not affiliated with or derived from any commercial course or
+vendor. MIT-licensed (`LICENSE`). Read `DISCLAIMER.md` before use.
+
+> **Lab use only.** `service.exe` is intentionally insecure and its bug is
+> remotely reachable. Build and run it **only** inside a throwaway, isolated
+> Windows VM that is not on any network you care about. Do not use these
+> techniques against systems you do not own or lack written authorization to
+> test.
 
 ## What this is
 
@@ -53,6 +61,8 @@ grepping for `sscanf`.
 ```
 vulnsvc-lab/
 ├── README.md  BUILD.md  WALKTHROUGH.md  build.bat
+├── LICENSE  DISCLAIMER.md
 ├── exploit/exploit.py
+├── solutions/SOLUTIONS.md  solutions/exploit_virtualalloc.py
 └── src/{service,compression,helper,crypto,network}/...
 ```

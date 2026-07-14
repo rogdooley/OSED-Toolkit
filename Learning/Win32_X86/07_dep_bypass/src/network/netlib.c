@@ -17,9 +17,11 @@
  * Build target: 32-bit, /O2, /DYNAMICBASE:NO, base 0x64000000.
  */
 
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
 #include <string.h>
+#include <stdlib.h>
 
 #pragma comment(lib, "ws2_32.lib")
 

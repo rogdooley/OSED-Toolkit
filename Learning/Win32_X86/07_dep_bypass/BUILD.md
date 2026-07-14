@@ -179,6 +179,29 @@ this in detail):
 
 ---
 
+## 5.4 Troubleshooting
+
+**`winsock.h` / `winsock2.h` redefinition errors** (`C2011 'sockaddr'`,
+`C2059`, `FD_SET`/`timeval` redefinitions, dozens of `C4005` macro warnings):
+this means `<windows.h>` pulled in the legacy Winsock 1 header before
+`<winsock2.h>`. The sources define `WIN32_LEAN_AND_MEAN` up front to prevent it,
+and `build.bat` also passes `/DWIN32_LEAN_AND_MEAN` globally. If you compile by
+hand, include that define (or `#include <winsock2.h>` before `<windows.h>`).
+
+**`C4996` deprecation warnings** for `sscanf`, `strcpy`, `fopen`, `localtime`,
+etc. are expected — this is deliberately old-style code. `build.bat` passes
+`/D_CRT_SECURE_NO_WARNINGS` to quiet them. They are warnings, not errors; the
+build still succeeds without the define.
+
+**`LNK2019 unresolved external`** for a DLL export (e.g. `ComputeChecksum`)
+means the EXE was linked before the DLL import libs existed. Always build the
+DLLs first (as `build.bat` does) so `compression.lib` etc. are present for the
+`service.exe` link.
+
+**A DLL fails to load at runtime** (`0xC000007B` / "side-by-side"): its preferred
+`/BASE` is occupied. Pick another free `0x6xxx0000` base (non-zero, bad-char-free
+high byte) and rebuild that DLL.
+
 ## 6. File map
 
 ```

@@ -5,6 +5,7 @@
  * in a parser, which is exactly the point: recv is not the bug.
  */
 
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
