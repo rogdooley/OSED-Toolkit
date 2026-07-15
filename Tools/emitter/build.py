@@ -375,7 +375,6 @@ def strip_non_ascii(asm):
     lines = []
     for line in asm.splitlines():
         line = line.split("#")[0]
-        line = line.replace("jmp short ", "jmp ")
         line = line.encode("ascii", "replace").decode("ascii")
         lines.append(line)
     return "\\n".join(lines)

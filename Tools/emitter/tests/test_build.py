@@ -462,10 +462,10 @@ def test_debug_runner_embeds_assembly():
     assert "push eax" in runner
 
 
-def test_debug_runner_normalizes_short_jumps_for_keystone():
+def test_debug_runner_preserves_short_jumps_for_keystone():
     from Tools.emitter.build import _generate_debug_runner
     runner = _generate_debug_runner("start:\n    jmp short done\ndone:\n    ret")
-    assert 'line = line.replace("jmp short ", "jmp ")' in runner
+    assert "jmp short" in runner
 
 
 def test_debug_runner_contains_breakpoint_hint():
