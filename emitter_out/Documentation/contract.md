@@ -101,25 +101,3 @@ VOID ExitProcess(UINT uExitCode)
 ---
 
 # Structure Layouts
-
----
-
-# Operational Cheatsheet
-
-**Template:** RunCommandTemplate
-**Target:** `127.0.0.1:4444`
-**Bad characters:** `0x00`
-
-## Setup Commands
-
-**Command executed on target:**
-```
-calc.exe
-```
-
-## Encoding (if needed)
-
-Remove bad chars with msfvenom (requires `shellcode.bin`):
-```
-cat shellcode.bin | msfvenom --platform windows -a x86 -e x86/shikata_ga_nai -b "\x00" -f python -v shellcode
-```
