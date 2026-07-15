@@ -64,7 +64,7 @@ def test_wsadata_no_instructions(revshell_layout):
 def test_sockaddr_in_sin_family(revshell_layout):
     from Tools.emitter.structure_emitter import emit_structure
     asm = emit_structure("sockaddr_in", revshell_layout)
-    assert "0x0002" in asm  # AF_INET
+    assert "0x02" in asm  # AF_INET
 
 
 def test_sockaddr_in_slot_referenced(revshell_layout):

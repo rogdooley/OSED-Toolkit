@@ -6,6 +6,7 @@ addresses by ROR13 export hash and stores each pointer to its stack slot.
 from __future__ import annotations
 
 from .api_database import API_DATABASE, MODULE_LOAD_ORDER
+from .encode import encode_dword
 from .hash_gen import ror13
 from .schema import Manifest
 from .stack_alloc import StackLayout
@@ -27,7 +28,7 @@ def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
     """Generate API resolution stubs for every function in the manifest.
 
     Output is grouped by module in MODULE_LOAD_ORDER sequence.
-    Per function, emits exactly three instructions preceded by a comment.
+    Per function, emits the hash load (badchar-safe), call, and store.
     Returns a single string of assembly text.
     """
     # Build a lookup: dll -> list of function names in manifest declaration order
@@ -54,7 +55,7 @@ def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
             ebp_ref = slot.ebp_ref  # e.g. '[ebp-0x28]'
 
             lines.append(f"    ; {name}  {ebp_ref}")
-            lines.append(f"    mov  eax, 0x{hash_val:08x}")
+            lines.extend(encode_dword(hash_val, manifest.badchars, "eax"))
             lines.append(f"    call resolve_export_by_hash")
             lines.append(f"    mov  {ebp_ref}, eax")
             lines.append("")
@@ -87,7 +88,7 @@ def emit_module_resolution(manifest: Manifest, layout: StackLayout, dll: str) ->
         hash_val = ror13(name)
         ebp_ref = slot.ebp_ref
         lines.append(f"    ; {name}  {ebp_ref}")
-        lines.append(f"    mov  eax, 0x{hash_val:08x}")
+        lines.extend(encode_dword(hash_val, manifest.badchars, "eax"))
         lines.append(f"    call resolve_export_by_hash")
         lines.append(f"    mov  {ebp_ref}, eax")
         lines.append("")

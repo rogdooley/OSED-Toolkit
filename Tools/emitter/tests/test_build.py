@@ -43,6 +43,7 @@ def test_build_generates_contract_md(manifest_dir, tmp_path):
 
 
 def test_build_all_hashes_match_ror13(manifest_dir, tmp_path):
+    import re
     from Tools.emitter.build import build
     from Tools.emitter.schema import load
     from Tools.emitter.hash_gen import ror13
@@ -53,8 +54,21 @@ def test_build_all_hashes_match_ror13(manifest_dir, tmp_path):
         assemble=False,
     )
     for name in manifest.functions:
-        expected = f"0x{ror13(name):08x}"
-        assert expected in result.asm, f"Hash for {name} ({expected}) not in generated asm"
+        expected = ror13(name)
+        hex_str = f"0x{expected:08x}"
+        if hex_str in result.asm:
+            continue
+        comment_pos = result.asm.index(name)
+        block = result.asm[comment_pos:comment_pos + 200]
+        mov_m = re.search(r'mov\s+eax,\s+0x([0-9a-f]{8})', block)
+        xor_m = re.search(r'xor\s+eax,\s+0x([0-9a-f]{8})', block)
+        assert mov_m and xor_m, (
+            f"Hash for {name} ({hex_str}) not found as plain or XOR-encoded"
+        )
+        decoded = int(mov_m.group(1), 16) ^ int(xor_m.group(1), 16)
+        assert decoded == expected, (
+            f"XOR-decoded hash for {name}: got 0x{decoded:08x}, want {hex_str}"
+        )
 
 
 def test_build_no_duplicate_api_slot_assignments(manifest_dir, tmp_path):
