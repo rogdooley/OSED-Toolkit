@@ -372,9 +372,11 @@ CODE = r"""
 
 
 def strip_non_ascii(asm):
+    import re as _re
     lines = []
     for line in asm.splitlines():
         line = line.split("#")[0]
+        line = _re.sub(r'\\bfs:\\[', '[fs:', line)
         line = line.encode("ascii", "replace").decode("ascii")
         lines.append(line)
     return "\\n".join(lines)
