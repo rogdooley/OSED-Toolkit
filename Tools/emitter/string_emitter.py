@@ -5,6 +5,7 @@ strings.py emitters. For push method, emits the push sequence only (ESP = pointe
 """
 from __future__ import annotations
 
+from .encode import safe_lea
 from .schema import Manifest, StringEntry
 from .stack_alloc import StackLayout
 from Tools.strings import emit_mov, emit_push, emit_shiftor, emit_xor
@@ -28,7 +29,7 @@ def emit_string(entry: StringEntry, layout: StackLayout, badchars: set[int]) -> 
         result = emit_push(entry.value, badchars=badchars)
         return f"{header}\n{result.asm}\n"
 
-    lea_line = f"    lea  edi, {slot.ebp_ref}"
+    lea_lines = safe_lea("edi", "ebp", -slot.offset, badchars)
 
     if entry.method == "mov":
         result = emit_mov(entry.value, dest="edi", badchars=badchars)
@@ -39,7 +40,7 @@ def emit_string(entry: StringEntry, layout: StackLayout, badchars: set[int]) -> 
     else:
         raise ValueError(f"Unknown string method: {entry.method!r}")
 
-    return f"{header}\n{lea_line}\n{result.asm}\n"
+    return f"{header}\n" + "\n".join(lea_lines) + f"\n{result.asm}\n"
 
 
 def emit_all_strings(

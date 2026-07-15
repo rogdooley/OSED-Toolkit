@@ -24,6 +24,33 @@ Typical usage in a template:
 from __future__ import annotations
 
 
+def _disp_bytes(offset: int) -> list[int]:
+    """Return the actual displacement bytes nasm will emit for a given offset.
+
+    For offsets -128..+127, nasm uses a single signed byte (disp8).
+    For larger offsets, nasm uses 4 bytes (disp32, little-endian, signed).
+    """
+    if -128 <= offset <= 127:
+        return [(offset & 0xFF)]
+    as_unsigned = offset & 0xFFFFFFFF
+    return [(as_unsigned >> (8 * i)) & 0xFF for i in range(4)]
+
+
+def _disp_has_badchar(offset: int, badchars: set[int]) -> bool:
+    """Check if any displacement byte for offset contains a badchar.
+
+    Offset 0 emits no displacement byte (nasm uses [reg] directly).
+    """
+    if offset == 0:
+        return False
+    return any(b in badchars for b in _disp_bytes(offset))
+
+
+def _has_badchar(value: int, nbytes: int, badchars: set[int]) -> bool:
+    """Check if any byte of the value (little-endian unsigned) is in badchars."""
+    return any(((value >> (8 * i)) & 0xFF) in badchars for i in range(nbytes))
+
+
 def _find_mask_byte(v_byte: int, badchars: set[int]) -> int:
     """Return a mask byte m such that m and (v_byte XOR m) are both not in badchars."""
     for m in range(1, 256):
@@ -33,6 +60,15 @@ def _find_mask_byte(v_byte: int, badchars: set[int]) -> int:
         f"Cannot encode byte 0x{v_byte:02x}: no valid mask exists for "
         f"badchar set {sorted(f'0x{b:02x}' for b in badchars)}"
     )
+
+
+def _fmt_offset(offset: int) -> str:
+    """Format a signed offset for assembly: +0xNN or -0xNN, empty for 0."""
+    if offset == 0:
+        return ""
+    if offset > 0:
+        return f"+0x{offset:02x}"
+    return f"-0x{-offset:02x}"
 
 
 def encode_dword(value: int, badchars: set[int], reg: str = "eax") -> list[str]:
@@ -71,6 +107,21 @@ def encode_word(value: int, badchars: set[int], reg: str = "ax") -> list[str]:
     ]
 
 
+def encode_byte(value: int, badchars: set[int], reg: str = "al") -> list[str]:
+    """Return assembly lines that load an 8-bit value into reg, free of badchars.
+
+    If the value is clean, emits a single mov.
+    Otherwise emits mov + xor using a computed mask byte.
+    """
+    if value not in badchars:
+        return [f"    mov  {reg}, 0x{value:02x}"]
+    m = _find_mask_byte(value, badchars)
+    return [
+        f"    mov  {reg}, 0x{(value ^ m):02x}",
+        f"    xor  {reg}, 0x{m:02x}",
+    ]
+
+
 def safe_push_dword(value: int, badchars: set[int]) -> list[str]:
     """Emit a badchar-safe push of a 32-bit immediate via eax."""
     return [*encode_dword(value, badchars, "eax"), "    push eax"]
@@ -83,3 +134,293 @@ def safe_push_word_as_dword(value: int, badchars: set[int]) -> list[str]:
     DWORD but whose upper bytes would be null if encoded as push imm32.
     """
     return ["    xor  eax, eax", *encode_word(value, badchars, "ax"), "    push eax"]
+
+
+def safe_push_imm(value: int, badchars: set[int]) -> list[str]:
+    """Emit a badchar-safe push of a small immediate value.
+
+    push imm8 encodes the byte directly in the opcode stream.
+    Values 0-127 that are clean use push imm8 directly.
+    Zero always goes through xor+push to avoid null bytes.
+    """
+    if value == 0:
+        return ["    xor  eax, eax", "    push eax"]
+    if 1 <= value <= 0x7f and value not in badchars:
+        return [f"    push 0x{value:x}"]
+    return safe_push_dword(value, badchars)
+
+
+def safe_mem_load(
+    dst: str, base: str, offset: int, badchars: set[int],
+    *, width: str = "dword", tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe memory load: dst = [base + offset].
+
+    offset is signed (negative for [ebp-0x04] style). Checks the actual
+    displacement bytes nasm would emit against badchars.
+    """
+    size_prefix = {"word": "word ptr ", "byte": "byte ptr "}
+    pfx = size_prefix.get(width, "")
+    fmt = _fmt_offset(offset)
+
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    mov  {dst}, {pfx}[{base}{fmt}]"]
+
+    lines = [*encode_dword(offset & 0xFFFFFFFF, badchars, tmp)]
+    lines.append(f"    add  {tmp}, {base}")
+    lines.append(f"    mov  {dst}, {pfx}[{tmp}]")
+    return lines
+
+
+def safe_mem_store(
+    base: str, offset: int, src: str, badchars: set[int],
+    *, width: str = "dword", tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe memory store: [base + offset] = src.
+
+    offset is signed. Checks actual displacement bytes against badchars.
+    """
+    fmt = _fmt_offset(offset)
+
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    mov  [{base}{fmt}], {src}"]
+
+    lines = [*encode_dword(offset & 0xFFFFFFFF, badchars, tmp)]
+    lines.append(f"    add  {tmp}, {base}")
+    lines.append(f"    mov  [{tmp}], {src}")
+    return lines
+
+
+def _cmp_imm_has_badchar(value: int, badchars: set[int]) -> bool:
+    """Check if a cmp immediate's encoded bytes contain badchars.
+
+    nasm uses sign-extended imm8 when the value fits in 0..127 (for cmp r/m16)
+    so only the low byte appears in the output. For values > 127, both bytes
+    of a 16-bit immediate appear.
+    """
+    if 0 <= value <= 0x7F:
+        return (value & 0xFF) in badchars
+    return _has_badchar(value, 2, badchars)
+
+
+def safe_cmp_word(
+    base: str, offset: int, value: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe cmp word ptr [base+offset], value.
+
+    Both the offset displacement and the immediate value can contain badchars.
+    """
+    fmt = _fmt_offset(offset)
+    offset_dirty = _disp_has_badchar(offset, badchars)
+    value_dirty = _cmp_imm_has_badchar(value, badchars)
+
+    if not offset_dirty and not value_dirty:
+        return [f"    cmp  word ptr [{base}{fmt}], 0x{value:04x}"]
+
+    lines: list[str] = []
+
+    if offset_dirty:
+        lines.extend(encode_dword(offset & 0xFFFFFFFF, badchars, tmp))
+        lines.append(f"    add  {tmp}, {base}")
+        addr = tmp
+    else:
+        addr = f"{base}{fmt}"
+
+    if not value_dirty:
+        lines.append(f"    cmp  word ptr [{addr}], 0x{value:04x}")
+    else:
+        lines.append(f"    movzx {tmp}, word ptr [{addr}]")
+        m1 = _find_mask_byte(value & 0xFF, badchars)
+        m2 = _find_mask_byte((value >> 8) & 0xFF, badchars)
+        mask = m1 | (m2 << 8)
+        encoded = (value ^ mask) & 0xFFFF
+        if not _has_badchar(mask, 2, badchars) and not _has_badchar(encoded, 2, badchars):
+            lines.append(f"    xor  {tmp}, 0x{mask:04x}")
+            lines.append(f"    cmp  {tmp}, 0x{encoded:04x}")
+        else:
+            lines.extend(encode_dword(value, badchars, "edx"))
+            lines.append(f"    cmp  {tmp}, edx")
+    return lines
+
+
+def safe_sub_imm(reg: str, value: int, badchars: set[int], *, tmp: str = "ecx") -> list[str]:
+    """Emit a badchar-safe sub reg, imm."""
+    if not _disp_has_badchar(value, badchars):
+        return [f"    sub  {reg}, 0x{value:02x}"]
+    lines = encode_dword(value, badchars, tmp)
+    lines.append(f"    sub  {reg}, {tmp}")
+    return lines
+
+
+def safe_add_imm(reg: str, offset: int, badchars: set[int], *, tmp: str = "ecx") -> list[str]:
+    """Emit a badchar-safe add reg, imm."""
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    add  {reg}, 0x{offset:02x}"]
+    lines = encode_dword(offset, badchars, tmp)
+    lines.append(f"    add  {reg}, {tmp}")
+    return lines
+
+
+def safe_ror_imm(reg: str, value: int, badchars: set[int]) -> list[str]:
+    """Emit a badchar-safe ror reg, imm8."""
+    if value not in badchars:
+        return [f"    ror  {reg}, 0x{value:02x}"]
+    for split in range(1, value):
+        if split not in badchars and (value - split) not in badchars:
+            return [
+                f"    ror  {reg}, 0x{split:02x}",
+                f"    ror  {reg}, 0x{value - split:02x}",
+            ]
+    raise ValueError(f"Cannot encode ror imm8 0x{value:02x} with given badchars")
+
+
+def safe_byte_store(
+    base: str, offset: int, value: int, badchars: set[int],
+    *, tmp_reg: str = "al", addr_tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe mov byte ptr [base+offset], imm8."""
+    lines: list[str] = []
+    fmt = _fmt_offset(offset)
+    need_encode_val = value in badchars
+    offset_dirty = _disp_has_badchar(offset, badchars)
+
+    if need_encode_val:
+        lines.extend(encode_byte(value, badchars, tmp_reg))
+
+    src = tmp_reg if need_encode_val else f"0x{value:02x}"
+
+    if not offset_dirty:
+        lines.append(f"    mov  byte ptr [{base}{fmt}], {src}")
+    else:
+        lines.extend(encode_dword(offset & 0xFFFFFFFF, badchars, addr_tmp))
+        lines.append(f"    add  {addr_tmp}, {base}")
+        lines.append(f"    mov  byte ptr [{addr_tmp}], {src}")
+    return lines
+
+
+def safe_word_store(
+    base: str, offset: int, src_reg: str, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe mov word ptr [base+offset], src_reg."""
+    fmt = _fmt_offset(offset)
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    mov  word ptr [{base}{fmt}], {src_reg}"]
+    lines = encode_dword(offset & 0xFFFFFFFF, badchars, tmp)
+    lines.append(f"    add  {tmp}, {base}")
+    lines.append(f"    mov  word ptr [{tmp}], {src_reg}")
+    return lines
+
+
+def safe_dword_store(
+    base: str, offset: int, src_reg: str, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe mov dword ptr [base+offset], src_reg."""
+    fmt = _fmt_offset(offset)
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    mov  [{base}{fmt}], {src_reg}"]
+    lines = encode_dword(offset & 0xFFFFFFFF, badchars, tmp)
+    lines.append(f"    add  {tmp}, {base}")
+    lines.append(f"    mov  [{tmp}], {src_reg}")
+    return lines
+
+
+# ── ebp_ref parsing and high-level ref-based helpers ──────────────────
+
+import re as _re
+
+_EBP_RE = _re.compile(r'\[ebp([+-])(0x[0-9a-fA-F]+)\]')
+
+
+def parse_ebp_offset(ref: str) -> int:
+    """Parse '[ebp-0xNN]' or '[ebp+0xNN]' into a signed integer offset."""
+    m = _EBP_RE.match(ref)
+    if not m:
+        raise ValueError(f"Cannot parse ebp reference: {ref}")
+    sign = -1 if m.group(1) == '-' else 1
+    return sign * int(m.group(2), 16)
+
+
+def _safe_addr(base: str, offset: int, badchars: set[int], tmp: str) -> tuple[list[str], str]:
+    """Compute effective address, returning (setup_lines, addr_operand).
+
+    If displacement is clean, returns ([], "[base+offset]").
+    If dirty, emits code to compute address in tmp, returns (lines, "[tmp]").
+    """
+    fmt = _fmt_offset(offset)
+    if not _disp_has_badchar(offset, badchars):
+        return [], f"[{base}{fmt}]"
+    lines = list(encode_dword(offset & 0xFFFFFFFF, badchars, tmp))
+    lines.append(f"    add  {tmp}, {base}")
+    return lines, f"[{tmp}]"
+
+
+def safe_lea(
+    dst: str, base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe lea dst, [base+offset]."""
+    fmt = _fmt_offset(offset)
+    if not _disp_has_badchar(offset, badchars):
+        return [f"    lea  {dst}, [{base}{fmt}]"]
+    lines = list(encode_dword(offset & 0xFFFFFFFF, badchars, tmp))
+    lines.append(f"    add  {tmp}, {base}")
+    if tmp != dst:
+        lines.append(f"    mov  {dst}, {tmp}")
+    return lines
+
+
+def safe_push_mem(
+    base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe push dword ptr [base+offset]."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    push dword ptr {addr}"]
+
+
+def safe_call_mem(
+    base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe call dword ptr [base+offset]."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    call dword ptr {addr}"]
+
+
+def safe_add_from_mem(
+    dst: str, base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe add dst, [base+offset]."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    add  {dst}, {addr}"]
+
+
+def safe_sub_from_mem(
+    dst: str, base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe sub dst, [base+offset]."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    sub  {dst}, {addr}"]
+
+
+def safe_add_to_mem(
+    base: str, offset: int, src: str, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe add [base+offset], src."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    add  {addr}, {src}"]
+
+
+def safe_cmp_with_mem(
+    reg: str, base: str, offset: int, badchars: set[int],
+    *, tmp: str = "ecx",
+) -> list[str]:
+    """Emit a badchar-safe cmp reg, [base+offset]."""
+    setup, addr = _safe_addr(base, offset, badchars, tmp)
+    return setup + [f"    cmp  {reg}, {addr}"]

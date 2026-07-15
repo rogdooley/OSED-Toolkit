@@ -1,5 +1,5 @@
 # Minimal — calc.exe launcher
-badchars: ["00"]
+badchars: ["00", "0a", "0d"]
 
 functions:
   - WinExec

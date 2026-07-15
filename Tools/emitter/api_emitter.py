@@ -6,7 +6,7 @@ addresses by ROR13 export hash and stores each pointer to its stack slot.
 from __future__ import annotations
 
 from .api_database import API_DATABASE, MODULE_LOAD_ORDER
-from .encode import encode_dword
+from .encode import encode_dword, safe_mem_store
 from .hash_gen import ror13
 from .schema import Manifest
 from .stack_alloc import StackLayout
@@ -31,7 +31,6 @@ def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
     Per function, emits the hash load (badchar-safe), call, and store.
     Returns a single string of assembly text.
     """
-    # Build a lookup: dll -> list of function names in manifest declaration order
     module_funcs: dict[str, list[str]] = {}
     for name in manifest.functions:
         dll = API_DATABASE[name].module
@@ -44,7 +43,6 @@ def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
         if dll not in module_funcs:
             continue
 
-        # Section header
         lines.append(_module_header(dll, mi.load_via))
         lines.append("")
 
@@ -52,15 +50,14 @@ def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
         for name in funcs:
             slot = layout.slot(name)
             hash_val = ror13(name)
-            ebp_ref = slot.ebp_ref  # e.g. '[ebp-0x28]'
+            offset = -slot.offset
 
-            lines.append(f"    ; {name}  {ebp_ref}")
+            lines.append(f"    ; {name}  {slot.ebp_ref}")
             lines.extend(encode_dword(hash_val, manifest.badchars, "eax"))
             lines.append(f"    call resolve_export_by_hash")
-            lines.append(f"    mov  {ebp_ref}, eax")
+            lines.extend(safe_mem_store("ebp", offset, "eax", manifest.badchars))
             lines.append("")
 
-    # Ensure exactly one trailing newline at end
     while lines and lines[-1] == "":
         lines.pop()
     lines.append("")
@@ -86,11 +83,11 @@ def emit_module_resolution(manifest: Manifest, layout: StackLayout, dll: str) ->
     for name in module_funcs:
         slot = layout.slot(name)
         hash_val = ror13(name)
-        ebp_ref = slot.ebp_ref
-        lines.append(f"    ; {name}  {ebp_ref}")
+        offset = -slot.offset
+        lines.append(f"    ; {name}  {slot.ebp_ref}")
         lines.extend(encode_dword(hash_val, manifest.badchars, "eax"))
         lines.append(f"    call resolve_export_by_hash")
-        lines.append(f"    mov  {ebp_ref}, eax")
+        lines.extend(safe_mem_store("ebp", offset, "eax", manifest.badchars))
         lines.append("")
 
     while lines and lines[-1] == "":

