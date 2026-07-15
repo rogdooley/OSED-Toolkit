@@ -378,6 +378,35 @@ def test_build_exposes_assembler_errors(monkeypatch, manifest_dir, tmp_path):
     assert result.asm_errors == expected
 
 
+def test_build_rejects_assembled_badchars(monkeypatch, manifest_dir, tmp_path):
+    import Tools.emitter.build as build_module
+
+    monkeypatch.setattr(
+        build_module,
+        "_try_assemble",
+        lambda asm: (b"\x90\x00\xc3", "keystone", []),
+    )
+
+    result = build_module.build(
+        str(manifest_dir / "calc.yaml"),
+        assemble=True,
+        out_dir=str(tmp_path),
+    )
+
+    assert result.shellcode_bytes == b"\x90\x00\xc3"
+    assert result.hex_str == r"\x90\x00\xc3"
+    assert result.py_bytes == 'shellcode = b"\\x90\\x00\\xc3"'
+    assert result.c_array is not None
+    assert result.test_harness is not None
+    assert result.assembler == "keystone"
+    assert result.encoded_bytes is None
+    assert result.encoder_report is None
+    assert result.asm_errors == [
+        "[!] 1 badchar violation(s) in 3 bytes",
+        "BADCHAR 0x00 at offset 1 (context: 9000c3)",
+    ]
+
+
 def test_cli_prints_assembler_errors(monkeypatch, capsys, tmp_path):
     import Tools.emitter.build as build_module
 
@@ -433,6 +462,12 @@ def test_debug_runner_embeds_assembly():
     assert "push eax" in runner
 
 
+def test_debug_runner_normalizes_short_jumps_for_keystone():
+    from Tools.emitter.build import _generate_debug_runner
+    runner = _generate_debug_runner("start:\n    jmp short done\ndone:\n    ret")
+    assert 'line = line.replace("jmp short ", "jmp ")' in runner
+
+
 def test_debug_runner_contains_breakpoint_hint():
     from Tools.emitter.build import _generate_debug_runner
     runner = _generate_debug_runner("nop")
@@ -461,6 +496,61 @@ def test_debug_runner_written_to_disk(manifest_dir, tmp_path):
     runner_path = tmp_path / "asm" / "debug_runner.py"
     assert runner_path.exists()
     assert "VirtualAlloc" in runner_path.read_text()
+
+
+def test_write_outputs_removes_stale_bin_artifacts(tmp_path):
+    from Tools.emitter.build import BuildResult, write_outputs
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True)
+    for name in (
+        "shellcode.bin",
+        "shellcode.hex",
+        "shellcode.py",
+        "shellcode.c",
+        "test_harness.py",
+    ):
+        (bin_dir / name).write_text("stale")
+
+    result = BuildResult(
+        manifest_path="manifest.yaml",
+        asm="asm",
+        contract_md="contract",
+        debug_runner="runner",
+    )
+    write_outputs(result, str(tmp_path))
+
+    for name in (
+        "shellcode.bin",
+        "shellcode.hex",
+        "shellcode.py",
+        "shellcode.c",
+        "test_harness.py",
+    ):
+        assert not (bin_dir / name).exists()
+
+
+def test_write_text_uses_utf8_encoding(tmp_path, monkeypatch):
+    import pathlib
+    from Tools.emitter.build import _write_text
+
+    captured: dict[str, object] = {}
+    original = pathlib.Path.write_text
+
+    def fake_write_text(self, data, encoding=None, errors=None, newline=None):
+        captured["path"] = self
+        captured["data"] = data
+        captured["encoding"] = encoding
+        return original(self, data, encoding=encoding, errors=errors, newline=newline)
+
+    monkeypatch.setattr(pathlib.Path, "write_text", fake_write_text)
+
+    target = tmp_path / "unicode.txt"
+    _write_text(target, "; \u2500\u2500 unicode")
+
+    assert captured["path"] == target
+    assert captured["encoding"] == "utf-8"
+    assert target.read_text(encoding="utf-8") == "; \u2500\u2500 unicode"
 
 
 # ---------------------------------------------------------------------------

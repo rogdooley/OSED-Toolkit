@@ -106,11 +106,15 @@ name = "osed-toolkit"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "capstone" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "textual" },
+]
+
+[package.optional-dependencies]
+disasm = [
+    { name = "capstone" },
 ]
 
 [package.dev-dependencies]
@@ -120,12 +124,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "capstone", specifier = ">=5.0.6" },
+    { name = "capstone", marker = "extra == 'disasm'", specifier = ">=5.0.6" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "textual", specifier = ">=6.6.0" },
 ]
+provides-extras = ["disasm"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.0" }]

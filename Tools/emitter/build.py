@@ -375,6 +375,7 @@ def strip_non_ascii(asm):
     lines = []
     for line in asm.splitlines():
         line = line.split("#")[0]
+        line = line.replace("jmp short ", "jmp ")
         line = line.encode("ascii", "replace").decode("ascii")
         lines.append(line)
     return "\\n".join(lines)
@@ -446,6 +447,11 @@ def _bytes_to_c(raw: bytes) -> str:
     return f"unsigned char shellcode[] = {{\n{body}\n}};\n// Length: {len(raw)} bytes"
 
 
+def _write_text(path: pathlib.Path, data: str) -> None:
+    """Write text files as UTF-8 regardless of the host locale."""
+    path.write_text(data, encoding="utf-8")
+
+
 def _strip_comments(asm: str) -> str:
     """Strip both # and ; comments so non-ASCII decoration never reaches the assembler."""
     lines = []
@@ -498,7 +504,7 @@ def _try_assemble_nasm(asm: str) -> tuple[bytes | None, str | None]:
         with tempfile.TemporaryDirectory() as tmpdir:
             src = pathlib.Path(tmpdir) / "shellcode.asm"
             out = pathlib.Path(tmpdir) / "shellcode.bin"
-            src.write_text(_to_nasm(asm))
+            _write_text(src, _to_nasm(asm))
             result = subprocess.run(
                 ["nasm", "-f", "bin", "-o", str(out), str(src)],
                 capture_output=True,
@@ -542,6 +548,17 @@ def _try_assemble(asm: str) -> tuple[bytes, str, list[str]] | tuple[None, None, 
     if err:
         errors.append(err)
     return None, None, errors
+
+
+def _validate_badchars(raw: bytes, badchars: set[int]) -> list[str]:
+    """Return diagnostics when assembled bytes contain forbidden values."""
+    hits = [(offset, byte) for offset, byte in enumerate(raw) if byte in badchars]
+    if not hits:
+        return []
+
+    preview = ", ".join(f"0x{offset:04x}=0x{byte:02x}" for offset, byte in hits[:8])
+    suffix = "" if len(hits) <= 8 else f" ... ({len(hits)} total)"
+    return [f"assembled shellcode contains forbidden bytes: {preview}{suffix}"]
 
 
 def _load_template(name: str) -> PayloadTemplate:
@@ -896,36 +913,37 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
     (base / "asm").mkdir(parents=True, exist_ok=True)
     (base / "Documentation").mkdir(parents=True, exist_ok=True)
 
-    (base / "asm" / "generated.asm").write_text(result.asm)
-    (base / "asm" / "debug_runner.py").write_text(result.debug_runner)
-    (base / "Documentation" / "contract.md").write_text(result.contract_md)
+    _write_text(base / "asm" / "generated.asm", result.asm)
+    _write_text(base / "asm" / "debug_runner.py", result.debug_runner)
+    _write_text(base / "Documentation" / "contract.md", result.contract_md)
 
     if result.shellcode_bytes:
         (base / "bin").mkdir(parents=True, exist_ok=True)
         (base / "bin" / "shellcode.bin").write_bytes(result.shellcode_bytes)
-        (base / "bin" / "shellcode.hex").write_text(result.hex_str or "")
-        (base / "bin" / "shellcode.py").write_text(result.py_bytes or "")
-        (base / "bin" / "shellcode.c").write_text(result.c_array or "")
+        _write_text(base / "bin" / "shellcode.hex", result.hex_str or "")
+        _write_text(base / "bin" / "shellcode.py", result.py_bytes or "")
+        _write_text(base / "bin" / "shellcode.c", result.c_array or "")
         if result.test_harness:
-            (base / "bin" / "test_harness.py").write_text(result.test_harness)
+            _write_text(base / "bin" / "test_harness.py", result.test_harness)
+    else:
+        for name in (
+            "shellcode.bin",
+            "shellcode.hex",
+            "shellcode.py",
+            "shellcode.c",
+            "test_harness.py",
+        ):
+            (base / "bin" / name).unlink(missing_ok=True)
 
     if result.encoded_bytes:
         (base / "bin").mkdir(parents=True, exist_ok=True)
         (base / "bin" / "shellcode_encoded.bin").write_bytes(result.encoded_bytes)
-        (base / "bin" / "shellcode_encoded.hex").write_text(
-            _bytes_to_hex_str(result.encoded_bytes) or ""
-        )
-        (base / "bin" / "shellcode_encoded.py").write_text(
-            _bytes_to_py(result.encoded_bytes) or ""
-        )
-        (base / "bin" / "shellcode_encoded.c").write_text(
-            _bytes_to_c(result.encoded_bytes) or ""
-        )
+        _write_text(base / "bin" / "shellcode_encoded.hex", _bytes_to_hex_str(result.encoded_bytes) or "")
+        _write_text(base / "bin" / "shellcode_encoded.py", _bytes_to_py(result.encoded_bytes) or "")
+        _write_text(base / "bin" / "shellcode_encoded.c", _bytes_to_c(result.encoded_bytes) or "")
 
     if result.encoder_report:
-        (base / "Documentation" / "encoder_report.txt").write_text(
-            result.encoder_report
-        )
+        _write_text(base / "Documentation" / "encoder_report.txt", result.encoder_report)
 
 
 # ---------------------------------------------------------------------------
