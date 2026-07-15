@@ -377,6 +377,7 @@ def strip_non_ascii(asm):
     for line in asm.splitlines():
         line = line.split("#")[0]
         line = _re.sub(r'\\bfs:\\[', '[fs:', line)
+        line = line.replace("jmp short ", "jmp ")
         line = line.encode("ascii", "replace").decode("ascii")
         lines.append(line)
     return "\\n".join(lines)
@@ -384,10 +385,21 @@ def strip_non_ascii(asm):
 
 def main():
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
+    cleaned = strip_non_ascii(CODE)
     try:
-        encoding, count = ks.asm(strip_non_ascii(CODE))
+        encoding, count = ks.asm(cleaned)
     except Exception as e:
         print(f"[-] Assembly failed: {{e}}", file=sys.stderr)
+        print("[*] Scanning for the failing instruction...", file=sys.stderr)
+        all_lines = cleaned.split("\\n")
+        accum = []
+        for i, ln in enumerate(all_lines):
+            accum.append(ln)
+            try:
+                ks.asm("\\n".join(accum))
+            except Exception:
+                print(f"    line {{i+1}}: {{ln.strip()!r}}", file=sys.stderr)
+                accum.pop()
         sys.exit(1)
 
     shellcode = bytearray(encoding)

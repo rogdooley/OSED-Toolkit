@@ -462,10 +462,26 @@ def test_debug_runner_embeds_assembly():
     assert "push eax" in runner
 
 
-def test_debug_runner_preserves_short_jumps_for_keystone():
+def test_debug_runner_preserves_short_jumps_in_source():
     from Tools.emitter.build import _generate_debug_runner
     runner = _generate_debug_runner("start:\n    jmp short done\ndone:\n    ret")
     assert "jmp short" in runner
+
+
+def test_debug_runner_strip_non_ascii_removes_short_qualifier():
+    """strip_non_ascii converts 'jmp short' to 'jmp' for Keystone compatibility."""
+    from Tools.emitter.build import _generate_debug_runner
+    runner = _generate_debug_runner("start:\n    jmp short done\ndone:\n    ret")
+    # Extract just the strip_non_ascii function from the generated source
+    import textwrap
+    func_start = runner.index("def strip_non_ascii(asm):")
+    func_end = runner.index("\n\ndef main():")
+    func_src = runner[func_start:func_end]
+    ns = {}
+    exec(compile(textwrap.dedent(func_src), "<test>", "exec"), ns)
+    cleaned = ns["strip_non_ascii"]("    jmp short done\n")
+    assert "jmp short" not in cleaned
+    assert "jmp done" in cleaned
 
 
 def test_debug_runner_contains_breakpoint_hint():
