@@ -371,21 +371,9 @@ CODE = r"""
 """
 
 
-def strip_non_ascii(asm):
-    import re as _re
-    lines = []
-    for line in asm.splitlines():
-        line = line.split("#")[0]
-        line = _re.sub(r'\\bfs:\\[', '[fs:', line)
-        line = line.replace("jmp short ", "jmp ")
-        line = line.encode("ascii", "replace").decode("ascii")
-        lines.append(line)
-    return "\\n".join(lines)
-
-
 def main():
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
-    cleaned = strip_non_ascii(CODE)
+    cleaned = CODE.replace("jmp short ", "jmp ")
     try:
         encoding, count = ks.asm(cleaned)
     except Exception as e:
