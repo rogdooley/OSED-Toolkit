@@ -296,6 +296,8 @@ def emit_cheatsheet_md(
         lines.append("## Setup Commands")
         lines.append("")
         for desc, cmd in entries:
+            if cmd is None:
+                continue
             lines.append(f"**{desc}:**")
             lines.append(f"```")
             lines.append(cmd)
