@@ -5,12 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "capstone>=5.0.6",
     "pydantic>=2.11.7",
     "pyyaml>=6.0.2",
     "rich>=14.2.0",
     "textual>=6.6.0",
 ]
+
+[project.optional-dependencies]
+disasm = ["capstone>=5.0.6"]
 
 [project.scripts]
 shellforge = "shellforge.cli:main"
@@ -26,6 +28,4 @@ where = ["."]
 include = ["Tools*", "asm_lab*", "shellforge*"]
 
 [dependency-groups]
-dev = [
-    "pytest>=9.1.0",
-]
+dev = ["pytest>=9.1.0"]
