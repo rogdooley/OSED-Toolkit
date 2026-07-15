@@ -246,7 +246,7 @@ def _dll_load_block(dll: str, manifest: Manifest, layout: StackLayout) -> str:
     bc = manifest.badchars
 
     lines = [
-        f"; ── Loading {dll} via LoadLibraryA ──────────────────────────────────",
+        f"; -- Loading {dll} via LoadLibraryA --",
         "",
         push_result.asm,
         f"    push esi                    ; lpLibFileName = &{dll}",
@@ -748,7 +748,7 @@ def compose_asm(
         "    _start:",
         "        jmp short _stub_trampoline1",
         "",
-        "; ── Framework Stubs ────────────────────────────────────────────────",
+        "; -- Framework Stubs --",
         "",
         _emit_framework_stubs_part1a(config.badchars),
         "_stub_trampoline1:",
@@ -759,7 +759,7 @@ def compose_asm(
         "    jmp short main",
         "",
         _emit_framework_stubs_part2(config.badchars),
-        "; ── Main ───────────────────────────────────────────────────────────",
+        "; -- Main --",
         "",
         "main:",
         "    mov  ebp, esp",
@@ -790,7 +790,7 @@ def compose_asm(
             parts.append(resolution)
 
     parts += [
-        "; ── String Construction ─────────────────────────────────────────────",
+        "; -- String Construction --",
         "",
     ]
     str_asm = emit_all_strings(manifest, layout, skip_labels=dll_string_labels)
@@ -800,7 +800,7 @@ def compose_asm(
         parts += ["; (no strings)", ""]
 
     parts += [
-        "; ── Structure Initialization ────────────────────────────────────────",
+        "; -- Structure Initialization --",
         "",
     ]
     struct_asm = emit_all_structures(manifest, layout)
@@ -810,7 +810,7 @@ def compose_asm(
         parts += ["; (no structures)", ""]
 
     parts += [
-        "; ── Payload ─────────────────────────────────────────────────────────",
+        "; -- Payload --",
         "",
     ]
     if template is not None:

@@ -25,7 +25,7 @@ class CopyFileTemplate(PayloadTemplate):
             ) from e
 
         return "\n".join([
-            "; ── Copy File Payload ───────────────────────────────────────────",
+            "; -- Copy File Payload --",
             "",
             "    ; CopyFileA(&src, &dst, bFailIfExists=FALSE)",
             *safe_lea("eax", "ebp", src_off, bc),

@@ -21,7 +21,7 @@ class RunCommandTemplate(PayloadTemplate):
             cmd_off = -layout.slot("cmd").offset
             cmd_ref = layout.slot("cmd").ebp_ref
             return "\n".join([
-                "; ── Run Command Payload ─────────────────────────────────────────",
+                "; -- Run Command Payload --",
                 f"; Command: {command} (from 'cmd' slot at {cmd_ref})",
                 "",
                 "    ; WinExec(&cmd, SW_SHOWNORMAL)",
@@ -38,7 +38,7 @@ class RunCommandTemplate(PayloadTemplate):
         push_asm = emit_push(command, badchars=bc).asm
         n_bytes = len(to_dwords(command)) * 4
         return "\n".join([
-            "; ── Run Command Payload ─────────────────────────────────────────",
+            "; -- Run Command Payload --",
             f"; Command: {command} (inline push)",
             "",
             push_asm,

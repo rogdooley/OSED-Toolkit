@@ -29,7 +29,7 @@ class CopyThenRunTemplate(PayloadTemplate):
             ) from e
 
         return "\n".join([
-            "; ── Copy Then Run Payload ───────────────────────────────────────",
+            "; -- Copy Then Run Payload --",
             "",
             "    ; CopyFileA(&src_path, &dst_path, bFailIfExists=FALSE)",
             *safe_lea("eax", "ebp", src_off, bc),

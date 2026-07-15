@@ -120,7 +120,7 @@ def null_safe_dword(dw: int) -> tuple[str, list[str]]:
         if 0x00 not in dword_bytes(encoded) and 0x00 not in dword_bytes(key_dword):
             fixup = [
                 f"    mov  eax, {fmt_dword(encoded)}",
-                f"    xor  eax, {fmt_dword(key_dword)}  ; decode → {fmt_dword(dw)}",
+                f"    xor  eax, {fmt_dword(key_dword)}  ; decode -> {fmt_dword(dw)}",
             ]
             return fmt_dword(encoded), fixup
 

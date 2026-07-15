@@ -33,7 +33,7 @@ class BindShellTemplate(PayloadTemplate):
         sock_h_ref = layout.slot("socket_handle").ebp_ref
 
         return "\n".join([
-            "; ── Bind Shell Payload (scaffold) ──────────────────────────────────",
+            "; -- Bind Shell Payload (scaffold) --",
             f"; Listen port: {config.lport}",
             "; NOTE: bind/listen/accept stubs are not generated — add manually.",
             "",

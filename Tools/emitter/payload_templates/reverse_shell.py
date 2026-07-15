@@ -37,7 +37,7 @@ class ReverseShellTemplate(PayloadTemplate):
         cmd_off       = -layout.slot("cmd").offset
 
         return "\n".join([
-            "; ── Reverse Shell Payload ─────────────────────────────────────────",
+            "; -- Reverse Shell Payload --",
             f"; Target: {config.lhost}:{config.lport}",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",

