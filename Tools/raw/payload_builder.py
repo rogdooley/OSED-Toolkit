@@ -5,11 +5,11 @@ Layout-driven payload builder that assembles raw bytes deterministically
 from a :class:`LayoutSpec`.
 
 Design decisions:
-  - Uses bytearray throughout to avoid O(n²) concatenation.
+  - Uses bytearray throughout to avoid O(n^2) concatenation.
   - Single-pass construction where possible; overlap/offset checks are O(n).
   - Computed segments are resolved at build time via computed_registry.
   - at_offset segments are written after the initial pass so they can
-    overwrite padding at exact positions — this is intentional and explicit.
+    overwrite padding at exact positions - this is intentional and explicit.
   - Badchar validation is one final scan O(n) over the finished payload.
 """
 
@@ -152,7 +152,7 @@ class PayloadBuilder:
 
         at_offset_queue: list[tuple[AtOffsetSegment, int]] = []
 
-        # Pass 1 — sequential segments
+        # Pass 1 - sequential segments
         for seg in spec.segments:
             if isinstance(seg, AtOffsetSegment):
                 at_offset_queue.append((seg, len(buf)))
@@ -168,7 +168,7 @@ class PayloadBuilder:
             placed.append(p)
             segment_offsets[seg.name] = start
 
-        # Pass 2 — at_offset segments (write at exact positions, extending buf if needed)
+        # Pass 2 - at_offset segments (write at exact positions, extending buf if needed)
         for seg, _ in at_offset_queue:
             chunk = self._resolve_at_offset(seg)
             target = seg.at_offset
@@ -259,7 +259,7 @@ class PayloadBuilder:
             return
 
         bad_set = set(badchars)
-        # Build offset→segment name map (last writer wins for at_offset overwrites)
+        # Build offset->segment name map (last writer wins for at_offset overwrites)
         offset_to_seg: dict[int, str] = {}
         for p in placed:
             for i in range(p.start, p.end):

@@ -1,4 +1,4 @@
-"""Tests for encode.py — badchar-safe immediate encoding."""
+"""Tests for encode.py - badchar-safe immediate encoding."""
 import pytest
 
 from Tools.emitter.encode import (
@@ -34,7 +34,7 @@ class TestEncodeDword:
         assert result == value
 
     def test_null_ip_encodes_correctly(self):
-        # 192.168.1.0 — last byte is 0x00
+        # 192.168.1.0 - last byte is 0x00
         value = 0xc0a80100
         lines = encode_dword(value, COMMON)
         assert _eval_dword_lines(lines) == value
@@ -73,11 +73,11 @@ class TestEncodeWord:
 
     def test_null_byte_produces_xor_pair(self):
         lines = encode_word(0x0202, COMMON)  # MAKEWORD(2,2) zero-extended has no null in word itself
-        # 0x0202 bytes are 0x02, 0x02 — both clean
+        # 0x0202 bytes are 0x02, 0x02 - both clean
         assert lines == ["    mov  ax, 0x0202"]
 
     def test_port_with_null(self):
-        # Port 256 big-endian = 0x0100 — low byte is 0x00
+        # Port 256 big-endian = 0x0100 - low byte is 0x00
         value = 0x0100
         lines = encode_word(value, COMMON)
         assert _eval_word_lines(lines) == value
@@ -117,7 +117,7 @@ class TestSafePushDword:
         assert len(lines) == 3  # mov + xor + push
 
     def test_file_attribute_normal(self):
-        # 0x80 has null bytes when encoded as imm32 — this was the sign-extension bug
+        # 0x80 has null bytes when encoded as imm32 - this was the sign-extension bug
         lines = safe_push_dword(0x80, COMMON)
         result = _eval_dword_lines(lines[:-1])  # exclude push
         assert result == 0x80

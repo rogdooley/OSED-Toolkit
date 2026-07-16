@@ -1,4 +1,4 @@
-"""Tests for doc_gen.py — Phase 3 Markdown documentation generator."""
+"""Tests for doc_gen.py - Phase 3 Markdown documentation generator."""
 from __future__ import annotations
 
 import pathlib

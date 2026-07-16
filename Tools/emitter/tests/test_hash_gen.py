@@ -1,4 +1,4 @@
-"""Tests for hash_gen.py — ground truth from shellcode-04.py and RevShellV1.md."""
+"""Tests for hash_gen.py - ground truth from shellcode-04.py and RevShellV1.md."""
 from __future__ import annotations
 
 from ..hash_gen import compute_hashes, ror13

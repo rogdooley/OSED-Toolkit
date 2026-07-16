@@ -29,19 +29,19 @@ class OffsetResolver:
         :return: Offset as int, or None if not found
         """
 
-        # STEP 1 — normalize query to bytes
+        # STEP 1 - normalize query to bytes
         needle = self._normalize_query(query, raw=raw)
 
-        # STEP 2 — validate length matches word size
+        # STEP 2 - validate length matches word size
         if len(needle) != self.config.word_size:
             raise ValueError(
                 f"Query length {len(needle)} does not match word size {self.config.word_size}"
             )
 
-        # STEP 3 — regenerate pattern
+        # STEP 3 - regenerate pattern
         pattern = self.generator.create(length)
 
-        # STEP 4 — search
+        # STEP 4 - search
         offset = pattern.find(needle)
         return offset if offset != -1 else None
 
@@ -55,23 +55,23 @@ class OffsetResolver:
         - Raw bytes are treated as memory order
         """
 
-        # CASE 1 — bytes (memory order)
+        # CASE 1 - bytes (memory order)
         if isinstance(query, bytes):
             return query
 
-        # CASE 2 — integer (register value)
+        # CASE 2 - integer (register value)
         if isinstance(query, int):
             b = query.to_bytes(self.config.word_size, "big")
             if not raw and self.config.endianness == "little":
                 b = b[::-1]
             return b
 
-        # CASE 3 — string (assume hex register value)
+        # CASE 3 - string (assume hex register value)
         if isinstance(query, str):
             # TODO:
             # 1. Strip optional "0x"
             # 2. Validate hex string
-            # 3. Convert hex → bytes
+            # 3. Convert hex -> bytes
             # 4. Apply endianness reversal unless raw=True
             # 5. Return bytes
             if query.startswith("0x"):

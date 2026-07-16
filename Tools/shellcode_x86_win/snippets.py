@@ -2,9 +2,9 @@
 Reusable x86 assembly snippet blocks.
 
 Register conventions (all snippets follow these):
-    ESI   socket handle — set before STARTUPINFOA blocks, consumed by bind/listen/accept
-    EDI   STARTUPINFOA pointer — set by startupinfoa blocks, consumed by createprocessa
-    EBX   command string pointer — set by cmd_string, consumed by createprocessa
+    ESI   socket handle - set before STARTUPINFOA blocks, consumed by bind/listen/accept
+    EDI   STARTUPINFOA pointer - set by startupinfoa blocks, consumed by createprocessa
+    EBX   command string pointer - set by cmd_string, consumed by createprocessa
 
 Static snippets are module-level strings ready to paste.
 Parameterized snippets are functions that return strings.
@@ -13,7 +13,7 @@ Parameterized snippets are functions that return strings.
 from .encoding import encode_ip, encode_port
 
 
-# ── Static snippets ────────────────────────────────────────────────────────────
+# -- Static snippets ------------------------------------------------------------
 
 SNIPPET_STARTUPINFOA_SOCKET = """\
 create_startupinfoa:
@@ -78,7 +78,7 @@ create_cmd_string:
     pop   ebx                        # EBX = "cmd.exe\""""
 
 
-# ── Parameterized snippets ─────────────────────────────────────────────────────
+# -- Parameterized snippets -----------------------------------------------------
 
 def snippet_createprocessa(slot: int) -> str:
     """
@@ -179,7 +179,7 @@ def snippet_sockaddr_bind(port: int) -> str:
 
 def snippet_bind_listen_accept(bind_slot: int, listen_slot: int, accept_slot: int) -> str:
     """
-    Call bind(ESI, EDI, 16) → listen(ESI, 0) → accept(ESI, NULL, NULL).
+    Call bind(ESI, EDI, 16) -> listen(ESI, 0) -> accept(ESI, NULL, NULL).
     After accept, ESI = accepted client socket.
     """
     return (

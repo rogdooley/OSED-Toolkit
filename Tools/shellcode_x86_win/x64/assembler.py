@@ -1,5 +1,5 @@
 """
-x64 assembler — thin re-export of shellcode.assembler.assemble64.
+x64 assembler - thin re-export of shellcode.assembler.assemble64.
 Imported here so shellcode.x64 has a self-contained namespace.
 """
 

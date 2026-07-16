@@ -16,8 +16,8 @@ def _assemble(code: str, mode_32: bool) -> tuple:
     """
     Assemble *code* with Keystone.
 
-    mode_32=True  → KS_MODE_32 (x86)
-    mode_32=False → KS_MODE_64 (x64)
+    mode_32=True  -> KS_MODE_32 (x86)
+    mode_32=False -> KS_MODE_64 (x64)
 
     Returns (shellcode_bytearray, instruction_count).
     Raises SystemExit on missing Keystone or assembly error.

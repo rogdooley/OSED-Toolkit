@@ -65,7 +65,7 @@ EXCLUDE = (0x00,)
 def send_trun(payload: bytes) -> None:
     """
     TRUN command framing:  TRUN /.:/<payload>
-    Vulnserver expects the command on one line. No \\r\\n needed —
+    Vulnserver expects the command on one line. No \\r\\n needed -
     the server reads until it has enough data, but adding \\r\\n is safe.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

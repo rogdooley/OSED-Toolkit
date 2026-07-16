@@ -12,7 +12,7 @@ Usage::
 
     result = xor_encode(raw_shellcode, badchars={0x00, 0x0a, 0x0d})
     if result.success:
-        final = result.encoded   # decoder_stub ‖ encoded_payload
+        final = result.encoded   # decoder_stub || encoded_payload
 """
 from __future__ import annotations
 
@@ -32,9 +32,9 @@ class EncoderResult:
     diagnostics: str = ""
 
 
-# ── Decoder stub builder ──────────────────────────────────────────────
+# -- Decoder stub builder ----------------------------------------------
 #
-# Stub layout (small, payload ≤ 255):
+# Stub layout (small, payload <= 255):
 #
 #   [pad]               optional neutral padding (shifts jmp disp)
 #   EB [jmp1]           jmp short call_tag
@@ -193,7 +193,7 @@ def _build_fnstenv_stub(
     # optional padding
     parts.extend([neutral] * pad)
 
-    # add esi, <stub_size> — placeholder, fix after computing total
+    # add esi, <stub_size> - placeholder, fix after computing total
     add_idx = len(parts)
     parts.extend([0x83, 0xC6, 0x00])
 
@@ -226,7 +226,7 @@ def _build_fnstenv_stub(
     # ret
     parts.append(0xC3)
 
-    # Fix the add offset — distance from fldz to end of stub
+    # Fix the add offset - distance from fldz to end of stub
     stub_size = len(parts)
     parts[add_idx + 2] = stub_size & 0xFF
 
@@ -301,7 +301,7 @@ def xor_encode(payload: bytes, badchars: set[int]) -> EncoderResult:
             encoded=b"",
             key=None,
             payload_size=0,
-            diagnostics="Empty payload — nothing to encode.",
+            diagnostics="Empty payload - nothing to encode.",
         )
 
     if plen > 65535:
@@ -318,7 +318,7 @@ def xor_encode(payload: bytes, badchars: set[int]) -> EncoderResult:
             success=False,
             payload_size=plen,
             diagnostics=(
-                "No neutral padding byte available — all NOP-like instructions "
+                "No neutral padding byte available - all NOP-like instructions "
                 "are forbidden. A more advanced encoder is needed."
             ),
         )

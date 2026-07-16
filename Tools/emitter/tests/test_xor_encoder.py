@@ -115,7 +115,7 @@ class TestSuccessfulEncoding:
         assert result.stub_size >= 22
 
     def test_length_with_null_low_byte(self):
-        """Length 256 = 0x0100 has null low byte — should fail with {0x00}."""
+        """Length 256 = 0x0100 has null low byte - should fail with {0x00}."""
         payload = b"\x01" * 256
         result = xor_encode(payload, {0x00})
         assert not result.success

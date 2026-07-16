@@ -108,7 +108,7 @@ def _fmt(badchars: List[int]) -> str:
 
 
 def make_tcp_sender(host: str, port: int) -> Callable[[bytes], None]:
-    """Raw TCP sender — wrap this to add protocol framing (e.g. SMTP PASS, FTP USER)."""
+    """Raw TCP sender - wrap this to add protocol framing (e.g. SMTP PASS, FTP USER)."""
     def send(payload: bytes) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)

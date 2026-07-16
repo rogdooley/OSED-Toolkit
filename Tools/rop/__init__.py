@@ -1,5 +1,5 @@
 """
-Tools.rop — ROP chain planning, validation, and serialization for x86 Windows.
+Tools.rop - ROP chain planning, validation, and serialization for x86 Windows.
 
 Typical usage
 -------------

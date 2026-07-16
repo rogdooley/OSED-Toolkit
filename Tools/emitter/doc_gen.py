@@ -1,6 +1,6 @@
 """Markdown documentation generator for the shellcode emitter.
 
-Pure functions only — no file I/O.  All functions take data objects and
+Pure functions only - no file I/O.  All functions take data objects and
 return strings.
 """
 from __future__ import annotations
@@ -58,7 +58,7 @@ def emit_stack_layout_md(manifest: Manifest, layout: StackLayout) -> str:
     lines.append("")
 
     # --- Export Context (static) ---
-    lines.append("## Export Context (reserved — do not allocate)")
+    lines.append("## Export Context (reserved - do not allocate)")
     lines.append("")
     rows = [[_fmt_offset(offset), desc] for offset, desc in _EXPORT_CONTEXT_ROWS]
     lines.append(_table(["Offset", "Description"], rows))
@@ -161,7 +161,7 @@ def emit_api_contracts_md(manifest: Manifest, layout: StackLayout) -> str:
         else:
             dll_slot = layout.slot(dll)
             lines.append(
-                f"Resolution: `LoadLibraryA(\"{dll}\")` → base stored at `{dll_slot.ebp_ref}`"
+                f"Resolution: `LoadLibraryA(\"{dll}\")` -> base stored at `{dll_slot.ebp_ref}`"
             )
         lines.append("")
 

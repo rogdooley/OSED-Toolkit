@@ -1,5 +1,5 @@
 """
-ChainValidator — validates a symbolic ROP chain before serialization.
+ChainValidator - validates a symbolic ROP chain before serialization.
 
 Returns a list of ValidationIssue; an empty list means the chain is clean.
 All checks are independent; the full list is always returned so the caller
@@ -7,19 +7,19 @@ can see every problem at once.
 
 Checks performed
 ----------------
-MISSING_GADGET      (error)   — GadgetRef or WritablePtr whose name is absent
+MISSING_GADGET      (error)   - GadgetRef or WritablePtr whose name is absent
                                 from the GadgetDB
-BAD_CHARS           (error)   — packed address / value contains a byte present
+BAD_CHARS           (error)   - packed address / value contains a byte present
                                 in the caller's bad-char set
-ZERO_PADDING        (error)   — PaddingBlock with count=0 (constructor-level
+ZERO_PADDING        (error)   - PaddingBlock with count=0 (constructor-level
                                 guard should prevent this, but checked anyway)
-NO_WRITABLE_PTR     (error)   — chain contains no WritablePtr element;
+NO_WRITABLE_PTR     (error)   - chain contains no WritablePtr element;
                                 VirtualProtect needs one for lpflOldProtect
-NULL_BYTE_IN_SIZE   (warning) — negated shellcode size contains a null byte
+NULL_BYTE_IN_SIZE   (warning) - negated shellcode size contains a null byte
                                 (only relevant when bad_chars includes 0x00)
-STACK_ALIGNMENT     (warning) — total chain length is not 16-byte aligned
+STACK_ALIGNMENT     (warning) - total chain length is not 16-byte aligned
                                 (MSVC prologues require 16-byte aligned ESP)
-NO_RETURN_TARGET    (warning) — no ShellcodePtr or jmp-esp gadget reference
+NO_RETURN_TARGET    (warning) - no ShellcodePtr or jmp-esp gadget reference
                                 found; VirtualProtect needs somewhere to return
 """
 
@@ -85,7 +85,7 @@ class ChainValidator:
 
         return issues
 
-    # ── Individual checks ─────────────────────────────────────────────────────
+    # -- Individual checks -----------------------------------------------------
 
     def _check_missing_gadgets(
         self,
@@ -237,7 +237,7 @@ class ChainValidator:
                 code="STACK_ALIGNMENT",
                 message=(
                     f"Chain is {total_dwords} dwords ({total_bytes} bytes); "
-                    "not 16-byte aligned — add padding dwords if the target "
+                    "not 16-byte aligned - add padding dwords if the target "
                     "uses SSE prologues"
                 ),
             )]

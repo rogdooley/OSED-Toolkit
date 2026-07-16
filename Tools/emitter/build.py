@@ -1,4 +1,4 @@
-"""Assembly build pipeline: manifest → generated.asm + generated_contract.md.
+"""Assembly build pipeline: manifest -> generated.asm + generated_contract.md.
 
 Usage:
     uv run emitter manifests/revshell.yaml --template reverse_shell \
@@ -28,7 +28,7 @@ from .payload_templates.base import PayloadTemplate, TemplateConfig
 from Tools.strings import emit_push, to_dwords
 
 # ---------------------------------------------------------------------------
-# Framework stubs — PEB-walk and export-resolution routines.
+# Framework stubs - PEB-walk and export-resolution routines.
 #
 # Layout is null-free: callees are placed before callers so that every
 # `call` instruction uses a negative (backward) relative offset whose
@@ -354,7 +354,7 @@ def _generate_debug_runner(asm: str) -> str:
 Copy this file to the Windows lab VM, then:
   python debug_runner.py
 
-The assembly source is embedded below — edit it directly to experiment.
+The assembly source is embedded below - edit it directly to experiment.
 Requires: pip install keystone-engine
 
 Attach WinDbg before pressing Enter. The shellcode address is printed
@@ -469,8 +469,8 @@ def _to_nasm(asm: str) -> str:
     Differences handled:
     - Prepend 'BITS 32' so nasm knows the mode
     - Strip # and ; comments (may contain non-ASCII decoration)
-    - 'dword/word/byte ptr [...]' → 'dword/word/byte [...]'
-    - 'fs:[...]' → '[fs:...]'  (segment register syntax)
+    - 'dword/word/byte ptr [...]' -> 'dword/word/byte [...]'
+    - 'fs:[...]' -> '[fs:...]'  (segment register syntax)
     """
     lines = ["BITS 32"]
     for line in asm.splitlines():
@@ -665,11 +665,11 @@ def _merge_template_requirements(
     Manifest with any missing API functions auto-added.
 
     Classification of each probed slot name:
-      - In API_DATABASE         → function (auto-add if missing)
-      - In STRUCT_DATABASE      → structure (auto-derived from functions)
-      - In MODULE_LOAD_ORDER    → module base (auto-derived from functions)
-      - Matches a manifest string label or variable → already present
-      - Otherwise               → ignored (optional probe or manifest error)
+      - In API_DATABASE         -> function (auto-add if missing)
+      - In STRUCT_DATABASE      -> structure (auto-derived from functions)
+      - In MODULE_LOAD_ORDER    -> module base (auto-derived from functions)
+      - Matches a manifest string label or variable -> already present
+      - Otherwise               -> ignored (optional probe or manifest error)
 
     Variables are not auto-added because the probe cannot distinguish
     required variables from optional slot lookups guarded by try/except.
@@ -816,7 +816,7 @@ def compose_asm(
     if template is not None:
         parts.append(template.emit(layout, config))
     else:
-        parts += ["; (no template — insert payload assembly here)", ""]
+        parts += ["; (no template - insert payload assembly here)", ""]
 
     parts += [
         "hang:",
@@ -954,7 +954,7 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="emitter-v1: manifest → assembly + contract",
+        description="emitter-v1: manifest -> assembly + contract",
     )
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(

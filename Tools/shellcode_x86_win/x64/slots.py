@@ -16,7 +16,7 @@ class SlotAllocator64:
     Tracks RBP-relative 8-byte slots for saved function pointers.
 
     Layout (negative offsets from RBP):
-        [rbp-0x08]   find_function pointer  — permanently reserved
+        [rbp-0x08]   find_function pointer  - permanently reserved
         [rbp-0x10]   first user slot
         [rbp-0x18]   second user slot
         ...
@@ -64,7 +64,7 @@ class SlotAllocator64:
         return f'-{hex(-offset)}' if offset < 0 else hex(offset)
 
     def as_dict(self) -> dict:
-        """Copy of the name → offset mapping."""
+        """Copy of the name -> offset mapping."""
         return dict(self._map)
 
     def print_map(self):

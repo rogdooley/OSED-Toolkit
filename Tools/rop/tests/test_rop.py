@@ -1,5 +1,5 @@
 """
-Unit tests for Tools.rop — all gadget addresses are fake.
+Unit tests for Tools.rop - all gadget addresses are fake.
 
 No real binary gadgets, no network, no file I/O (except the from_file test
 which uses tmp_path).  Every address is chosen to be null-free so the full
@@ -28,7 +28,7 @@ from Tools.rop.serializer import ChainSerializer, SerializationError
 from Tools.rop.validator import ChainValidator
 
 
-# ── Fake gadget database ──────────────────────────────────────────────────────
+# -- Fake gadget database ------------------------------------------------------
 #
 # Addresses chosen to be:
 #   - Non-zero
@@ -60,7 +60,7 @@ def make_db(extra: dict[str, dict] | None = None) -> GadgetDB:
     return GadgetDB.from_dict(data)
 
 
-# ── GadgetDB ──────────────────────────────────────────────────────────────────
+# -- GadgetDB ------------------------------------------------------------------
 
 
 class TestGadgetDB:
@@ -138,7 +138,7 @@ class TestGadgetDB:
             GadgetDB.from_file(p)
 
 
-# ── ChainElement models ───────────────────────────────────────────────────────
+# -- ChainElement models -------------------------------------------------------
 
 
 class TestChainElementModels:
@@ -179,7 +179,7 @@ class TestChainElementModels:
         assert "element" not in str(vi)
 
 
-# ── RopChain (generic builder) ────────────────────────────────────────────────
+# -- RopChain (generic builder) ------------------------------------------------
 
 
 class TestRopChain:
@@ -247,7 +247,7 @@ class TestRopChain:
         assert rc.dword_count() == 1  # original unchanged
 
 
-# ── VirtualProtectChain ───────────────────────────────────────────────────────
+# -- VirtualProtectChain -------------------------------------------------------
 
 
 class TestVirtualProtectChain:
@@ -323,7 +323,7 @@ class TestVirtualProtectChain:
         assert vp.protect_flags == 0x80
 
 
-# ── ChainValidator ────────────────────────────────────────────────────────────
+# -- ChainValidator ------------------------------------------------------------
 
 
 class TestChainValidator:
@@ -340,7 +340,7 @@ class TestChainValidator:
     def test_full_vp_chain_null_byte_only_from_protect_flags(self) -> None:
         # Gadget addresses are null-free (0x41414141 range).
         # The only null bytes come from the literal RawDword(0x40) pushed for
-        # flNewProtect — 0x40 packed as 4 LE bytes is 0x40 0x00 0x00 0x00.
+        # flNewProtect - 0x40 packed as 4 LE bytes is 0x40 0x00 0x00 0x00.
         # This is expected and is why real exploits need an encoding trick for
         # the protect flags (e.g. neg/not, or build it via inc/shl gadgets).
         db = make_db()
@@ -468,7 +468,7 @@ class TestChainValidator:
         assert {i.element_index for i in bad} == {0, 2}
 
 
-# ── ChainSerializer ───────────────────────────────────────────────────────────
+# -- ChainSerializer -----------------------------------------------------------
 
 
 class TestChainSerializer:
@@ -527,7 +527,7 @@ class TestChainSerializer:
         )
 
 
-# ── DryRunPrinter (smoke test — output correctness checked visually) ───────────
+# -- DryRunPrinter (smoke test - output correctness checked visually) -----------
 
 
 class TestDryRunPrinter:

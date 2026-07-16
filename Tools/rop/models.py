@@ -4,11 +4,11 @@ Symbolic chain element types, Gadget, and ValidationIssue.
 ChainElement is a union of five concrete types that represent everything that
 can appear in a ROP chain before addresses are resolved:
 
-    RawDword      — literal 32-bit constant (flag, size, etc.)
-    GadgetRef     — named gadget resolved from GadgetDB at serialization
-    WritablePtr   — named writable memory location (e.g. lpflOldProtect)
-    ShellcodePtr  — placeholder for the runtime shellcode base address
-    PaddingBlock  — one or more consecutive filler dwords
+    RawDword      - literal 32-bit constant (flag, size, etc.)
+    GadgetRef     - named gadget resolved from GadgetDB at serialization
+    WritablePtr   - named writable memory location (e.g. lpflOldProtect)
+    ShellcodePtr  - placeholder for the runtime shellcode base address
+    PaddingBlock  - one or more consecutive filler dwords
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-# ── Symbolic chain elements ──────────────────────────────────────────────────
+# -- Symbolic chain elements --------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class GadgetRef:
 @dataclass(frozen=True)
 class WritablePtr:
     """
-    Named writable memory location — resolved the same way as a GadgetRef but
+    Named writable memory location - resolved the same way as a GadgetRef but
     carries a distinct type so validators can check it separately.
 
     Typically used for VirtualProtect's *lpflOldProtect* argument.
@@ -94,7 +94,7 @@ class PaddingBlock:
 type ChainElement = RawDword | GadgetRef | WritablePtr | ShellcodePtr | PaddingBlock
 
 
-# ── Gadget record ────────────────────────────────────────────────────────────
+# -- Gadget record ------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -110,7 +110,7 @@ class Gadget:
         return struct.pack("<I", self.address)
 
 
-# ── Validation output ────────────────────────────────────────────────────────
+# -- Validation output --------------------------------------------------------
 
 
 @dataclass(frozen=True)

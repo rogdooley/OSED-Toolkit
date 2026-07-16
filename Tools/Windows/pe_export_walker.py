@@ -1,12 +1,12 @@
 """
 pe_export_walker.py
 -------------------
-Manual PE export resolution for x86/x64 — mirrors exactly what Windows
+Manual PE export resolution for x86/x64 - mirrors exactly what Windows
 loader and position-independent shellcode do.
 
 Supports:
-  - resolve_by_name()   — string match
-  - resolve_by_hash()   — hash-based (avoids embedding strings; AV evasion)
+  - resolve_by_name()   - string match
+  - resolve_by_hash()   - hash-based (avoids embedding strings; AV evasion)
   - forwarded export detection and recursive resolution
   - pluggable read primitives (swap in Frida, ctypes, pwnlib, raw bytes, etc.)
 
@@ -31,7 +31,7 @@ ReadCStr = Callable[[int], bytes]  # addr -> null-terminated bytes
 @dataclass
 class ExportEntry:
     name: str
-    ordinal: int  # biased ordinal (Base + index) — informational only
+    ordinal: int  # biased ordinal (Base + index) - informational only
     ordinal_idx: int  # zero-based index into AddressOfFunctions
     func_rva: int  # raw RVA from AddressOfFunctions
     func_va: int  # module_base + func_rva
@@ -53,7 +53,7 @@ class ExportDirectory:
 
 
 # ---------------------------------------------------------------------------
-# Read primitives — swap these out for your debugger's read functions
+# Read primitives - swap these out for your debugger's read functions
 # ---------------------------------------------------------------------------
 
 
@@ -134,7 +134,7 @@ class PEExportWalker:
         walker = PEExportWalker(rd, rw, rs, base=0x75680000)
         va = walker.resolve_by_name('WinExec')
 
-    Example (Frida / ctypes — replace reads with your primitives):
+    Example (Frida / ctypes - replace reads with your primitives):
         rd = lambda va: struct.unpack('<I', read_process_memory(va, 4))[0]
         rw = lambda va: struct.unpack('<H', read_process_memory(va, 2))[0]
         rs = lambda va: read_cstring_from_process(va)
@@ -164,7 +164,7 @@ class PEExportWalker:
 
         base = self._base
 
-        # DOS header — MZ check + e_lfanew
+        # DOS header - MZ check + e_lfanew
         e_magic = self._rw(base + 0x00)
         if e_magic != 0x5A4D:
             raise ValueError(
@@ -174,7 +174,7 @@ class PEExportWalker:
         e_lfanew = self._rd(base + 0x3C)
         nt_hdrs = base + e_lfanew
 
-        # NT headers — PE signature check
+        # NT headers - PE signature check
         sig = self._rd(nt_hdrs)
         if sig != 0x00004550:
             raise ValueError(f"Bad PE signature: 0x{sig:08x}")
@@ -220,7 +220,7 @@ class PEExportWalker:
     # Internal: check for forwarded export
     #
     # A function RVA that falls inside the export directory's VA range
-    # is NOT code — it's an ASCII forward string, e.g.:
+    # is NOT code - it's an ASCII forward string, e.g.:
     #   "NTDLL.RtlAcquireSRWLockExclusive"
     # ------------------------------------------------------------------
 
@@ -265,7 +265,7 @@ class PEExportWalker:
     def resolve_by_name(self, target: str) -> Optional[ExportEntry]:
         """
         Linear scan of AddressOfNames for exact string match.
-        Returns ExportEntry (may be forwarded — caller decides whether to follow).
+        Returns ExportEntry (may be forwarded - caller decides whether to follow).
         """
         exp = self._get_export_dir()
         for i in range(exp.num_names):
@@ -280,7 +280,7 @@ class PEExportWalker:
         hash_fn: Callable[[bytes], int] = hash_ror13_add,
     ) -> Optional[ExportEntry]:
         """
-        Hash-based resolution — avoids embedding export name strings.
+        Hash-based resolution - avoids embedding export name strings.
         Default hash: ROR-13-ADD (Metasploit / most public shellcode convention).
 
         Example:
@@ -306,7 +306,7 @@ class PEExportWalker:
         return results
 
     def export_dir_info(self) -> dict:
-        """Return parsed export directory fields — mirrors WinDbg's !dh output."""
+        """Return parsed export directory fields - mirrors WinDbg's !dh output."""
         exp = self._get_export_dir()
         return {
             "module_base": f"0x{exp.base:08x}",
@@ -325,7 +325,7 @@ class PEExportWalker:
 # Forwarded export resolver
 #
 # Follows the forward chain across modules.
-# Requires a registry mapping module name (uppercase, no .dll) → PEExportWalker.
+# Requires a registry mapping module name (uppercase, no .dll) -> PEExportWalker.
 # ---------------------------------------------------------------------------
 
 
@@ -404,7 +404,7 @@ def generate_hash_table(
 
 
 # ---------------------------------------------------------------------------
-# Demo — works with raw DLL bytes (no debugger needed)
+# Demo - works with raw DLL bytes (no debugger needed)
 # ---------------------------------------------------------------------------
 
 
@@ -431,7 +431,7 @@ def demo_from_file(dll_path: str, base_va: int = 0x75680000) -> None:
         if entry is None:
             print(f"  {name:<30} NOT FOUND")
         elif entry.forwarded:
-            print(f"  {name:<30} FORWARDED → {entry.forward_str}")
+            print(f"  {name:<30} FORWARDED -> {entry.forward_str}")
         else:
             print(
                 f"  {name:<30} VA=0x{entry.func_va:08x}  RVA=0x{entry.func_rva:05x}  ord={entry.ordinal}"
@@ -446,7 +446,7 @@ def demo_from_file(dll_path: str, base_va: int = 0x75680000) -> None:
     for name, h in hashes.items():
         entry = walker.resolve_by_hash(h)
         if entry:
-            print(f"  0x{h:08x} → {entry.name}")
+            print(f"  0x{h:08x} -> {entry.name}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 """
-shellcode — x86 Windows shellcode building blocks.
+shellcode - x86 Windows shellcode building blocks.
 
 Public API
 ----------

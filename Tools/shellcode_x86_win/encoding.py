@@ -39,7 +39,7 @@ def stack_string_pushes(s: str) -> list:
     Five cases are handled:
       - No nulls in the chunk: plain push <dword>
       - Only trailing null bytes (align padding): mov ax / mov al variants
-      - Single trailing null (high byte): 3× mov-al-shl sequence
+      - Single trailing null (high byte): 3x mov-al-shl sequence
       - Embedded nulls in a non-terminal chunk: warning comment emitted
     """
     data = s.encode('ascii') + b'\x00'

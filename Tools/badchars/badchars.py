@@ -51,7 +51,7 @@ class BadCharAnalyzer:
         j = 0  # index into observed
 
         while i < len(expected):
-            # Case 4 — observed exhausted
+            # Case 4 - observed exhausted
             if j >= len(observed):
                 badchars.update(expected[i:])
                 break
@@ -59,13 +59,13 @@ class BadCharAnalyzer:
             exp = expected[i]
             obs = observed[j]
 
-            # Case 1 — exact match
+            # Case 1 - exact match
             if exp == obs:
                 i += 1
                 j += 1
                 continue
 
-            # Case 2 — observed byte appears later in expected
+            # Case 2 - observed byte appears later in expected
             try:
                 next_match = expected.index(obs, i + 1)
             except ValueError:
@@ -78,7 +78,7 @@ class BadCharAnalyzer:
                 i = next_match
                 continue
 
-            # Case 3 — transformation
+            # Case 3 - transformation
             badchars.add(exp)
             transformed[exp] = obs
             i += 1

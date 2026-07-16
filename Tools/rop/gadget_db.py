@@ -1,5 +1,5 @@
 """
-GadgetDB — loads and queries a user-supplied gadget database.
+GadgetDB - loads and queries a user-supplied gadget database.
 
 JSON schema
 -----------
@@ -15,7 +15,7 @@ JSON schema
     }
 
 Addresses must be non-zero 32-bit values; the tool never generates or guesses
-gadget addresses — every address must come from this file.
+gadget addresses - every address must come from this file.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class GadgetDB:
                     f"Invalid gadget entry '{name}': {exc}"
                 ) from exc
 
-    # ── Constructors ─────────────────────────────────────────────────────────
+    # -- Constructors ---------------------------------------------------------
 
     @classmethod
     def from_file(cls, path: Path | str) -> GadgetDB:
@@ -81,7 +81,7 @@ class GadgetDB:
         """Construct directly from a Python dict (useful for tests)."""
         return cls(data)
 
-    # ── Query interface ───────────────────────────────────────────────────────
+    # -- Query interface -------------------------------------------------------
 
     def get(self, name: str) -> Gadget:
         """

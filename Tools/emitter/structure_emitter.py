@@ -90,7 +90,7 @@ def _emit_process_information(ref: str, offset: int, badchars: set[int]) -> str:
 def _emit_wsadata(ref: str) -> str:
     return "\n".join([
         f"; --- WSADATA at {ref} (0x190 bytes) ---",
-        f"; No initialization needed — WSAStartup writes output to {ref}.",
+        f"; No initialization needed - WSAStartup writes output to {ref}.",
         "",
     ])
 
@@ -107,7 +107,7 @@ def _emit_sockaddr_in(ref: str, offset: int, badchars: set[int]) -> str:
         lines.extend(safe_dword_store("edi", off, "eax", badchars, tmp="ecx"))
     lines.append("")
     # sin_family = AF_INET = 2
-    lines.append("    ; sin_family = AF_INET (byte store — high byte already 0)")
+    lines.append("    ; sin_family = AF_INET (byte store - high byte already 0)")
     lines.extend(safe_byte_store("edi", 0, 0x02, badchars, tmp_reg="al", addr_tmp="ecx"))
     lines += [
         "",

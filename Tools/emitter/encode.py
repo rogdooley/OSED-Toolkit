@@ -327,7 +327,7 @@ def safe_dword_store(
     return lines
 
 
-# ── ebp_ref parsing and high-level ref-based helpers ──────────────────
+# -- ebp_ref parsing and high-level ref-based helpers ------------------
 
 import re as _re
 

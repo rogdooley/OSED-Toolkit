@@ -48,7 +48,7 @@ def test_all_functions_present(revshell_asm, manifest_dir):
 
 
 def test_all_hashes_correct(revshell_asm, manifest_dir):
-    """Verify every hash is present — either as a plain mov or XOR-encoded pair."""
+    """Verify every hash is present - either as a plain mov or XOR-encoded pair."""
     import re
     from Tools.emitter.schema import load
     from Tools.emitter.hash_gen import ror13
@@ -58,7 +58,7 @@ def test_all_hashes_correct(revshell_asm, manifest_dir):
         hex_str = f"0x{expected:08x}"
         if hex_str in revshell_asm:
             continue
-        # Hash was XOR-encoded — find mov+xor pair after the function comment
+        # Hash was XOR-encoded - find mov+xor pair after the function comment
         comment_pos = revshell_asm.index(name)
         block = revshell_asm[comment_pos:comment_pos + 200]
         mov_m = re.search(r'mov\s+eax,\s+0x([0-9a-f]{8})', block)

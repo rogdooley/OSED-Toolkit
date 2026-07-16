@@ -1,5 +1,5 @@
 """
-shellcode.x64 — x64 Windows shellcode building blocks.
+shellcode.x64 - x64 Windows shellcode building blocks.
 
 Public API mirrors shellcode (x86) but all assembly targets 64-bit Windows.
 
@@ -8,16 +8,16 @@ Public API mirrors shellcode (x86) but all assembly targets 64-bit Windows.
 Key differences from shellcode (x86):
   - GS:[0x60] for PEB (not FS:[0x30])
   - Microsoft x64 fastcall: first 4 args in RCX/RDX/R8/R9, 32-byte shadow space
-  - No pushad/popad — registers saved/restored manually
+  - No pushad/popad - registers saved/restored manually
   - 8-byte function pointer slots at negative RBP offsets
   - STARTUPINFOA.cb = 0x68 (not 0x44)
   - 16-byte stack alignment required before every CALL
 
-Hashing and network encoding are shared with the x86 package — they are
+Hashing and network encoding are shared with the x86 package - they are
 pure Python and architecture-independent.
 """
 
-# Shared with x86 — no duplication
+# Shared with x86 - no duplication
 from shellcode.hashing import (
     ror_hash,
     rolxor_hash,

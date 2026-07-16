@@ -26,7 +26,7 @@ class PayloadTemplate(ABC):
 
     Subclasses implement emit() to generate payload-specific assembly.
     The builder auto-derives API and variable requirements by probing
-    emit() with a RecordingLayout — no manual declarations needed.
+    emit() with a RecordingLayout - no manual declarations needed.
 
     Contract: emit() MUST use layout.slot(name).ebp_ref for all stack
     references. Hardcoded [ebp-0xNN] offsets are forbidden.

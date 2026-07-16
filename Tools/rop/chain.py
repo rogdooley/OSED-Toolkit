@@ -1,5 +1,5 @@
 """
-ROP chain builders — symbolic planning, no address resolution.
+ROP chain builders - symbolic planning, no address resolution.
 
 RopChain
     Generic builder: append any ChainElement via fluent push_* methods.
@@ -14,10 +14,10 @@ VirtualProtectChain
         EAX, ECX, EDX, EBX, (pre-PUSHAD) ESP, EBP, ESI, EDI
 
     After ``pushad; ret`` the ret pops EDI into EIP.  The chain sets:
-        EDI = ptr_to_ret  — executes one more ret, landing on ESI
-        ESI = VirtualProtect — called as the next instruction after the second ret
-        EBP = jmp_esp gadget — return address used by VirtualProtect (stdcall)
-        pre-PUSHAD ESP = lpAddress — the address of the pushad gadget's next
+        EDI = ptr_to_ret  - executes one more ret, landing on ESI
+        ESI = VirtualProtect - called as the next instruction after the second ret
+        EBP = jmp_esp gadget - return address used by VirtualProtect (stdcall)
+        pre-PUSHAD ESP = lpAddress - the address of the pushad gadget's next
                          element (the ShellcodePtr), which equals shellcode base
         EBX = dwSize (shellcode size, encoded null-free via negation)
         EDX = flNewProtect (0x40 = PAGE_EXECUTE_READWRITE)
@@ -49,9 +49,9 @@ from Tools.rop.models import (
     WritablePtr,
 )
 
-# PAGE_EXECUTE_READWRITE — the most common DEP bypass protection constant
+# PAGE_EXECUTE_READWRITE - the most common DEP bypass protection constant
 _PAGE_EXECUTE_READWRITE: int = 0x40
-# PAGE_EXECUTE — minimal; use when shellcode does not need to write itself
+# PAGE_EXECUTE - minimal; use when shellcode does not need to write itself
 _PAGE_EXECUTE: int = 0x20
 
 _EXECUTABLE_FLAGS: frozenset[int] = frozenset({_PAGE_EXECUTE, _PAGE_EXECUTE_READWRITE, 0x80})
@@ -74,7 +74,7 @@ VIRTUALPROTECT_REQUIRED_GADGETS: frozenset[str] = frozenset({
 })
 
 
-# ── Generic builder ──────────────────────────────────────────────────────────
+# -- Generic builder ----------------------------------------------------------
 
 
 @dataclass
@@ -94,7 +94,7 @@ class RopChain:
 
     _elements: list[ChainElement] = field(default_factory=list, init=False)
 
-    # ── Append methods ────────────────────────────────────────────────────
+    # -- Append methods ----------------------------------------------------
 
     def push_gadget(self, name: str, purpose: str = "") -> RopChain:
         self._elements.append(GadgetRef(name, purpose))
@@ -126,7 +126,7 @@ class RopChain:
         self._elements.extend(other._elements)
         return self
 
-    # ── Inspection ────────────────────────────────────────────────────────
+    # -- Inspection --------------------------------------------------------
 
     def elements(self) -> list[ChainElement]:
         """Return a shallow copy of the element list."""
@@ -149,7 +149,7 @@ class RopChain:
         return f"RopChain({len(self._elements)} elements, {self.byte_length()} bytes)"
 
 
-# ── VirtualProtect planner ───────────────────────────────────────────────────
+# -- VirtualProtect planner ---------------------------------------------------
 
 
 class VirtualProtectChain:
@@ -199,70 +199,70 @@ class VirtualProtectChain:
         neg_size = (-self.shellcode_size) & 0xFFFFFFFF
 
         chain: list[ChainElement] = [
-            # ── Set up registers for PUSHAD ───────────────────────────────────
+            # -- Set up registers for PUSHAD -----------------------------------
             #
-            # EDI: skeleton ret — after PUSHAD's ret lands here, one more ret
+            # EDI: skeleton ret - after PUSHAD's ret lands here, one more ret
             # hops to ESI (VirtualProtect) with the correct argument frame
             GadgetRef("pop_edi_ret",
                        "load skeleton-ret pointer into EDI"),
             GadgetRef("ptr_to_ret",
-                       "EDI ← address of any ret instruction (PUSHAD trampoline)"),
+                       "EDI <- address of any ret instruction (PUSHAD trampoline)"),
 
             # ESI: VirtualProtect function address (called via the two-ret hop)
             GadgetRef("pop_esi_ret",
                        "load VirtualProtect address into ESI"),
             GadgetRef("virtualprotect_ptr",
-                       "ESI ← VirtualProtect (IAT entry or resolved function)"),
+                       "ESI <- VirtualProtect (IAT entry or resolved function)"),
 
-            # EBP: return target after VirtualProtect returns (jmp esp → shellcode)
+            # EBP: return target after VirtualProtect returns (jmp esp -> shellcode)
             GadgetRef("pop_ebp_ret",
                        "load jmp-esp gadget into EBP"),
             GadgetRef("jmp_esp",
-                       "EBP ← jmp esp (VirtualProtect return target → shellcode)"),
+                       "EBP <- jmp esp (VirtualProtect return target -> shellcode)"),
 
             # EBX: shellcode size via null-free negation trick
-            #   1. pop_eax: EAX ← neg(size)
-            #   2. neg_eax: EAX ← size
-            #   3. xchg:    EBX ← size, EAX ← old EBX (don't care)
+            #   1. pop_eax: EAX <- neg(size)
+            #   2. neg_eax: EAX <- size
+            #   3. xchg:    EBX <- size, EAX <- old EBX (don't care)
             GadgetRef("pop_eax_ret",
                        f"load negated size ({neg_size:#010x}) into EAX"),
             RawDword(neg_size,
-                     f"EAX ← neg({self.shellcode_size:#x}) — null-free size encoding"),
+                     f"EAX <- neg({self.shellcode_size:#x}) - null-free size encoding"),
             GadgetRef("neg_eax_ret",
-                       f"EAX ← {self.shellcode_size:#x} (shellcode size)"),
+                       f"EAX <- {self.shellcode_size:#x} (shellcode size)"),
             GadgetRef("xchg_eax_ebx_ret",
-                       "EBX ← shellcode size (via xchg eax, ebx)"),
+                       "EBX <- shellcode size (via xchg eax, ebx)"),
 
             # EDX: flNewProtect
             GadgetRef("pop_edx_ret",
                        "load flNewProtect into EDX"),
             RawDword(self.protect_flags,
-                     f"EDX ← {self.protect_flags:#x} (PAGE_EXECUTE_READWRITE)"),
+                     f"EDX <- {self.protect_flags:#x} (PAGE_EXECUTE_READWRITE)"),
 
             # ECX: lpflOldProtect (writable static location)
             GadgetRef("pop_ecx_ret",
                        "load writable-ptr address into ECX"),
             WritablePtr("writable_ptr",
-                        "ECX ← lpflOldProtect (static writable dword)"),
+                        "ECX <- lpflOldProtect (static writable dword)"),
 
-            # EAX: 0x90909090 — NOP sled filler.
+            # EAX: 0x90909090 - NOP sled filler.
             # After PUSHAD the EAX slot lands a few bytes before the shellcode
             # base; setting it to NOPs (0x90) means jmp esp enters a sled.
             GadgetRef("pop_eax_ret",
                        "load NOP filler into EAX"),
             RawDword(0x90909090,
-                     "EAX ← 0x90909090 (NOP fill — sled at VirtualProtect return)"),
+                     "EAX <- 0x90909090 (NOP fill - sled at VirtualProtect return)"),
 
-            # ── PUSHAD → triggers VirtualProtect call ─────────────────────────
+            # -- PUSHAD -> triggers VirtualProtect call -------------------------
             # pushad saves all regs to stack, ret hops to EDI (ptr_to_ret),
             # which then rets to ESI (VirtualProtect).
             GadgetRef("pushad_ret",
-                       "pushad + ret → EDI (ptr_to_ret) → ret → ESI (VirtualProtect)"),
+                       "pushad + ret -> EDI (ptr_to_ret) -> ret -> ESI (VirtualProtect)"),
 
-            # ── Shellcode follows immediately ─────────────────────────────────
+            # -- Shellcode follows immediately ---------------------------------
             # The pre-PUSHAD value of ESP equals this element's address,
             # which VirtualProtect receives as lpAddress.
-            ShellcodePtr("shellcode base — pre-PUSHAD ESP == lpAddress arg to VirtualProtect"),
+            ShellcodePtr("shellcode base - pre-PUSHAD ESP == lpAddress arg to VirtualProtect"),
         ]
         return chain
 

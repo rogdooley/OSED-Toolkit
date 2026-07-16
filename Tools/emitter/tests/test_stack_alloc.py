@@ -203,7 +203,7 @@ def test_calc_layout_only_one_module_base(calc_layout):
 
 
 # ---------------------------------------------------------------------------
-# Invariant tests — run against every manifest
+# Invariant tests - run against every manifest
 # ---------------------------------------------------------------------------
 
 

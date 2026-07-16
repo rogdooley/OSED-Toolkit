@@ -1,19 +1,19 @@
 """
-ChainSerializer — converts a symbolic ROP chain to raw bytes.
+ChainSerializer - converts a symbolic ROP chain to raw bytes.
 
 Every ChainElement is resolved to a 4-byte little-endian value:
 
-    RawDword      → struct.pack("<I", value)
-    GadgetRef     → gadget address from GadgetDB
-    WritablePtr   → writable address from GadgetDB
-    ShellcodePtr  → shellcode_addr supplied by the caller
-    PaddingBlock  → value repeated count times
+    RawDword      -> struct.pack("<I", value)
+    GadgetRef     -> gadget address from GadgetDB
+    WritablePtr   -> writable address from GadgetDB
+    ShellcodePtr  -> shellcode_addr supplied by the caller
+    PaddingBlock  -> value repeated count times
 
 ShellcodePtr requires a concrete runtime address.  Pass it via
 ``shellcode_addr``; the serializer raises SerializationError if one is
 present in the chain but the argument is omitted.
 
-Run ChainValidator first — the serializer does not duplicate validation
+Run ChainValidator first - the serializer does not duplicate validation
 logic and will raise GadgetDBError for missing gadgets.
 """
 

@@ -1,4 +1,4 @@
-"""String construction emitter — wraps Tools/strings.py with layout awareness.
+"""String construction emitter - wraps Tools/strings.py with layout awareness.
 
 Option B: for non-push methods, emits `lea edi, [slot]` then delegates to
 strings.py emitters. For push method, emits the push sequence only (ESP = pointer).

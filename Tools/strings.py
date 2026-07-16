@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-strings.py — Shellcode string emitter for OSED exam prep.
+strings.py - Shellcode string emitter for OSED exam prep.
 
 Four emission methods: mov, shiftor, push, xor.
-All methods are null-safe by default — null terminators are handled
+All methods are null-safe by default - null terminators are handled
 without embedding 0x00 in any immediate or encoded byte.
 
 --verify assembles generated ASM with keystone and round-trips
@@ -50,7 +50,7 @@ class EmitResult:
 
 def to_dwords(s: str, pad: bool = True) -> list[int]:
     """
-    Null-terminated ASCII string → list of DWORDs (little-endian).
+    Null-terminated ASCII string -> list of DWORDs (little-endian).
     Padded to DWORD boundary with null bytes.
     """
     data = s.encode("ascii") + b"\x00"
@@ -94,7 +94,7 @@ def null_safe_dword(dw: int) -> tuple[str, list[str]]:
     Strategy: if the DWORD is zero or contains 0x00 bytes, express it as
     a subtraction from a non-null base so no 0x00 appears in the encoding.
 
-        0x00657865  →  mov eax, 0x01667966
+        0x00657865  ->  mov eax, 0x01667966
                        dec eax             ; 0x01667966 - 0x01010101 won't work for all
                                            ; use sub instead
     Simplest universally safe approach:
@@ -247,7 +247,7 @@ def emit_mov(
         raw_bytes = dword_bytes(dw)
 
         if 0x00 in raw_bytes:
-            # Express as encoded+xor pair — no null in either immediate
+            # Express as encoded+xor pair - no null in either immediate
             _, fixup = null_safe_dword(dw)
             lines.extend(fixup)
             lines.append(f"    mov  [{dest}{offset}], eax")
@@ -371,7 +371,7 @@ def emit_shiftor(
     found = check_badchars(all_immediates, badchars)
 
     # shl eax, 8 encodes 0x08 as an imm8 in every shift instruction.
-    # This is a fixed structural immediate — present regardless of string content.
+    # This is a fixed structural immediate - present regardless of string content.
     # Check it explicitly so --badchars 08 is correctly flagged.
     SHIFTOR_FIXED: set[int] = {0x08}
     fixed_hits = sorted(SHIFTOR_FIXED & badchars)
@@ -517,7 +517,7 @@ def emit_xor(
         result_k = try_key(key)
         if result_k is None:
             warnings.append(
-                f"Supplied key {fmt_byte(key)} produces badchars — auto-selecting"
+                f"Supplied key {fmt_byte(key)} produces badchars - auto-selecting"
             )
             key = None
         else:
@@ -533,7 +533,7 @@ def emit_xor(
                 break
         else:
             warnings.append(
-                "No single-byte XOR key found — output may contain badchars"
+                "No single-byte XOR key found - output may contain badchars"
             )
             chosen_key = 0x01
             key_dword = 0x01010101
@@ -590,8 +590,8 @@ def emit_xor(
 
     lines = stub
 
-    # Verify ASM: inline encoded→decoded mov sequence into edi-relative writes
-    # Directly assembleable — no symbolic labels, no placeholder offsets.
+    # Verify ASM: inline encoded->decoded mov sequence into edi-relative writes
+    # Directly assembleable - no symbolic labels, no placeholder offsets.
     verify_lines = []
     for j, dw in enumerate(encoded_dwords):
         verify_lines.append(f"    mov  eax, {fmt_dword(dw)}")
@@ -641,7 +641,7 @@ def print_result(result: EmitResult, badchars: set[int], do_verify: bool) -> Non
 
     if badchars:
         if result.clean:
-            print("\n  [+] Clean — no badchars in generated output")
+            print("\n  [+] Clean - no badchars in generated output")
         else:
             print(
                 f"\n  [-] Badchars: {', '.join(fmt_byte(b) for b in result.badchars)}"
@@ -651,11 +651,11 @@ def print_result(result: EmitResult, badchars: set[int], do_verify: bool) -> Non
         print()
         if result.verify_ok is True:
             print(
-                f'  [+] VERIFY PASS — assembled bytes decode to "{result.verify_got}"'
+                f'  [+] VERIFY PASS - assembled bytes decode to "{result.verify_got}"'
             )
             print("  [+] No null bytes in assembled output")
         elif result.verify_ok is False:
-            print(f"  [-] VERIFY FAIL — {result.verify_error}")
+            print(f"  [-] VERIFY FAIL - {result.verify_error}")
         else:
             print("  [?] Verification not run")
 
@@ -667,7 +667,7 @@ def print_result(result: EmitResult, badchars: set[int], do_verify: bool) -> Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="x86 shellcode string emitter — OSED exam utility",
+        description="x86 shellcode string emitter - OSED exam utility",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Examples:

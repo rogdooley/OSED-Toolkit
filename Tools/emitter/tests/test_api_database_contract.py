@@ -1,7 +1,7 @@
 """Semantic contract tests for API_DATABASE.
 
-These tests assert specific values — module ownership, category, argument count,
-and struct dependencies — for every API that appears in project manifests.
+These tests assert specific values - module ownership, category, argument count,
+and struct dependencies - for every API that appears in project manifests.
 A failing test here means the database has drifted from reality.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ from ..api_database import API_DATABASE
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — process
+# kernel32.dll - process
 # ---------------------------------------------------------------------------
 
 def test_winexec_contract():
@@ -38,7 +38,7 @@ def test_createprocessa_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — library
+# kernel32.dll - library
 # ---------------------------------------------------------------------------
 
 def test_loadlibrarya_contract():
@@ -58,7 +58,7 @@ def test_getprocaddress_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — filesystem
+# kernel32.dll - filesystem
 # ---------------------------------------------------------------------------
 
 def test_copyfile_contract():
@@ -86,7 +86,7 @@ def test_movefilea_contract():
 
 
 # ---------------------------------------------------------------------------
-# ws2_32.dll — network
+# ws2_32.dll - network
 # ---------------------------------------------------------------------------
 
 def test_wsastartup_contract():
@@ -114,7 +114,7 @@ def test_connect_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — memory
+# kernel32.dll - memory
 # ---------------------------------------------------------------------------
 
 def test_virtualalloc_contract():
@@ -134,7 +134,7 @@ def test_virtualprotect_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — process (additional)
+# kernel32.dll - process (additional)
 # ---------------------------------------------------------------------------
 
 def test_createthread_contract():
@@ -154,7 +154,7 @@ def test_getlasterror_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — synchronization
+# kernel32.dll - synchronization
 # ---------------------------------------------------------------------------
 
 def test_waitforsingleobject_contract():
@@ -174,7 +174,7 @@ def test_closehandle_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — filesystem (additional)
+# kernel32.dll - filesystem (additional)
 # ---------------------------------------------------------------------------
 
 def test_readfile_contract():
@@ -202,7 +202,7 @@ def test_gettemppatha_contract():
 
 
 # ---------------------------------------------------------------------------
-# kernel32.dll — library (additional)
+# kernel32.dll - library (additional)
 # ---------------------------------------------------------------------------
 
 def test_getmodulehandlea_contract():
@@ -214,7 +214,7 @@ def test_getmodulehandlea_contract():
 
 
 # ---------------------------------------------------------------------------
-# ws2_32.dll — network (additional)
+# ws2_32.dll - network (additional)
 # ---------------------------------------------------------------------------
 
 def test_bind_contract():

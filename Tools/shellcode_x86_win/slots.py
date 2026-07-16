@@ -25,7 +25,7 @@ class SlotAllocator:
         self._next: int  = start
 
     def alloc(self, name: str) -> int:
-        """Allocate a slot for *name* (idempotent — returns existing if already allocated)."""
+        """Allocate a slot for *name* (idempotent - returns existing if already allocated)."""
         if name not in self._map:
             self._map[name] = self._next
             self._next += 4
@@ -40,7 +40,7 @@ class SlotAllocator:
         return hex(self._map[name])
 
     def as_dict(self) -> dict:
-        """Return a copy of the name→offset mapping."""
+        """Return a copy of the name->offset mapping."""
         return dict(self._map)
 
     def print_map(self):
