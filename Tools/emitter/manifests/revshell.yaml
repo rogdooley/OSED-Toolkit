@@ -1,4 +1,5 @@
 # Reverse shell — kernel32 + ws2_32
+template: reverse_shell
 badchars: ["00", "0a", "0d"]
 
 functions:

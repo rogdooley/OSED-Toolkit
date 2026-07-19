@@ -1,7 +1,7 @@
 """Assembly build pipeline: manifest -> generated.asm + generated_contract.md.
 
 Usage:
-    uv run emitter manifests/revshell.yaml --template reverse_shell \
+    uv run emitter Tools/emitter/manifests/revshell.yaml \
         --lhost 192.168.1.116 --lport 9001 --out emitter_out/
 """
 from __future__ import annotations
@@ -855,7 +855,8 @@ def build(
     config.badchars = manifest.badchars   # manifest is authoritative
     manifest = _apply_config_overrides(manifest, config)
 
-    template = _load_template(template_name) if template_name else None
+    effective_template = template_name or manifest.template
+    template = _load_template(effective_template) if effective_template else None
     if template is not None:
         manifest = _merge_template_requirements(manifest, template, config)
     layout = build_layout(manifest)

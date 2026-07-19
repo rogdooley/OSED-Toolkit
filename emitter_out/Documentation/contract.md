@@ -8,7 +8,7 @@ Generated from manifest.
 
 Frame: `mov ebp, esp` / `add esp, 0xfffffb00` (0x500 bytes reserved)
 
-## Export Context (reserved — do not allocate)
+## Export Context (reserved - do not allocate)
 
 | Offset | Description |
 |--------|-------------|

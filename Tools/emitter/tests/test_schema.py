@@ -135,3 +135,29 @@ def test_variable_slot_before_struct_zone(revshell_layout):
     from Tools.emitter.stack_alloc import STRUCT_ZONE_START
     socket_slot = revshell_layout.slot("socket_handle")
     assert socket_slot.offset + socket_slot.size <= STRUCT_ZONE_START
+
+
+# ---------------------------------------------------------------------------
+# Manifest template field
+# ---------------------------------------------------------------------------
+
+def test_template_loaded_from_manifest(manifest_dir):
+    m = load(str(manifest_dir / "calc.yaml"))
+    assert m.template == "run_command"
+
+
+def test_template_defaults_none(tmp_path):
+    f = tmp_path / "no_tmpl.yaml"
+    f.write_text("badchars: ['00']\nfunctions:\n  - WinExec\nstrings: []\n")
+    m = load(str(f))
+    assert m.template is None
+
+
+def test_unknown_template_raises(tmp_path):
+    f = tmp_path / "bad_tmpl.yaml"
+    f.write_text(
+        "template: fake_template\nbadchars: ['00']\n"
+        "functions:\n  - WinExec\nstrings: []\n"
+    )
+    with pytest.raises(ValueError, match="Unknown template"):
+        load(str(f))

@@ -9,6 +9,10 @@ from .api_database import API_DATABASE, MODULE_LOAD_ORDER
 
 _VALID_METHODS = {"mov", "shiftor", "push", "xor"}
 _VALID_REGS = {"eax", "ebx", "ecx", "edx", "esi", "edi"}
+_VALID_TEMPLATES = {
+    "reverse_shell", "run_command", "copy_file", "copy_then_run",
+    "tcp_download", "tcp_stager", "bind_shell",
+}
 
 
 @dataclass
@@ -30,6 +34,7 @@ class Manifest:
     functions: list[str]
     strings: list[StringEntry]
     variables: list[VariableEntry] = field(default_factory=list)
+    template: str | None = None
 
 
 def load(path: str) -> Manifest:
@@ -119,7 +124,22 @@ def load(path: str) -> Manifest:
         seen_var_names.add(name)
         variables.append(VariableEntry(name=name))
 
+    # --- template ---
+    raw_template = data.get("template", None)
+    template: str | None = None
+    if raw_template is not None:
+        if raw_template not in _VALID_TEMPLATES:
+            errors.append(
+                f"Unknown template: '{raw_template}'. "
+                f"Available: {sorted(_VALID_TEMPLATES)}"
+            )
+        else:
+            template = raw_template
+
     if errors:
         raise ValueError("\n".join(errors))
 
-    return Manifest(badchars=badchars, functions=functions, strings=strings, variables=variables)
+    return Manifest(
+        badchars=badchars, functions=functions, strings=strings,
+        variables=variables, template=template,
+    )
