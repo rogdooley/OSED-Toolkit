@@ -30,8 +30,11 @@ yours to find.
 2. **`WALKTHROUGH.md`** — the tutorial. 14 chapters + 3 appendices, from recon to
    a working VirtualProtect chain, then VirtualAlloc and WriteProcessMemory, then
    what ASLR would break.
-3. **`exploit/exploit.py`** — staged PoC scaffold; fill the gadget table from
-   your build and drive it `trigger → pattern → eip → badchars → rop`.
+3. **`exploit/exploit.py`** — staged PoC scaffold (direct EIP); fill the gadget
+   table from your build and drive it `trigger → pattern → eip → badchars → rop`.
+4. **`solutions/exploit_seh_dep.py`** — SEH + DEP bypass variant; same staged
+   approach but targets `OP_CONFIG_IMPORT` and goes through PPR → short jump →
+   ESP recovery → ROP chain.
 
 ## The five modules (and the lesson each carries)
 
@@ -43,7 +46,9 @@ yours to find.
 | `crypto.dll` | no ASLR, `/Od`, no useful imports | Noise: thin, no API to resolve. |
 | `network.dll` | no ASLR, `/O2`, no VA/VP import | Viable but inferior: good gadgets, wrong imports. |
 
-## The bug
+## The bugs
+
+### Bug 1: Direct EIP overflow (OP_CONFIG_SET)
 
 Reachable only via `OP_CONFIG_SET`, and only after `OP_AUTH`. Buried in
 `parser.c`:
@@ -56,6 +61,18 @@ Two sibling parsers look just as suspicious and are perfectly safe — the
 walkthrough teaches you to tell them apart by *following the bytes*, not by
 grepping for `sscanf`.
 
+### Bug 2: SEH + DEP overflow (OP_CONFIG_IMPORT)
+
+Reachable via `OP_CONFIG_IMPORT` (opcode `0x0022`), also after `OP_AUTH`.
+The parser wraps its work in `__try/__except`, creating an SEH registration
+record on the stack. An unbounded `memcpy` overflows into the SEH record.
+After the overwrite, a read through corrupted data triggers an access
+violation, and the exception dispatcher calls the attacker-controlled handler.
+
+This is the second exploit path: instead of controlling saved EIP directly,
+the attacker controls the SEH handler and must go through `pop;pop;ret` →
+short jump → ESP recovery → ROP chain → DEP bypass.
+
 ## Layout
 
 ```
@@ -63,6 +80,6 @@ vulnsvc-lab/
 ├── README.md  BUILD.md  WALKTHROUGH.md  build.bat
 ├── LICENSE  DISCLAIMER.md
 ├── exploit/exploit.py
-├── solutions/SOLUTIONS.md  solutions/exploit_virtualalloc.py
+├── solutions/SOLUTIONS.md  solutions/exploit_virtualalloc.py  solutions/exploit_seh_dep.py
 └── src/{service,compression,helper,crypto,network}/...
 ```

@@ -49,6 +49,10 @@ int dispatch_request(Client *c, const PACKET_HEADER *hdr, uint8_t *body)
         /* Reachable, but handler enforces c->authenticated first. */
         return handle_config_set(c, body, hdr->body_len);
 
+    case OP_CONFIG_IMPORT:
+        /* SEH-based variant: __try/__except + unbounded copy. */
+        return handle_config_import(c, body, hdr->body_len);
+
     case OP_LOG_UPLOAD:
         return handle_log_upload(c, body, hdr->body_len);
 

@@ -8,6 +8,7 @@
  *   handle_status       -> parse_status_query()   bounded %63s   safe
  *   handle_config_get   table lookup       safe
  *   handle_config_set   -> parse_config_set()     UNBOUNDED %s   *** BUG ***
+ *   handle_config_import -> parse_config_import() UNBOUNDED memcpy + SEH *** BUG ***
  *   handle_log_upload   -> parse_log_upload()     length-checked memcpy  safe
  *   handle_compress     round-trips DLL     safe
  *   handle_stats        counters only       safe
@@ -110,6 +111,26 @@ int handle_config_set(Client *c, const uint8_t *body, uint32_t body_len)
         return send_status(c, ST_BAD_REQUEST, "expected: set <key> <value>");
 
     return send_status(c, ST_OK, "config updated");
+}
+
+/* ---- OP_CONFIG_IMPORT  ***  SEH VULNERABLE PATH  *** ------------------ */
+/*
+ * "Batch config import": accepts a raw blob of key=value pairs. The parser
+ * wraps the parse in __try/__except, which pushes an SEH registration record
+ * onto the stack. The unbounded memcpy in parse_config_import can overwrite
+ * that record, enabling SEH-based exploitation with DEP bypass.
+ *
+ * Like OP_CONFIG_SET, reachable only after OP_AUTH.
+ */
+int handle_config_import(Client *c, const uint8_t *body, uint32_t body_len)
+{
+    if (!c->authenticated)
+        return send_status(c, ST_NOAUTH, "not authenticated");
+
+    if (parse_config_import((const char *)body, (size_t)body_len) != 0)
+        return send_status(c, ST_BAD_REQUEST, "import failed");
+
+    return send_status(c, ST_OK, "config imported");
 }
 
 /* ---- OP_LOG_UPLOAD ---------------------------------------------------- */

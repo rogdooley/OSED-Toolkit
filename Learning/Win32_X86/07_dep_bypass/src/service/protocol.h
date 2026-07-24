@@ -44,6 +44,7 @@ enum {
     OP_CONFIG_SET  = 0x0021,   /* write a config key/value  <-- VULNERABLE */
     OP_LOG_UPLOAD  = 0x0030,   /* upload a log blob (length-checked memcpy)*/
     OP_COMPRESS    = 0x0040,   /* round-trip a blob through compression.dll*/
+    OP_CONFIG_IMPORT = 0x0022, /* batch config import  <-- VULNERABLE (SEH) */
     OP_STATS       = 0x0050,   /* server counters, no attacker input       */
     OP_QUIT        = 0x00FF    /* close the connection                     */
 };

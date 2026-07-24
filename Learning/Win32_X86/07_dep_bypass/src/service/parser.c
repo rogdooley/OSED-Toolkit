@@ -96,6 +96,58 @@ int parse_config_set(const char *body)
     return config_set(name, value);
 }
 
+/* --------------------------------------------------------- BUG (SEH) -- */
+/*
+ * The SEH-path vulnerability.
+ *
+ *   - `body` is fully attacker-controlled (from the OP_CONFIG_IMPORT body).
+ *   - The function wraps the parse in __try/__except, ostensibly to catch
+ *     malformed input gracefully. This creates an SEH registration record
+ *     on the stack.
+ *   - `memcpy` copies `len` bytes into a fixed 256-byte stack buffer with
+ *     no bounds check.
+ *   - After the copy, the function reads through a pointer derived from
+ *     the buffer (treating the first DWORD as a record-count field). When
+ *     the buffer is overflowed, this read hits corrupted memory and
+ *     triggers an access violation.
+ *   - The exception dispatcher walks the SEH chain and finds the
+ *     attacker-overwritten handler pointer.
+ *
+ * Exploit path: overflow buffer -> overwrite nSEH/handler -> trigger
+ * exception -> PPR gadget -> short jump -> ROP chain -> DEP bypass.
+ *
+ * The __try block also means the compiler emits an EXCEPTION_REGISTRATION
+ * record on this function's stack frame, which the overflow can reach.
+ */
+int parse_config_import(const char *body, size_t len)
+{
+    char buf[256];
+    int count;
+    int i;
+    const char *p;
+
+    __try {
+        memcpy(buf, body, len);
+        buf[sizeof(buf) - 1] = '\0';
+
+        count = *(int *)buf;
+        p = buf + 4;
+
+        for (i = 0; i < count && p < buf + sizeof(buf); i++) {
+            char key[64], val[256];
+            if (sscanf(p, "%63s %255s", key, val) == 2)
+                config_set(key, val);
+            p += strlen(p) + 1;
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        log_msg("ERROR", "config import: malformed batch data");
+        return -1;
+    }
+
+    return 0;
+}
+
 /* ------------------------------------------------------------- helper -- */
 /* Bounded auth-line parse used by handle_auth. Safe. */
 int parse_auth_line(const char *body, char *user_out, size_t user_cap)

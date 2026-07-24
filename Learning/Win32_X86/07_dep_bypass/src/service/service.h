@@ -49,6 +49,7 @@ int  handle_auth(Client *c, const uint8_t *body, uint32_t body_len);
 int  handle_status(Client *c, const uint8_t *body, uint32_t body_len);
 int  handle_config_get(Client *c, const uint8_t *body, uint32_t body_len);
 int  handle_config_set(Client *c, const uint8_t *body, uint32_t body_len); /* VULN */
+int  handle_config_import(Client *c, const uint8_t *body, uint32_t body_len); /* VULN SEH */
 int  handle_log_upload(Client *c, const uint8_t *body, uint32_t body_len);
 int  handle_compress(Client *c, const uint8_t *body, uint32_t body_len);
 int  handle_stats(Client *c);
@@ -57,6 +58,7 @@ int  handle_stats(Client *c);
 int  parse_status_query(const char *body);                 /* bounded  (safe) */
 int  parse_log_upload(const char *body, size_t len);       /* checked  (safe) */
 int  parse_config_set(const char *body);                   /* UNBOUNDED (bug) */
+int  parse_config_import(const char *body, size_t len);    /* UNBOUNDED + SEH (bug) */
 int  parse_auth_line(const char *body, char *user_out, size_t user_cap);
 
 /* config.c --------------------------------------------------------------- */

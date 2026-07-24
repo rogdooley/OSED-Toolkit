@@ -48,10 +48,11 @@ restart. `rp++` is optional — only if you want to feed raw gadgets into
 12. [Chapter 2 API: VirtualAlloc](12-virtualalloc.md)
 13. [Chapter 3 API: WriteProcessMemory](13-writeprocessmemory.md)
 14. [What ASLR would have broken](14-aslr-outlook.md)
-15. [Appendix A: gadget table (fill-in)](A-gadget-table.md)
-16. [Appendix B: the complete annotated chain](B-annotated-chain.md)
-17. [Appendix C: challenges](C-challenges.md)
-18. [Appendix D: tooling — the osed-windbg command map](D-tooling-osed-windbg.md)
+15. [SEH + DEP Bypass: the second exploit path](15-seh-dep-bypass.md)
+16. [Appendix A: gadget table (fill-in)](A-gadget-table.md)
+17. [Appendix B: the complete annotated chain](B-annotated-chain.md)
+18. [Appendix C: challenges](C-challenges.md)
+19. [Appendix D: tooling — the osed-windbg command map](D-tooling-osed-windbg.md)
 
 ---
 

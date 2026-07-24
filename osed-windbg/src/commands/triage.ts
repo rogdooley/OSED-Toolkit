@@ -180,38 +180,157 @@ function scanStack(sp: bigint | undefined, size: number): { base?: bigint; bytes
   }
 }
 
-function findShellcodeCandidates(stackBase: bigint | undefined, stackBytes: Uint8Array | undefined): bigint[] {
+type ShellcodeHit = { address: bigint; reason: string };
+
+const SHELLCODE_PROLOGUES: { bytes: number[]; label: string }[] = [
+  { bytes: [0xfc, 0xe8], label: "CLD;CALL stub" },
+  { bytes: [0x64, 0xa1, 0x30, 0x00, 0x00, 0x00], label: "PEB via fs:[0x30]" },
+  { bytes: [0x31, 0xc9, 0xb1], label: "XOR ECX,ECX;MOV CL,N (decoder)" },
+  { bytes: [0x31, 0xc9, 0xb5], label: "XOR ECX,ECX;MOV CH,N (decoder)" },
+  { bytes: [0x89, 0xe5, 0x31, 0xc0], label: "MOV EBP,ESP;XOR EAX,EAX" },
+];
+
+function matchesAt(data: Uint8Array, offset: number, pattern: number[]): boolean {
+  if (offset + pattern.length > data.length) return false;
+  for (let j = 0; j < pattern.length; j += 1) {
+    if (data[offset + j] !== pattern[j]) return false;
+  }
+  return true;
+}
+
+function shannonEntropy(data: Uint8Array, start: number, length: number): number {
+  const counts = new Uint32Array(256);
+  const end = Math.min(start + length, data.length);
+  const n = end - start;
+  if (n <= 0) return 0;
+  for (let i = start; i < end; i += 1) {
+    counts[data[i]] += 1;
+  }
+  let entropy = 0;
+  for (let i = 0; i < 256; i += 1) {
+    if (counts[i] === 0) continue;
+    const p = counts[i] / n;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+function isRepeatingDwords(data: Uint8Array, start: number, length: number): boolean {
+  if (length < 8) return false;
+  const d0 = data[start];
+  const d1 = data[start + 1];
+  const d2 = data[start + 2];
+  const d3 = data[start + 3];
+  for (let i = 4; i < length && start + i + 3 < data.length; i += 4) {
+    if (data[start + i] !== d0 || data[start + i + 1] !== d1 ||
+        data[start + i + 2] !== d2 || data[start + i + 3] !== d3) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isMonotonicBytes(data: Uint8Array, start: number, length: number): boolean {
+  let ascending = 0;
+  const end = Math.min(start + length, data.length);
+  for (let i = start + 1; i < end; i += 1) {
+    if (data[i] === data[i - 1] + 1) ascending += 1;
+  }
+  return ascending > (length - 1) * 0.7;
+}
+
+function countAlignedModulePointers(data: Uint8Array, start: number, length: number): number {
+  let count = 0;
+  for (let i = 0; i + 3 < length; i += 4) {
+    const val = BigInt(data[start + i] | (data[start + i + 1] << 8) |
+                       (data[start + i + 2] << 16) | (data[start + i + 3] << 24)) & BigInt(0xffffffff);
+    if (val > BigInt(0x10000) && findModuleByAddress(val)) count += 1;
+  }
+  return count;
+}
+
+function findShellcodeCandidates(stackBase: bigint | undefined, stackBytes: Uint8Array | undefined): ShellcodeHit[] {
   if (!stackBase || !stackBytes) {
     return [];
   }
 
-  const hits = new Set<bigint>();
+  const seen = new Set<string>();
+  const hits: ShellcodeHit[] = [];
+  const addHit = (offset: number, reason: string) => {
+    const addr = stackBase + BigInt(offset);
+    const key = addr.toString();
+    if (!seen.has(key)) {
+      seen.add(key);
+      hits.push({ address: addr, reason });
+    }
+  };
 
+  // 1. NOP sled detection (>= 8 consecutive 0x90).
   for (let i = 0; i <= stackBytes.length - 8; i += 1) {
     let nopRun = 0;
     for (let j = i; j < stackBytes.length && stackBytes[j] === 0x90; j += 1) {
       nopRun += 1;
     }
     if (nopRun >= 8) {
-      hits.add(stackBase + BigInt(i));
+      addHit(i, `NOP sled (${nopRun} bytes)`);
       i += nopRun;
     }
   }
 
-  for (let i = 0; i <= stackBytes.length - 32; i += 4) {
-    const window = stackBytes.slice(i, i + 32);
-    let zeroes = 0;
-    let printable = 0;
-    for (const b of window) {
-      if (b === 0x00) zeroes += 1;
-      if (b >= 0x20 && b <= 0x7e) printable += 1;
-    }
-    if (zeroes <= 1 && printable <= 8) {
-      hits.add(stackBase + BigInt(i));
+  // 2. JMP/CALL/POP pattern (EB xx ... E8): the encoder stub this toolkit emits.
+  for (let i = 0; i <= stackBytes.length - 6; i += 1) {
+    if (stackBytes[i] !== 0xeb) continue;
+    const jmpDelta: number = stackBytes[i + 1];
+    if (jmpDelta < 4 || jmpDelta > 0x20) continue;
+    const callSite = i + 2 + jmpDelta;
+    if (callSite + 5 > stackBytes.length) continue;
+    if (stackBytes[callSite] === 0xe8) {
+      addHit(i, "JMP/CALL/POP decoder stub");
     }
   }
 
-  return [...hits].sort((a, b) => (a < b ? -1 : 1)).slice(0, 5);
+  // 3. Known shellcode prologues.
+  for (let i = 0; i <= stackBytes.length - 6; i += 1) {
+    for (const prologue of SHELLCODE_PROLOGUES) {
+      if (matchesAt(stackBytes, i, prologue.bytes)) {
+        addHit(i, prologue.label);
+      }
+    }
+  }
+
+  // 4. Egghunter tag: any 4-byte value repeated twice consecutively (W00TW00T pattern).
+  for (let i = 0; i <= stackBytes.length - 8; i += 1) {
+    if (stackBytes[i] === stackBytes[i + 4] &&
+        stackBytes[i + 1] === stackBytes[i + 5] &&
+        stackBytes[i + 2] === stackBytes[i + 6] &&
+        stackBytes[i + 3] === stackBytes[i + 7]) {
+      const d = stackBytes[i] | (stackBytes[i + 1] << 8) | (stackBytes[i + 2] << 16) | (stackBytes[i + 3] << 24);
+      if (d !== 0 && d !== 0x90909090 && (d >>> 0) !== 0xffffffff) {
+        const tag = String.fromCharCode(stackBytes[i], stackBytes[i + 1], stackBytes[i + 2], stackBytes[i + 3]);
+        const isPrintable = [...tag].every(ch => ch.charCodeAt(0) >= 0x20 && ch.charCodeAt(0) <= 0x7e);
+        addHit(i, `egg tag ${isPrintable ? `"${tag}"` : `0x${(d >>> 0).toString(16)}`} x2`);
+      }
+    }
+  }
+
+  // 5. Entropy-based detection with negative filters.
+  const WINDOW = 64;
+  for (let i = 0; i <= stackBytes.length - WINDOW; i += 4) {
+    const entropy = shannonEntropy(stackBytes, i, WINDOW);
+    if (entropy < 4.5 || entropy > 6.5) continue;
+    if (isRepeatingDwords(stackBytes, i, WINDOW)) continue;
+    if (isMonotonicBytes(stackBytes, i, WINDOW)) continue;
+    if (countAlignedModulePointers(stackBytes, i, WINDOW) >= 4) continue;
+    addHit(i, `entropy ${entropy.toFixed(1)} bits/byte`);
+  }
+
+  hits.sort((a, b) => (a.address < b.address ? -1 : 1));
+
+  // Prefer signature-based hits; entropy-only hits fill the remaining slots.
+  const signatures = hits.filter(h => !h.reason.startsWith("entropy"));
+  const entropyOnly = hits.filter(h => h.reason.startsWith("entropy"));
+  const remaining = Math.max(0, 8 - signatures.length);
+  return [...signatures, ...entropyOnly.slice(0, remaining)].slice(0, 8);
 }
 
 function scoreModule(module: ModuleMitigation): number {
@@ -374,7 +493,7 @@ export function createTriageCommand(): Command {
       if (shellcode.length > 0) {
         out.print("Shellcode candidates:");
         for (const candidate of shellcode) {
-          out.print(`  ${out.formatAddress(candidate, pointerSize)}`);
+          out.print(`  ${out.formatAddress(candidate.address, pointerSize)}  ${candidate.reason}`);
         }
       } else {
         out.print("Shellcode candidates: none");
@@ -446,7 +565,7 @@ export function createTriageCommand(): Command {
             sp: regs.sp,
             spName: regs.spName,
             badPointer: badSp === "yes",
-            shellcodeCandidates: shellcode,
+            shellcodeCandidates: shellcode.map(h => ({ address: h.address, reason: h.reason })),
           },
           gadgets,
           modules,

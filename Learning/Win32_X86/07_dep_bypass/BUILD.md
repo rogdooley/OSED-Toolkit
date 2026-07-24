@@ -41,8 +41,11 @@ Key flags explained:
 - **`/NXCOMPAT`** — sets the NX-compatible bit → **DEP is enabled and permanent**
   for the process. This is why you do not need EMET/WDEG here (though the
   walkthrough shows how you *would* enable it externally if it were missing).
-- **`/SAFESEH:NO`** — no SafeSEH table (the bug is a straight stack smash, not
-  an SEH overwrite; a later exercise covers the SEH path).
+- **`/SAFESEH:NO`** — no SafeSEH table. Required for the SEH exploit path
+  (`OP_CONFIG_IMPORT`): the PPR gadget used as the overwritten handler must
+  come from a module without SafeSEH, and service.exe's own addresses carry
+  `0x00` bytes, so the PPR must come from `compression.dll` (also not
+  SafeSEH-registered). The direct-EIP path (`OP_CONFIG_SET`) does not use SEH.
 - **`/GS-`** — no stack cookie on the vulnerable function. `/GS` is a *separate*
   mitigation; disabling it here isolates the DEP lesson. Bypassing `/GS` is its
   own module.
