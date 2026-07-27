@@ -15,7 +15,8 @@ execution) by resolving Win32 API hashes at runtime via PEB walking. This is
 the tool that gets actual use.
 
 **`osed-windbg/`** -- Archived reference snapshot only. The active toolkit now
-lives in the standalone repository and should not be used from this tree.
+lives here: [github.com/rogdooley/osed-windbg](https://github.com/rogdooley/osed-windbg).
+Do not use the archived copy in this tree for new student work.
 
 **`shellforge/`** -- CLI for shellcode analysis: disassembly, bad-character
 detection, entropy measurement, PE export walking, XOR/alphanumeric encoding,
@@ -81,13 +82,13 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-The WinDbg extension is completed in its standalone repository and is not part
-of the active workflow in this tree. Do not use the archived copy here for new
-student work.
+The WinDbg extension is completed in the standalone repository:
+[github.com/rogdooley/osed-windbg](https://github.com/rogdooley/osed-windbg).
+The copy in this tree is archived only.
 
 ## Status
 
-This is a learning repo, not a product. The emitter, the WinDbg extension, and
+This is a learning repo, not a product. The emitter and
 shellforge are the most reliable pieces. Everything else ranges from "works but
 untested" to "abandoned experiment." Contributions are not expected, but if you
 are working through EXP-301 and find something useful, that is the intent.
