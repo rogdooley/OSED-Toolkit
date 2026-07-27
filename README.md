@@ -14,11 +14,8 @@ x86 assembly for common payloads (reverse shell, bind shell, file copy, command
 execution) by resolving Win32 API hashes at runtime via PEB walking. This is
 the tool that gets actual use.
 
-**`osed-windbg/`** -- A WinDbg JavaScript extension for exploit development
-triage. Module/mitigation enumeration, cyclic pattern generation, bad-character
-comparison, ROP gadget scanning with semantic classification, IAT resolution,
-and format-string offset calculation, all from the `dx` evaluator. Has its own
-[README](osed-windbg/README.md) and is published as a standalone project.
+**`osed-windbg/`** -- Archived reference snapshot only. The active toolkit now
+lives in the standalone repository and should not be used from this tree.
 
 **`shellforge/`** -- CLI for shellcode analysis: disassembly, bad-character
 detection, entropy measurement, PE export walking, XOR/alphanumeric encoding,
@@ -84,8 +81,9 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-The WinDbg extension requires no Python environment. Copy `osed-windbg/dist/osed.js`
-to your Windows target and load it with `.scriptload`.
+The WinDbg extension is completed in its standalone repository and is not part
+of the active workflow in this tree. Do not use the archived copy here for new
+student work.
 
 ## Status
 
