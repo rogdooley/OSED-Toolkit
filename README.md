@@ -14,9 +14,8 @@ x86 assembly for common payloads (reverse shell, bind shell, file copy, command
 execution) by resolving Win32 API hashes at runtime via PEB walking. This is
 the tool that gets actual use.
 
-**`osed-windbg/`** -- Archived reference snapshot only. The active toolkit now
+**`osed-windbg`** -- The active toolkit now
 lives here: [github.com/rogdooley/osed-windbg](https://github.com/rogdooley/osed-windbg).
-Do not use the archived copy in this tree for new student work.
 
 **`shellforge/`** -- CLI for shellcode analysis: disassembly, bad-character
 detection, entropy measurement, PE export walking, XOR/alphanumeric encoding,
