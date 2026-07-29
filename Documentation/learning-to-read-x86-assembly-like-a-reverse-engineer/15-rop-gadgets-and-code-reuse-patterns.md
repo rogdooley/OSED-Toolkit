@@ -249,7 +249,7 @@ Given this stack layout after a buffer overflow:
 
 ```text
 ESP+00: 0x10015442   ; pop eax; ret
-ESP+04: 0x00000201   ; -> EAX
+ESP+04: 0x00000040   ; -> EAX (PAGE_EXECUTE_READWRITE)
 ESP+08: 0x10017753   ; pop ecx; ret
 ESP+0C: 0x1002A148   ; -> ECX (writable address in .data)
 ESP+10: 0x1001AABB   ; mov [ecx], eax; ret
@@ -301,17 +301,18 @@ Exercise solution:
 
 Step-by-step trace:
 
-1. `pop eax; ret` at `0x10015442`: EAX = `0x201`, ret to `0x10017753`.
+1. `pop eax; ret` at `0x10015442`: EAX = `0x40`, ret to `0x10017753`.
 2. `pop ecx; ret` at `0x10017753`: ECX = `0x1002A148`, ret to `0x1001AABB`.
-3. `mov [ecx], eax; ret` at `0x1001AABB`: write `0x201` to address
+3. `mov [ecx], eax; ret` at `0x1001AABB`: write `0x40` to address
    `0x1002A148`, ret to `0x10015442`.
 4. `pop eax; ret` at `0x10015442`: EAX = `0x7C801D7B` (VirtualProtect), ret
    to `0x10012345`.
 5. `push eax; ret` at `0x10012345`: push `0x7C801D7B` onto the stack, then
    `ret` pops it and transfers control to `VirtualProtect`.
 
-The chain writes `0x201` (`PAGE_EXECUTE_READWRITE | MEM_COMMIT` flag bits) to
-a writable .data address, then redirects execution to `VirtualProtect`. The
+The chain writes `0x40` (`PAGE_EXECUTE_READWRITE`) to a writable .data
+address, staging it as an argument for `VirtualProtect`, then redirects
+execution to `VirtualProtect`. The
 `push eax; ret` pattern is a standard way to call an API whose address is in a
 register: pushing it makes it the next return address, and `ret` "calls" it.
 

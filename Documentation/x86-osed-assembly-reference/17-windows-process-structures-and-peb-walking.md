@@ -87,7 +87,9 @@ mov esi, [eax+0x14]          ; ESI = Flink (points to first entry's InMemoryOrde
 
 next_module:
     mov ebx, [esi+0x10]      ; EBX = DllBase
-    mov edi, [esi+0x20+0x04] ; EDI = BaseDllName.Buffer (Unicode string)
+    mov edi, [esi+0x28]      ; EDI = BaseDllName.Buffer (Unicode string)
+                              ; BaseDllName is at entry+0x2C; from ESI (at entry+0x08)
+                              ; that is 0x24, plus 0x04 to skip the UNICODE_STRING header
     mov esi, [esi]            ; ESI = Flink (next entry)
     ; compare name at EDI with target module name...
     ; if match: EBX = module base

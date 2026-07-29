@@ -102,8 +102,9 @@ First draw the frame:
 [ebp+8]    arg0: source pointer
 [ebp+4]    return address
 [ebp]      saved EBP
-[ebp-4]    unknown/padding/temp
-[ebp-40h]  local buffer begins
+[ebp-1]    local buffer top (last byte of 0x40-byte memcpy destination)
+[ebp-40h]  local buffer begins (first byte of memcpy destination)
+[ebp-44h]  padding/temp/alignment (4 extra bytes from sub esp, 44h)
 ```
 
 Then separate scaffolding from semantics:

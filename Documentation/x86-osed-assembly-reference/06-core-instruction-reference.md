@@ -150,8 +150,8 @@ neg eax               ; EAX = 0 - EAX  (= ~EAX + 1)
 ```
 
 Sets CF=1 unless operand was 0. Useful for converting between positive and
-negative values without null bytes: `mov eax, -0x1C` encodes nulls, but
-`mov eax, 0xFFFFFFE4` does not.
+negative values without null bytes: `mov eax, 0x1C` encodes nulls
+(`B8 1C 00 00 00`), but `mov eax, 0xFFFFFFE4` followed by `neg eax` does not.
 
 ### MUL -- Unsigned Multiply
 

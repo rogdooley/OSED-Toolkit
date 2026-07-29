@@ -173,10 +173,12 @@ sub_402100:
     push    eax
     call    config_lookup
     add     esp, 4
+    mov     esp, ebp
     pop     ebp
     retn
 fail:
     mov     eax, 0FFFFFFFFh
+    mov     esp, ebp
     pop     ebp
     retn
 ```

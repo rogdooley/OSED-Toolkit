@@ -19,11 +19,14 @@ absolute addresses using the relocation table.
 ## ASLR
 
 Address Space Layout Randomization randomizes the base address of modules,
-stack, and heap each time the process starts. With ASLR:
+stack, and heap. The stack and heap are randomized per process launch.
+System DLL bases (kernel32.dll, ntdll.dll, etc.) are randomized once at
+boot time and remain the same across all processes until the next reboot.
+Application EXEs with `/DYNAMICBASE` may be randomized per launch. With ASLR:
 
-- Gadget addresses change every run
+- Gadget addresses change (per-boot for system DLLs, per-launch for EXEs)
 - Hardcoded addresses in exploits break
-- Each module has an independent random base
+- A leaked DLL base is valid for all processes on the same machine until reboot
 
 ## Fixed vs. Randomized Modules
 
