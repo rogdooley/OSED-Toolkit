@@ -25,5 +25,5 @@ Modules/*
 .pytest_cache/
 .vscode/
 output/
-emitter_out/
+emitter_out/*
 emitter_out.local.bak/
