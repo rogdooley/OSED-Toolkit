@@ -122,6 +122,31 @@ def encode_byte(value: int, badchars: set[int], reg: str = "al") -> list[str]:
     ]
 
 
+# Register tables used by ModRM-aware helpers below.
+_REG_NUM = {
+    "eax": 0, "ecx": 1, "edx": 2, "ebx": 3,
+    "esp": 4, "ebp": 5, "esi": 6, "edi": 7,
+}
+_REG16 = {
+    "eax": "ax", "ecx": "cx", "edx": "dx", "ebx": "bx",
+    "esi": "si", "edi": "di", "esp": "sp", "ebp": "bp",
+}
+
+
+def _modrm_disp8(reg: str, rm_base: str) -> int | None:
+    """Return the ModRM byte for mov [rm_base+disp8], reg (or vice versa).
+
+    Returns None when the encoding is unknown (ESP base needs SIB; unknown reg).
+    The byte is the same whether reg is a source or destination -- only the
+    opcode differs, not the ModRM.
+    """
+    r = _REG_NUM.get(reg)
+    m = _REG_NUM.get(rm_base)
+    if r is None or m is None or m == 4:
+        return None
+    return 0x40 | (r << 3) | m
+
+
 def safe_push_dword(value: int, badchars: set[int]) -> list[str]:
     """Emit a badchar-safe push of a 32-bit immediate via eax."""
     return [*encode_dword(value, badchars, "eax"), "    push eax"]
@@ -156,14 +181,20 @@ def safe_mem_load(
 ) -> list[str]:
     """Emit a badchar-safe memory load: dst = [base + offset].
 
-    offset is signed (negative for [ebp-0x04] style). Checks the actual
-    displacement bytes nasm would emit against badchars.
+    Checks both the displacement bytes and the ModRM byte (e.g. mov eax,
+    [ebp-N] always produces ModRM 0x45 regardless of displacement).
     """
     size_prefix = {"word": "word ptr ", "byte": "byte ptr "}
     pfx = size_prefix.get(width, "")
     fmt = _fmt_offset(offset)
 
-    if not _disp_has_badchar(offset, badchars):
+    disp_dirty = _disp_has_badchar(offset, badchars)
+    modrm_dirty = False
+    if not disp_dirty and offset != 0 and -128 <= offset <= 127:
+        mb = _modrm_disp8(dst, base)
+        modrm_dirty = mb is not None and mb in badchars
+
+    if not disp_dirty and not modrm_dirty:
         return [f"    mov  {dst}, {pfx}[{base}{fmt}]"]
 
     lines = [*encode_dword(offset & 0xFFFFFFFF, badchars, tmp)]
@@ -178,11 +209,18 @@ def safe_mem_store(
 ) -> list[str]:
     """Emit a badchar-safe memory store: [base + offset] = src.
 
-    offset is signed. Checks actual displacement bytes against badchars.
+    Checks both the displacement bytes and the ModRM byte (e.g. mov
+    [ebp-N], eax always produces ModRM 0x45 regardless of displacement).
     """
     fmt = _fmt_offset(offset)
 
-    if not _disp_has_badchar(offset, badchars):
+    disp_dirty = _disp_has_badchar(offset, badchars)
+    modrm_dirty = False
+    if not disp_dirty and offset != 0 and -128 <= offset <= 127:
+        mb = _modrm_disp8(src, base)
+        modrm_dirty = mb is not None and mb in badchars
+
+    if not disp_dirty and not modrm_dirty:
         return [f"    mov  [{base}{fmt}], {src}"]
 
     lines = [*encode_dword(offset & 0xFFFFFFFF, badchars, tmp)]
@@ -210,6 +248,10 @@ def safe_cmp_word(
     """Emit a badchar-safe cmp word ptr [base+offset], value.
 
     Both the offset displacement and the immediate value can contain badchars.
+    When the value is dirty, uses the 16-bit sub-register form (dx/cx) for
+    xor and cmp to prevent nasm from zero-extending immediates to 32 bits and
+    introducing null bytes.  Falls back to sub (opcode 0x2B) instead of cmp
+    (opcode 0x3B) to keep the comparison opcode itself out of the output.
     """
     fmt = _fmt_offset(offset)
     offset_dirty = _disp_has_badchar(offset, badchars)
@@ -235,12 +277,18 @@ def safe_cmp_word(
         m2 = _find_mask_byte((value >> 8) & 0xFF, badchars)
         mask = m1 | (m2 << 8)
         encoded = (value ^ mask) & 0xFFFF
+        tmp16 = _REG16.get(tmp, tmp)
         if not _has_badchar(mask, 2, badchars) and not _has_badchar(encoded, 2, badchars):
-            lines.append(f"    xor  {tmp}, 0x{mask:04x}")
-            lines.append(f"    cmp  {tmp}, 0x{encoded:04x}")
+            # 16-bit form: xor dx, imm16 / cmp dx, imm16 uses 66-prefix + 16-bit
+            # immediate -- no 32-bit zero-extension, no null bytes.
+            lines.append(f"    xor  {tmp16}, 0x{mask:04x}")
+            lines.append(f"    cmp  {tmp16}, 0x{encoded:04x}")
         else:
-            lines.extend(encode_dword(value, badchars, "edx"))
-            lines.append(f"    cmp  {tmp}, edx")
+            # Fallback: encode full value in second register, compare with sub
+            # (opcode 0x2B) instead of cmp (opcode 0x3B).
+            other = "eax" if tmp != "eax" else "edx"
+            lines.extend(encode_dword(value, badchars, other))
+            lines.append(f"    sub  {tmp}, {other}")
     return lines
 
 

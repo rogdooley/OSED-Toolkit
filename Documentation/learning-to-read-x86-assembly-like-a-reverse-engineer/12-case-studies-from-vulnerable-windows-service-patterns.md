@@ -1,4 +1,4 @@
-# Case Studies from Vulnerable Windows Service Patterns
+# 12. Case Studies from Vulnerable Windows Service Patterns
 
 ## Learning objectives
 
@@ -100,6 +100,169 @@ DEP strategy
 A reverse engineer explains the bug as an invariant mismatch. An exploit
 developer turns the mismatch into control: offset, controllable bytes, reliable
 return path, and mitigation bypass.
+
+## Case study 2: SEH-based exploitation
+
+```asm
+sub_402300:
+    push    ebp
+    mov     ebp, esp
+    mov     eax, ___security_cookie
+    xor     eax, ebp
+    mov     [ebp-4], eax               ; store /GS cookie at [ebp-4]
+    push    offset handler_402400      ; SEH handler
+    push    dword ptr fs:[0]           ; previous SEH record
+    mov     fs:[0], esp                ; register exception handler
+    sub     esp, 100h
+    lea     ecx, [ebp-10Ch]            ; local buffer (256 bytes)
+    push    [ebp+0Ch]                  ; attacker-controlled count
+    push    [ebp+8]                    ; attacker-controlled source
+    push    ecx
+    call    _memcpy
+    add     esp, 0Ch
+    ; ... normal processing ...
+    pop     dword ptr fs:[0]           ; restore SEH chain
+    add     esp, 4
+    mov     ecx, [ebp-4]
+    xor     ecx, ebp
+    call    @__security_check_cookie@4 ; verify /GS cookie
+    mov     esp, ebp
+    pop     ebp
+    retn
+```
+
+Stack layout:
+
+```text
+Higher addresses
++--------------------------------------+
+| [ebp+0Ch]   arg1 (count)             |
+| [ebp+08h]   arg0 (source ptr)        |
+| return address                       |
+| saved EBP                   <-- EBP  |
+| /GS cookie        [ebp-04h]          |
+| SEH handler addr   [ebp-08h]         |  <-- EXCEPTION_REGISTRATION_RECORD
+| prev SEH (nSEH)   [ebp-0Ch]          |
+| ... 256 bytes of buffer ...          |
+| buffer start       [ebp-10Ch]        |
++--------------------------------------+
+Lower addresses
+```
+
+### Why SEH wins over /GS
+
+The overflow writes upward from `[ebp-10Ch]`:
+1. Fills 256 bytes of buffer.
+2. Overwrites nSEH at `[ebp-0Ch]` (4 bytes).
+3. Overwrites SEH handler at `[ebp-08h]` (4 bytes).
+4. Overwrites /GS cookie at `[ebp-04h]`.
+5. Overwrites saved EBP and return address.
+
+The /GS cookie check runs in the epilogue AFTER the function returns normally.
+But the overflow may trigger an access violation (writing past the guard page),
+which invokes the SEH handler BEFORE the epilogue runs. The cookie check never
+executes.
+
+### Exploit construction
+
+```text
+Overflow buffer layout:
++--------------------------------------+
+| 256 bytes padding (0x41 * 256)       |
+| nSEH = EB 06 90 90 (short jmp +6)   |
+| SEH  = <POP POP RET from non-SafeSEH module> |
+| 6 bytes alignment padding            |
+| shellcode or ROP chain               |
++--------------------------------------+
+```
+
+When the exception fires:
+1. Windows calls the corrupted SEH handler (POP-POP-RET gadget).
+2. The gadget pops two values and `ret` lands on nSEH.
+3. nSEH contains `EB 06` (short jump forward 6 bytes).
+4. Execution reaches the shellcode after the alignment padding.
+
+### Verify in WinDbg
+
+```
+0:000> !exchain                  ; before overflow: clean chain
+0:000> g                         ; trigger overflow
+0:000> !exchain                  ; after overflow: handler = POP-POP-RET addr
+0:000> bp <pop_pop_ret_addr>     ; break at gadget
+0:000> g
+0:000> p; p; p                   ; step: pop, pop, ret -> lands on nSEH
+0:000> u eip                     ; should show EB 06 (jmp short)
+```
+
+## Case study 3: format string in logging
+
+```asm
+sub_402500:
+    push    ebp
+    mov     ebp, esp
+    sub     esp, 200h
+    mov     eax, [ebp+8]              ; arg0 = client session
+    mov     ecx, [eax+10h]            ; ECX = log message from client buffer
+    lea     edx, [ebp-200h]
+    push    ecx                       ; format string (ATTACKER CONTROLLED)
+    push    edx                       ; destination buffer (512 bytes local)
+    call    _sprintf
+    add     esp, 8
+    lea     edx, [ebp-200h]
+    push    edx
+    call    write_log
+    add     esp, 4
+    mov     esp, ebp
+    pop     ebp
+    retn
+```
+
+### Analysis
+
+The client message at `[session+0x10]` is passed directly as `sprintf`'s
+format string. The programmer intended to log the message as text, but
+`sprintf` interprets it as a format command string.
+
+### What the attacker can do
+
+1. **Read the stack** with `%x` or `%08x`: each specifier reads one dword
+   from the stack above the format string argument. After 3-4 `%x` specifiers,
+   the attacker can see the saved EBP, return address, and /GS cookie.
+
+2. **Write to memory** with `%n`: the specifier writes the number of characters
+   output so far to the address stored in the corresponding stack dword. Using
+   direct parameter access (`%N$n`), the attacker targets a specific stack slot.
+
+3. **Partial writes** with `%hn` (16-bit) or `%hhn` (8-bit) to construct
+   arbitrary values in two or four writes.
+
+### Exploit strategy
+
+```text
+1. Leak stack values:  send "%x.%x.%x.%x.%x.%x.%x.%x"
+   Read response to extract return addresses and cookie.
+
+2. Calculate offsets:  find the stack slot containing a target address
+   (return address, function pointer, or SEH handler).
+
+3. Write payload:      use %hn writes to overwrite the target with shellcode
+   address or ROP gadget, splitting the 32-bit value into two 16-bit writes.
+
+4. Trigger execution:  when the function returns (or exception fires), EIP
+   goes to the overwritten address.
+```
+
+### Verify in WinDbg
+
+```
+0:000> bp app!sub_402500
+0:000> g
+0:000> da poi(ebp+8)+10h         ; view format string content
+0:000> dd esp L20                ; view stack that %x will read
+0:000> bp app!sprintf            ; break inside sprintf
+0:000> g
+0:000> dd esp L8                 ; sprintf args: dest, fmt, ...
+```
 
 ## Common mistakes
 
@@ -372,3 +535,29 @@ Verify:
 - SEH chain position
 - imported API addresses
 - whether a suspicious path is reachable
+
+## Key takeaways
+
+- Real bugs hide behind layers: dispatcher -> handler -> parser -> copy helper.
+  Follow attacker data through each layer, do not stop at the first function.
+- A length check only protects the buffer it compares against. A check proving
+  "copy length <= source length" says nothing about destination capacity.
+- SEH overwrites bypass /GS cookies because the exception handler fires before
+  the epilogue cookie check. Look for SEH registration in functions with buffers.
+- Format string bugs turn string data into arbitrary read/write primitives.
+  Any function that passes attacker data as a format argument is exploitable.
+- Always fill the complete exploit ledger before writing exploit code: data
+  origin, gate conditions, missing invariants, impact, mitigations, bad chars.
+
+## See also
+
+- `x86-osed-assembly-reference/11-buffers-and-stack-overflows.md` -- overflow
+  mechanics, offset calculation, cyclic patterns.
+- `x86-osed-assembly-reference/22-format-string-assembly-concepts.md` -- format
+  specifier behavior and partial-write technique.
+- `osed-reversing-guide/13-worked-example.md` -- full worked reversing example.
+- `DRILLS/stack_overflow.md` -- stack overflow practice drills.
+- `DRILLS/crash_analysis.md` -- crash triage drills.
+- `Tools/exploit/` -- exploit construction framework.
+- `Tools/badchars/` -- bad character identification.
+- `Tools/pattern/` -- cyclic pattern for offset calculation.

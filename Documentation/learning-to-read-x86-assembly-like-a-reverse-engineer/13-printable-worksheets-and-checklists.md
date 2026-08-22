@@ -1,4 +1,4 @@
-# Printable Worksheets and Checklists
+# 13. Printable Worksheets and Checklists
 
 Use these pages while working through unknown functions. They are intentionally
 repetitive. The repetition builds the habit that matters in real reversing:
@@ -525,3 +525,174 @@ One WinDbg command that would verify the main idea:
 
 One exploit question raised by the chapter:
 ```
+
+## Filled-in example: unknown function worksheet
+
+This example shows a completed worksheet for a real analysis, demonstrating the
+level of detail expected.
+
+```text
+Function address/name: sub_401900
+Caller(s): sub_401000 (network handler), sub_401200 (command dispatcher)
+Callee(s): _memcpy, send_status
+
+Boundary:
+  Prologue: push ebp / mov ebp, esp / sub esp, 200h
+  Epilogue: mov esp, ebp / pop ebp / retn
+  Tail calls: none
+  Exception exits: none
+
+Incoming values:
+  [x] stack arguments: [ebp+8] = client object ptr, [ebp+0Ch] = data ptr,
+      [ebp+10h] = data length
+  [ ] register arguments
+  [ ] globals
+  [ ] object fields: [ebp+8]+0x20 = auth flag (byte)
+  [ ] imported/runtime state
+
+Outgoing values:
+  [x] EAX return: 0 success, -1 failure
+  [x] memory writes: memcpy into [ebp-200h] (512-byte local buffer)
+  [ ] global writes
+  [x] calls with modified arguments: send_status(client, message)
+  [ ] indirect control flow
+
+Compiler scaffolding:
+  [ ] saved registers: ESI (used for client pointer)
+  [x] frame allocation: sub esp, 200h
+  [ ] stack cookie: NOT PRESENT
+  [ ] stack probe: not needed (< 4096 bytes)
+  [ ] SEH registration: none
+  [ ] import thunk: _memcpy
+
+One-sentence current hypothesis:
+  Authenticated command handler that copies client data into a local buffer
+  and sends a status response.
+
+Evidence that supports it:
+  - Auth check at [esi+20h] gates the copy path
+  - memcpy destination is a 512-byte local buffer
+  - send_status called with response messages on both paths
+
+Evidence that contradicts or weakens it:
+  - No bounds check on [ebp+10h] before memcpy -- data length is used directly
+    as copy count
+  - No /GS cookie despite 512-byte buffer (older compile? /GS disabled?)
+
+Next verification step:
+  Set breakpoint at memcpy call, send data > 512 bytes, verify overflow occurs.
+  Check whether auth can be bypassed or is obtained via a prior legitimate
+  request.
+```
+
+## Exploit development workflow worksheet
+
+Use this worksheet to track progress through a complete exploit development
+cycle. Each section corresponds to a phase of the OSED exam workflow.
+
+```text
+Target binary:
+Target service/protocol:
+Date started:
+Time spent so far:
+
+=== Phase 1: Reconnaissance ===
+Binary type: [ ] EXE  [ ] DLL  [ ] Service
+Architecture: [ ] x86  [ ] x64
+Protections:
+  ASLR:     [ ] Yes  [ ] No   [ ] Partial (which modules?)
+  DEP/NX:   [ ] Yes  [ ] No
+  SafeSEH:  [ ] Yes  [ ] No   (per module)
+  /GS:      [ ] Yes  [ ] No   (per function)
+  SEHOP:    [ ] Yes  [ ] No
+
+Network protocol: [ ] TCP  [ ] UDP  [ ] Named pipe  [ ] Other
+Port:
+Authentication required: [ ] Yes  [ ] No  [ ] Optional
+Input format:
+
+Non-ASLR modules:
+  Module name    Base address    SafeSEH
+  __________     __________     ________
+
+=== Phase 2: Vulnerability Discovery ===
+recv/ReadFile locations:
+Data flow from input to vulnerable function:
+Vulnerable function:
+Bug class:
+Overflow offset (cyclic pattern):
+Controlled registers at crash:
+Bad characters:
+
+=== Phase 3: Exploit Strategy ===
+Exploit type: [ ] Direct RET overwrite  [ ] SEH overwrite  [ ] Other
+DEP bypass:   [ ] Not needed  [ ] ROP chain  [ ] Other
+Payload space available:
+Egghunter needed: [ ] Yes  [ ] No
+
+=== Phase 4: Exploit Construction ===
+Return address / SEH handler:
+    Source module:
+    Address:
+    Instruction:
+ROP chain (if needed):
+    VirtualProtect / VirtualAlloc address:
+    Key gadgets:
+Shellcode:
+    Type: [ ] Reverse shell  [ ] Bind shell  [ ] Custom
+    Size:
+    Encoder:
+
+=== Phase 5: Verification ===
+Exploit works in debugger: [ ] Yes  [ ] No
+Exploit works standalone:  [ ] Yes  [ ] No
+Shell received:            [ ] Yes  [ ] No
+Screenshot taken:          [ ] Yes  [ ] No
+```
+
+## Practice binary sources
+
+For hands-on practice with these worksheets, use binaries from these sources
+(available on the OSED lab environment or for download):
+
+- **Vulnserver** (by Stephen Bradshaw): a deliberately vulnerable TCP server
+  with multiple exploit paths (TRUN, GMON, KSTET, etc.). Ideal for practicing
+  stack overflow, SEH, and egghunter techniques.
+- **dostackbufferoverflowgood** (by Justin Steven): guided stack buffer
+  overflow tutorial binary.
+- **brainpan**: VulnHub/TryHackMe binary for practicing basic overflow and
+  shellcode.
+- **OSED lab binaries**: the course-provided binaries for each module.
+  Apply these worksheets to every lab exercise.
+- **Exploit-DB applications**: search for Windows x86 applications with known
+  vulnerabilities in the stack overflow or SEH categories.
+
+When using any practice binary, fill out the Unknown Function Worksheet for
+at least three functions before writing exploit code. This builds the analysis
+discipline that separates exam-ready students from those who trial-and-error
+their way through.
+
+## Key takeaways
+
+- Worksheets are not busywork. They enforce the fact-ledger discipline that
+  prevents the most common reversing failure: acting on unproven assumptions.
+
+- Print the worksheets and fill them out by hand during practice. Handwriting
+  forces slower, more deliberate analysis than typing.
+
+- The exploit development workflow worksheet maps directly to the OSED exam
+  structure. Practice filling it out under time pressure.
+
+- Use the daily practice drill (25-minute timebox) to build speed. One
+  function per day, every day, for the duration of your OSED preparation.
+
+## See also
+
+- Chapter 0 (Preface) -- study method and four-pass reading strategy
+- Chapter 10 (Methodology) -- the 9-step analysis process these worksheets
+  support
+- Chapter 11 (Exploit-oriented reading) -- exploit triage checklist
+- Chapter 12 (Case studies) -- worked examples using these worksheet patterns
+- `DRILLS/` directory -- drill templates organized by skill area
+- `Tools/` directory -- automation tools for bad characters, patterns, and
+  exploit construction

