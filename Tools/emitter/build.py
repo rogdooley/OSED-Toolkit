@@ -1002,6 +1002,43 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_lhost(lhost: str) -> str:
+    """Return an IPv4 address for lhost.
+
+    Accepts either a dotted-decimal address or a network interface name
+    (e.g. tun0, eth0).  Raises SystemExit with a clear message on failure.
+    """
+    import socket as _socket
+
+    # Already a valid IPv4 address -- use it directly.
+    try:
+        _socket.inet_pton(_socket.AF_INET, lhost)
+        return lhost
+    except OSError:
+        pass
+
+    # Treat as interface name and resolve via ioctl (Linux/macOS).
+    try:
+        import fcntl
+        import struct
+        import sys as _sys
+        _SIOCGIFADDR = 0xc0206921 if _sys.platform == "darwin" else 0x8915
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
+            ifreq = struct.pack("256s", lhost[:15].encode())
+            result = fcntl.ioctl(_s.fileno(), _SIOCGIFADDR, ifreq)
+            # Linux: IP at bytes 20-24; macOS ifreq_addr starts at byte 4
+            ip_bytes = result[20:24] if _sys.platform != "darwin" else result[4:8]
+            return _socket.inet_ntoa(ip_bytes)
+    except ImportError:
+        pass
+    except OSError as exc:
+        print(f"[-] --lhost {lhost!r}: interface not found or has no IPv4 address ({exc})", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[-] --lhost {lhost!r}: not a valid IPv4 address and interface lookup not supported on this platform", file=sys.stderr)
+    sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="emitter-v1: manifest -> assembly + contract",
@@ -1012,7 +1049,8 @@ def main() -> None:
         choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "tcp_download", "tcp_stager", "bind_shell"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
-    parser.add_argument("--lhost", default="127.0.0.1")
+    parser.add_argument("--lhost", default="127.0.0.1", metavar="IP|IFACE",
+                        help="Listener IP address or interface name (e.g. tun0, eth0)")
     parser.add_argument("--lport", type=int, default=4444)
     parser.add_argument("--command", default=None)
     parser.add_argument("--src", default=None)
@@ -1025,7 +1063,7 @@ def main() -> None:
 
     args = parser.parse_args()
     config = TemplateConfig(
-        lhost=args.lhost,
+        lhost=_resolve_lhost(args.lhost),
         lport=args.lport,
         command=args.command,
         src_path=args.src,
