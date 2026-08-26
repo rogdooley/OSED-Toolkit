@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pefile>=2024.8.26",
     "pydantic>=2.11.7",
     "pyyaml>=6.0.2",
     "rich>=14.2.0",
@@ -13,11 +14,13 @@ dependencies = [
 
 [project.optional-dependencies]
 disasm = ["capstone>=5.0.6"]
+peinfo = ["lief>=0.16.0"]
 
 [project.scripts]
 shellforge = "shellforge.cli:main"
 value-convert = "Tools.Value_Conversion_Scripts.cli:main"
 emitter = "Tools.emitter.build:main"
+peinfo = "Tools.peinfo.cli:main"
 
 [build-system]
 requires = ["setuptools"]
