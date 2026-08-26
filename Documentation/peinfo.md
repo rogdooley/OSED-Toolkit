@@ -186,12 +186,39 @@ The full `PEReport` dataclass serializes to JSON via `dataclasses.asdict()`.
 
 ---
 
+## Portable bundle (air-gapped / exam machines)
+
+peinfo can be packaged into a self-contained zip that runs on a Windows
+machine with nothing but Python installed -- no pip, no internet.
+
+**On your Linux/macOS prep machine (with internet):**
+
+```bash
+python -m Tools.peinfo.bundle -o peinfo_portable.zip
+```
+
+**On the target Windows machine:**
+
+1. Copy `peinfo_portable.zip` over
+2. Extract it
+3. Run:
+
+```
+python peinfo_portable\peinfo.py target.exe
+```
+
+The bundle vendors `pefile` (pure Python, ~77 KB total zip).  If `rich` happens
+to be installed on the target, you get colored output; otherwise it falls back
+to plain text automatically.  No configuration, no install step.
+
+---
+
 ## Dependencies
 
-- `pefile` -- PE parsing (core dependency, installed automatically)
+- `pefile` -- PE parsing (core dependency, installed automatically; vendored in portable bundle)
 - `capstone` -- disassembly (optional, `pip install osed-toolkit[disasm]`)
 - `lief` -- richer PE parsing and editing (optional, `pip install osed-toolkit[peinfo]`)
-- `rich` -- terminal formatting (core dependency)
+- `rich` -- terminal formatting (optional -- graceful fallback to plain text if absent)
 
 ---
 

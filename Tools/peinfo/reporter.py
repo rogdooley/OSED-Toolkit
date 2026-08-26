@@ -8,12 +8,16 @@ from __future__ import annotations
 
 from typing import Optional
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-
 from .analyzer import PEReport
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    _HAS_RICH = True
+except ImportError:
+    _HAS_RICH = False
 
 YES = "[green]Yes[/green]"
 NO = "[red]No[/red]"
@@ -29,6 +33,10 @@ def bool_indicator(val: Optional[bool], invert: bool = False) -> str:
 
 
 def format_report(report: PEReport, console: Optional[Console] = None) -> None:
+    if not _HAS_RICH:
+        print(format_plain(report))
+        return
+
     if console is None:
         console = Console()
 

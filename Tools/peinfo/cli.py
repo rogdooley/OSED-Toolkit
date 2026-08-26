@@ -53,10 +53,14 @@ def main(argv: list[str] | None = None) -> None:
         from .reporter import format_plain
         print(format_plain(report))
     else:
-        from .reporter import format_report
-        from rich.console import Console
-        console = Console()
-        format_report(report, console)
+        try:
+            from rich.console import Console
+            from .reporter import format_report
+            console = Console()
+            format_report(report, console)
+        except ImportError:
+            from .reporter import format_plain
+            print(format_plain(report))
 
 
 if __name__ == "__main__":
