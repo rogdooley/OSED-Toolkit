@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.99 scan initiated Sun Jul 26 15:16:10 2026 as: /usr/lib/nmap/nmap -&#45;privileged -T4 -p- -vv -oA server 192.168.1.114 -->
+<nmaprun scanner="nmap" args="/usr/lib/nmap/nmap -&#45;privileged -T4 -p- -vv -oA server 192.168.1.114" start="1785093370" startstr="Sun Jul 26 15:16:10 2026" version="7.99" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="65535" services="1-65535"/>
+<verbose level="2"/>
+<debugging level="0"/>
+<taskbegin task="ARP Ping Scan" time="1785093370"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.1.114" addrtype="ipv4"/>
+<address addr="46:53:4F:4D:F5:F5" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<taskend task="ARP Ping Scan" time="1785093372" extrainfo="1 total hosts"/>
+<taskbegin task="Parallel DNS resolution of 1 host." time="1785093372"/>
+<taskend task="Parallel DNS resolution of 1 host." time="1785093372"/>
+<taskbegin task="SYN Stealth Scan" time="1785093372"/>
+<taskend task="SYN Stealth Scan" time="1785093401" extrainfo="65535 total ports"/>
+<host starttime="1785093372" endtime="1785093401"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.1.114" addrtype="ipv4"/>
+<address addr="46:53:4F:4D:F5:F5" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<ports><extraports state="closed" count="65522">
+<extrareasons reason="reset" count="65522" proto="tcp" ports="1-134,136-138,140-444,446-3388,3390-5039,5041-9998,10000-49663,49671-65535"/>
+</extraports>
+<port protocol="tcp" portid="135"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="msrpc" method="table" conf="3"/></port>
+<port protocol="tcp" portid="139"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="netbios-ssn" method="table" conf="3"/></port>
+<port protocol="tcp" portid="445"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="microsoft-ds" method="table" conf="3"/></port>
+<port protocol="tcp" portid="3389"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ms-wbt-server" method="table" conf="3"/></port>
+<port protocol="tcp" portid="5040"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="9999"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="abyss" method="table" conf="3"/></port>
+<port protocol="tcp" portid="49664"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49665"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49666"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49667"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49668"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49669"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+<port protocol="tcp" portid="49670"><state state="open" reason="syn-ack" reason_ttl="128"/></port>
+</ports>
+<times srtt="12402" rttvar="1213" to="100000"/>
+</host>
+<runstats><finished time="1785093402" timestr="Sun Jul 26 15:16:42 2026" summary="Nmap done at Sun Jul 26 15:16:42 2026; 1 IP address (1 host up) scanned in 31.15 seconds" elapsed="31.15" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>
