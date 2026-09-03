@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"osed/recon/internal/peobj"
@@ -102,6 +103,102 @@ func PEText(w io.Writer, r *peobj.Report) {
 		p("  Obstacles:")
 		for _, x := range e.Warnings {
 			p("    - %s", x)
+		}
+	}
+}
+
+// PEMarkdown writes the report as GitHub-flavored Markdown, for pasting into
+// notes or an exam report.
+func PEMarkdown(w io.Writer, r *peobj.Report) {
+	p := func(format string, a ...any) { fmt.Fprintf(w, format+"\n", a...) }
+
+	p("# PE Report: %s\n", filepath.Base(r.File.Path))
+	p("`%s`\n", r.File.Path)
+
+	p("## File\n")
+	p("| Field | Value |")
+	p("| --- | --- |")
+	p("| Machine | %s |", r.File.Machine)
+	p("| Subsystem | %s |", r.File.Subsystem)
+	p("| Linker | %s |", r.File.LinkerVersion)
+	p("| Timestamp | %s |", r.File.Timestamp)
+	p("| Size | %d bytes |", r.File.Size)
+	p("| 64-bit | %v |", r.File.Is64)
+
+	p("\n## Mitigations\n")
+	p("| Mitigation | State |")
+	p("| --- | --- |")
+	m := r.Mitigations
+	p("| ASLR (DYNAMIC_BASE) | %s |", yn(m.DynamicBase))
+	p("| DEP (NX_COMPAT) | %s |", yn(m.NXCompat))
+	p("| SafeSEH | %s |", tri(m.SafeSEH))
+	p("| NO_SEH | %s |", yn(m.NoSEH))
+	p("| GS cookie | %s |", tri(m.GSCookie))
+	p("| CFG (GUARD_CF) | %s |", yn(m.GuardCF))
+	p("| Relocations | %s |", yn(m.Relocations))
+
+	l := r.MemoryLayout
+	p("\n## Memory layout\n")
+	p("- Image base: `0x%08X`", l.ImageBase)
+	p("- Entry point: `0x%08X` (RVA `0x%X`)", l.EntryPoint, l.EntryRVA)
+	p("- Image size: `0x%X`", l.ImageSize)
+
+	p("\n## Sections\n")
+	p("| Name | VAddr | VSize | Entropy | Perms |")
+	p("| --- | --- | --- | --- | --- |")
+	for _, s := range r.Sections {
+		perms := permStr(s.Readable, s.Writable, s.Executable)
+		if s.Writable && s.Executable {
+			perms += " (W+X)"
+		}
+		p("| %s | `0x%08X` | `0x%X` | %.2f | %s |", s.Name, s.VirtAddr, s.VirtSize, s.Entropy, perms)
+	}
+
+	p("\n## Categorized imports\n")
+	if len(r.Categorized) == 0 {
+		p("_none matched_")
+	}
+	for _, cat := range []string{"exploitation", "dangerous_crt", "networking", "file_io", "process", "registry", "crypto"} {
+		if names := r.Categorized[cat]; len(names) > 0 {
+			p("- **%s**: %s", cat, strings.Join(names, ", "))
+		}
+	}
+
+	g := r.Gadgets
+	p("\n## Gadget pre-count (x86 byte scan)\n")
+	p("| Gadget | Count |")
+	p("| --- | --- |")
+	for _, kv := range []struct {
+		k string
+		v int
+	}{
+		{"ret", g.Ret}, {"pop; ret", g.PopRet}, {"pop; pop; ret", g.PopPopRet},
+		{"jmp esp", g.JmpEsp}, {"call esp", g.CallEsp}, {"push esp; ret", g.PushEspRet},
+		{"pushad; ret", g.PushadRet}, {"xchg eax,esp; ret", g.XchgEaxEsp}, {"add esp,x; ret", g.AddEspRet},
+	} {
+		p("| %s | %d |", kv.k, kv.v)
+	}
+
+	if len(r.Strings) > 0 {
+		p("\n## Interesting strings\n")
+		for _, s := range r.Strings {
+			p("- `%s`", s)
+		}
+	}
+
+	e := r.Exploitability
+	p("\n## Exploitability\n")
+	p("**Score %d - ROP candidate: %s**\n", e.Score, yn(e.ROPCandidate))
+	if len(e.Reasons) > 0 {
+		p("Favorable:")
+		for _, x := range e.Reasons {
+			p("- %s", x)
+		}
+	}
+	if len(e.Warnings) > 0 {
+		p("\nObstacles:")
+		for _, x := range e.Warnings {
+			p("- %s", x)
 		}
 	}
 }

@@ -22,10 +22,12 @@ import (
 const usage = `recon - OSED static analysis and triage aid
 
 usage:
-  recon pe [--json] <file>       static PE analysis (mitigations, imports, gadgets)
-  recon triage [--json] <file>   disassembly-driven function ranking (planned)
-  recon cdb [--json] <dump.txt>  rank functions from a cdb text dump (planned)
+  recon pe [--json|--md] <file>            static PE analysis (mitigations, imports, gadgets)
+  recon triage [--json|--md] [--top N] <file>   disassembly-driven function ranking
+  recon cdb [--json|--md] [--top N] [dump]      rank functions from a cdb text dump (or stdin)
   recon version
+
+Output: default is aligned text; --md is Markdown (for reports/notes); --json for tooling.
 
 Build a Win10 x86 exe:
   GOOS=windows GOARCH=386 go build -o recon.exe .

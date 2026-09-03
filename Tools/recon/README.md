@@ -17,25 +17,32 @@ in WinDbg (`uf <addr>`) instead of reading the whole binary.
 | `recon triage <file>` | PE on disk | Recursive-descent disassembly, call graph, IAT resolution, and per-function ranking by dangerous sinks, input sources, stack-frame size and inline copies. |
 | `recon cdb <dump.txt>` | headless-cdb text | Same ranking, driven from a WinDbg/cdb `uf` dump. Use when the target is packed/stripped and the static sweep under-recovers, or when you want to rank on your Kali box from a dump made on the exam box. |
 
-All three take `--json` for machine-readable output. `triage`/`cdb` take
-`--top N` (0 = all).
+All three default to aligned text, take `--md` for Markdown (paste into notes
+or an exam report) and `--json` for tooling. `triage`/`cdb` take `--top N`
+(0 = all).
 
 ## Two runtimes, one score
 
 `triage` and `cdb` are two frontends over the same ranking core
 (`internal/analysis`), so they agree on how a function is scored:
 
-- dangerous copy/format sink (`strcpy`, `sprintf`, `memcpy`, ...): +5
-- input source (`recv`, `WSARecv`, `ReadFile`, ...): +4
-- **source and sink in the same function** (classic remote overflow): +4 bonus
-- format-string family call: +2
-- **format-family call with a non-constant format string** (no string pushed
-  just before the call, i.e. the format is attacker-influenced - OSED modules
-  12-13): +4 bonus
+- **unbounded copy/format** (`strcpy`, `strcat`, `sprintf`, `gets`, ...): +6
+- bounded copy (`strncpy`, `memcpy`, `memmove`, ...): +2 (only if no unbounded)
+- reads attacker input (`recv`, `WSARecv`, `ReadFile`, `fread`, ...): +3 -
+  socket/bind/listen/accept are connection *setup*, not input, and score nothing
+- **input reaches an unbounded copy** - directly, or through the call graph
+  from an input-reading ancestor - the classic overflow shape: +5 bonus
+- **format-family call with a non-constant format string** (the format is
+  attacker-influenced - OSED modules 12-13): +4 bonus; a plain format sink: +1
 - inline `rep movs`/`stos`: +2
 - large stack frame (room for an overflowable local buffer): +1 / +3
+- calls a memory/exec primitive (`VirtualProtect`/`VirtualAlloc`/...): +1
+- high fan-in helper (>=6 callers, no input read): -3 (down-weights runtime plumbing)
 
-Bare `jmp [IAT]` thunks are dropped from the ranked view.
+Bare `jmp [IAT]` thunks are dropped from the ranked view. The copy weights and
+the interprocedural reachability are tuned against real targets (vulnserver):
+the actual `strcpy` command handlers rank at the top, the `recv` dispatcher just
+below, and boilerplate (`main`) and CRT/runtime helpers sink to the bottom.
 
 `triage` also resolves and prints, per function: referenced string literals
 (format strings, command strings, protocol tokens - the fastest way to tell

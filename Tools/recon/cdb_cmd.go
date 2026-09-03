@@ -12,7 +12,8 @@ import (
 
 func runCDB(args []string) int {
 	fs := flag.NewFlagSet("cdb", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "emit JSON instead of text")
+	asJSON := fs.Bool("json", false, "emit JSON")
+	asMD := fs.Bool("md", false, "emit Markdown")
 	top := fs.Int("top", 40, "max ranked functions to print (0 = all)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -33,13 +34,16 @@ func runCDB(args []string) int {
 	}
 
 	ranked := analysis.Rank(cdb.Parse(in))
-	if *asJSON {
+	switch {
+	case *asJSON:
 		if err := report.TriageJSON(os.Stdout, ranked); err != nil {
 			fmt.Fprintf(os.Stderr, "recon cdb: %v\n", err)
 			return 1
 		}
-		return 0
+	case *asMD:
+		report.TriageMarkdown(os.Stdout, ranked, *top)
+	default:
+		report.TriageText(os.Stdout, ranked, *top)
 	}
-	report.TriageText(os.Stdout, ranked, *top)
 	return 0
 }

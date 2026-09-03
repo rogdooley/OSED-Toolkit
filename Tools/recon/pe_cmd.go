@@ -11,12 +11,13 @@ import (
 
 func runPE(args []string) int {
 	fs := flag.NewFlagSet("pe", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "emit JSON instead of text")
+	asJSON := fs.Bool("json", false, "emit JSON")
+	asMD := fs.Bool("md", false, "emit Markdown")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: recon pe [--json] <file>")
+		fmt.Fprintln(os.Stderr, "usage: recon pe [--json|--md] <file>")
 		return 2
 	}
 	rep, err := peobj.Analyze(fs.Arg(0))
@@ -24,13 +25,16 @@ func runPE(args []string) int {
 		fmt.Fprintf(os.Stderr, "recon pe: %v\n", err)
 		return 1
 	}
-	if *asJSON {
+	switch {
+	case *asJSON:
 		if err := report.PEJSON(os.Stdout, rep); err != nil {
 			fmt.Fprintf(os.Stderr, "recon pe: %v\n", err)
 			return 1
 		}
-		return 0
+	case *asMD:
+		report.PEMarkdown(os.Stdout, rep)
+	default:
+		report.PEText(os.Stdout, rep)
 	}
-	report.PEText(os.Stdout, rep)
 	return 0
 }

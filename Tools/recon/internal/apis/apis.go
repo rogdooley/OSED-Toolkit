@@ -129,21 +129,45 @@ func Category(name string) string {
 	return ""
 }
 
-// SinkWeight returns a scoring weight for a called API, used to rank
-// functions by exploitability signal. Higher is more interesting.
-func SinkWeight(name string) int {
-	switch {
-	case DangerousCRT[name]:
-		return 5
-	case Networking[name]:
-		return 4
-	case Exploitation[name]:
-		return 3
-	case FileIO[name]:
-		return 1
-	}
-	return 0
-}
+// The sets below drive per-function ranking (analysis package). They are
+// finer-grained than the report categories above: real triage cares whether a
+// copy is bounded, and whether a "networking" call actually reads attacker
+// bytes or is just connection setup.
+
+// UnboundedCopy: copy/format routines with no destination length - the primary
+// stack-overflow sinks. A function calling one of these is the prime suspect.
+var UnboundedCopy = set(
+	"strcpy", "strcat", "lstrcpyA", "lstrcpyW", "lstrcatA", "lstrcatW",
+	"wcscpy", "wcscat", "gets", "_gets",
+	"sprintf", "vsprintf", "swprintf", "wsprintfA", "wsprintfW", "wvsprintfA", "wvsprintfW",
+	"scanf", "sscanf", "fscanf",
+)
+
+// BoundedCopy: length-taking copies. Still dangerous (wrong length, off-by-one)
+// but a weaker signal than an unbounded copy.
+var BoundedCopy = set(
+	"strncpy", "strncat", "wcsncpy", "wcsncat",
+	"memcpy", "memmove", "wmemcpy", "CopyMemory", "RtlCopyMemory", "_snprintf",
+)
+
+// InputRead: functions that actually read attacker-controlled bytes. Only these
+// count as an input "source"; socket/bind/listen/accept are connection setup,
+// not input, and must not make a boilerplate function look like a handler.
+var InputRead = set(
+	"recv", "recvfrom", "WSARecv", "WSARecvFrom",
+	"ReadFile", "ReadFileEx", "InternetReadFile",
+	"fread", "read", "_read", "ReadConsoleA", "ReadConsoleW",
+)
+
+// ExecPrimitive: the memory/exec primitives that matter for a working exploit.
+// A deliberately small subset of Exploitation (Heap* etc. are too common to
+// carry ranking signal).
+var ExecPrimitive = set(
+	"VirtualProtect", "VirtualProtectEx", "VirtualAlloc", "VirtualAllocEx",
+	"WriteProcessMemory", "WinExec", "system",
+	"CreateProcessA", "CreateProcessW",
+	"LoadLibraryA", "LoadLibraryW", "ShellExecuteA", "ShellExecuteW",
+)
 
 func set(items ...string) map[string]bool {
 	m := make(map[string]bool, len(items))

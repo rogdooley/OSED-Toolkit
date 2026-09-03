@@ -6,6 +6,7 @@ package analysis
 
 import (
 	"sort"
+	"strings"
 
 	"osed/recon/internal/apis"
 )
@@ -33,30 +34,20 @@ type Func struct {
 	Reasons       []string `json:"reasons"`
 }
 
-// apiCalls returns the distinct resolved API names called by the function.
-func (f *Func) apiCalls() []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, c := range f.Calls {
-		if c.API != "" && !seen[c.API] {
-			seen[c.API] = true
-			out = append(out, c.API)
-		}
-	}
-	return out
-}
-
-// Rank scores every function in place and returns them sorted most-interesting
-// first. Thunk functions (bare `jmp [IAT]`) are dropped from the ranked view;
-// they carry no logic of their own.
+// Rank scores every function and returns them sorted most-interesting first.
+// Thunk functions (bare `jmp [IAT]`) are dropped from the ranked view. Before
+// scoring, it computes which functions are reachable from an input-reading
+// function through the call graph, so an unbounded copy in a callee still
+// scores the overflow synergy even when the recv is in an ancestor.
 func Rank(funcs []Func) []Func {
+	reach := inputReachable(funcs)
 	var out []Func
 	for i := range funcs {
 		f := funcs[i]
 		if f.ThunkAPI != "" {
 			continue
 		}
-		f.Score, f.Reasons = scoreFunc(&f)
+		f.Score, f.Reasons = scoreFunc(&f, reach[f.Start])
 		out = append(out, f)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -68,61 +59,145 @@ func Rank(funcs []Func) []Func {
 	return out
 }
 
-func scoreFunc(f *Func) (int, []string) {
-	score := 0
-	var reasons []string
-
-	called := f.apiCalls()
-	hasSink := false
-	hasSource := false
-	hasFormat := false
-	for _, api := range called {
-		if w := apis.SinkWeight(api); w > 0 {
-			score += w
-			if apis.DangerousCRT[api] {
-				hasSink = true
-				reasons = append(reasons, "calls dangerous copy/format "+api)
-			} else if apis.Networking[api] {
-				hasSource = true
-				reasons = append(reasons, "reads input via "+api)
-			} else {
-				reasons = append(reasons, "calls "+api)
+// inputReachable returns the set of function start addresses that either read
+// attacker input directly or are called (transitively) from one that does.
+// It relies on Call.Target, so it is effective for the disasm frontend; the
+// cdb frontend leaves Target zero and falls back to direct detection only.
+func inputReachable(funcs []Func) map[uint64]bool {
+	idx := make(map[uint64]int, len(funcs))
+	for i := range funcs {
+		if funcs[i].Start != 0 {
+			idx[funcs[i].Start] = i
+		}
+	}
+	reach := map[uint64]bool{}
+	var q []uint64
+	for i := range funcs {
+		if funcs[i].Start == 0 {
+			continue
+		}
+		for _, c := range funcs[i].Calls {
+			if c.API != "" && apis.InputRead[c.API] {
+				if !reach[funcs[i].Start] {
+					reach[funcs[i].Start] = true
+					q = append(q, funcs[i].Start)
+				}
+				break
 			}
 		}
-		if apis.FormatFamily[api] {
+	}
+	for len(q) > 0 {
+		s := q[len(q)-1]
+		q = q[:len(q)-1]
+		i, ok := idx[s]
+		if !ok {
+			continue
+		}
+		for _, c := range funcs[i].Calls {
+			if c.Target != 0 && !reach[c.Target] {
+				if _, ok := idx[c.Target]; ok {
+					reach[c.Target] = true
+					q = append(q, c.Target)
+				}
+			}
+		}
+	}
+	return reach
+}
+
+func scoreFunc(f *Func, reachable bool) (int, []string) {
+	var reasons []string
+	score := 0
+
+	var unbounded, bounded, reads []string
+	hasFormat, hasExec := false, false
+	seen := map[string]bool{}
+	for _, c := range f.Calls {
+		a := c.API
+		if a == "" || seen[a] {
+			continue
+		}
+		seen[a] = true
+		switch {
+		case apis.UnboundedCopy[a]:
+			unbounded = append(unbounded, a)
+		case apis.BoundedCopy[a]:
+			bounded = append(bounded, a)
+		}
+		if apis.InputRead[a] {
+			reads = append(reads, a)
+		}
+		if apis.FormatFamily[a] {
 			hasFormat = true
+		}
+		if apis.ExecPrimitive[a] {
+			hasExec = true
+		}
+	}
+	hasUnbounded := len(unbounded) > 0
+	hasInputRead := len(reads) > 0
+	source := hasInputRead || reachable
+
+	// Copy signal: take the strongest present, do not sum every CRT call.
+	if hasUnbounded {
+		score += 6
+		reasons = append(reasons, "calls unbounded copy/format: "+strings.Join(unbounded, ", "))
+	} else if len(bounded) > 0 {
+		score += 2
+		reasons = append(reasons, "calls bounded copy: "+strings.Join(bounded, ", "))
+	}
+
+	if hasInputRead {
+		score += 3
+		reasons = append(reasons, "reads attacker input via "+strings.Join(reads, ", "))
+	}
+
+	// The overflow shape: attacker input reaching an unbounded copy.
+	if source && hasUnbounded {
+		score += 5
+		if hasInputRead {
+			reasons = append(reasons, "reads input and performs an unbounded copy (overflow shape)")
+		} else {
+			reasons = append(reasons, "unbounded copy reachable from an input-reading function")
 		}
 	}
 
-	// A format-family call whose format argument is not a constant string is a
-	// strong format-string-bug signal (OSED modules 12-13).
+	// Format-string signal (OSED modules 12-13).
 	if f.FormatDynamic {
 		score += 4
 		reasons = append(reasons, "format-family call with a non-constant format string (likely format-string bug)")
+	} else if hasFormat {
+		score++
 	}
 
-	// Synergy: an input source and a dangerous sink in the same function is
-	// the classic remote-overflow shape.
-	if hasSource && hasSink {
-		score += 4
-		reasons = append(reasons, "input source and copy sink in same function")
-	}
-	if hasFormat {
-		score += 2
-		reasons = append(reasons, "format-string family call (check for non-literal format)")
-	}
 	if f.StringOps {
 		score += 2
 		reasons = append(reasons, "inline rep movs/stos copy")
 	}
+
 	// Large stack frames are where overflowable local buffers live.
 	switch {
 	case f.FrameSize >= 0x200:
 		score += 3
 		reasons = append(reasons, frameReason(f.FrameSize))
 	case f.FrameSize >= 0x40:
-		score += 1
+		score++
 		reasons = append(reasons, frameReason(f.FrameSize))
+	}
+
+	if hasExec {
+		score++
+		reasons = append(reasons, "calls a memory/exec primitive (VirtualProtect/Alloc/LoadLibrary/...)")
+	}
+
+	// Shared helpers reached from many callers are usually runtime plumbing,
+	// not the specific vulnerable handler.
+	if f.Callers >= 6 && !hasInputRead {
+		score -= 3
+		reasons = append(reasons, "high fan-in helper (down-weighted as shared utility)")
+	}
+	if score < 0 {
+		score = 0
 	}
 	return score, reasons
 }
