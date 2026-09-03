@@ -35,7 +35,10 @@ or an exam report) and `--json` for tooling. `triage`/`cdb` take `--top N`
 - **format-family call with a non-constant format string** (the format is
   attacker-influenced - OSED modules 12-13): +4 bonus; a plain format sink: +1
 - inline `rep movs`/`stos`: +2
-- large stack frame (room for an overflowable local buffer): +1 / +3
+- stack-frame size, scaled +1..+5 (0x80 -> +1 up to >=0x800 -> +5; under 0x80
+  scores nothing). When the copy sink is invisible (statically-linked/inlined
+  CRT, so `strcpy`/`sprintf` are not imports), buffer size is the main
+  discriminator, so it does not saturate.
 - calls a memory/exec primitive (`VirtualProtect`/`VirtualAlloc`/...): +1
 - high fan-in helper (>=6 callers, no input read): -3 (down-weights runtime plumbing)
 

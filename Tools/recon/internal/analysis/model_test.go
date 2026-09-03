@@ -18,9 +18,9 @@ func TestRankPrioritizesSourceAndSink(t *testing.T) {
 	if got[0].Name != "handler" {
 		t.Fatalf("top func = %q, want handler", got[0].Name)
 	}
-	// strcpy unbounded(6) + recv read(3) + overflow synergy(5) + frame>=0x200(3) = 17
-	if got[0].Score != 17 {
-		t.Fatalf("handler score = %d, want 17", got[0].Score)
+	// strcpy unbounded(6) + recv read(3) + overflow synergy(5) + frame 0x400(4) = 18
+	if got[0].Score != 18 {
+		t.Fatalf("handler score = %d, want 18", got[0].Score)
 	}
 	// fprintf is a format sink only: +1
 	if got[1].Score != 1 {
@@ -46,9 +46,9 @@ func TestRankPropagatesInputReachability(t *testing.T) {
 	if sink == nil {
 		t.Fatal("TrunHandler missing")
 	}
-	// unbounded(6) + reachable synergy(5) + frame>=0x200(3) = 14
-	if sink.Score != 14 {
-		t.Fatalf("TrunHandler score = %d, want 14", sink.Score)
+	// unbounded(6) + reachable synergy(5) + frame 0x7E8 (>=0x400, +4) = 15
+	if sink.Score != 15 {
+		t.Fatalf("TrunHandler score = %d, want 15", sink.Score)
 	}
 	if got[0].Name != "TrunHandler" {
 		t.Fatalf("top = %q, want TrunHandler (should outrank the recv handler)", got[0].Name)
@@ -69,9 +69,9 @@ func TestRankDownweightsSharedHelpers(t *testing.T) {
 		t.Fatalf("top = %q, want Function3", got[0].Name)
 	}
 	helper := findByName(got, "__write_memory")
-	// bounded(2) + frame>=0x40(1) + exec(1) - fan-in(3) = 1
-	if helper.Score != 1 {
-		t.Fatalf("__write_memory score = %d, want 1", helper.Score)
+	// bounded(2) + frame 0x48 below 0x80(0) + exec(1) - fan-in(3), clamped to 0
+	if helper.Score != 0 {
+		t.Fatalf("__write_memory score = %d, want 0", helper.Score)
 	}
 }
 

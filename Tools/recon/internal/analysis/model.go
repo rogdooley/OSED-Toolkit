@@ -175,13 +175,11 @@ func scoreFunc(f *Func, reachable bool) (int, []string) {
 		reasons = append(reasons, "inline rep movs/stos copy")
 	}
 
-	// Large stack frames are where overflowable local buffers live.
-	switch {
-	case f.FrameSize >= 0x200:
-		score += 3
-		reasons = append(reasons, frameReason(f.FrameSize))
-	case f.FrameSize >= 0x40:
-		score++
+	// Large stack frames are where overflowable local buffers live. When the
+	// copy sink itself is invisible (statically-linked/inlined CRT), buffer
+	// size is the main discriminator, so it scales rather than saturating.
+	if fb := frameBonus(f.FrameSize); fb > 0 {
+		score += fb
 		reasons = append(reasons, frameReason(f.FrameSize))
 	}
 
