@@ -25,6 +25,7 @@ usage:
   recon pe [--json|--md] <file>            static PE analysis (mitigations, imports, gadgets)
   recon triage [--json|--md] [--top N] <file>   disassembly-driven function ranking
   recon cdb [--json|--md] [--top N] [dump]      rank functions from a cdb text dump (or stdin)
+  recon filter --badchars <spec> [gadgets.txt]  drop gadget lines whose address has a bad byte
   recon version
 
 Output: default is aligned text; --md is Markdown (for reports/notes); --json for tooling.
@@ -47,6 +48,8 @@ func main() {
 		os.Exit(runTriage(os.Args[2:]))
 	case "cdb":
 		os.Exit(runCDB(os.Args[2:]))
+	case "filter":
+		os.Exit(runFilter(os.Args[2:]))
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
