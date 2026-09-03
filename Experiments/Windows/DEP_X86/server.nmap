@@ -1,0 +1,23 @@
+# Nmap 7.99 scan initiated Sun Jul 26 15:16:10 2026 as: /usr/lib/nmap/nmap --privileged -T4 -p- -vv -oA server 192.168.1.114
+Nmap scan report for 192.168.1.114
+Host is up, received arp-response (0.012s latency).
+Scanned at 2026-07-26 15:16:12 EDT for 29s
+Not shown: 65522 closed tcp ports (reset)
+PORT      STATE SERVICE       REASON
+135/tcp   open  msrpc         syn-ack ttl 128
+139/tcp   open  netbios-ssn   syn-ack ttl 128
+445/tcp   open  microsoft-ds  syn-ack ttl 128
+3389/tcp  open  ms-wbt-server syn-ack ttl 128
+5040/tcp  open  unknown       syn-ack ttl 128
+9999/tcp  open  abyss         syn-ack ttl 128
+49664/tcp open  unknown       syn-ack ttl 128
+49665/tcp open  unknown       syn-ack ttl 128
+49666/tcp open  unknown       syn-ack ttl 128
+49667/tcp open  unknown       syn-ack ttl 128
+49668/tcp open  unknown       syn-ack ttl 128
+49669/tcp open  unknown       syn-ack ttl 128
+49670/tcp open  unknown       syn-ack ttl 128
+MAC Address: 46:53:4F:4D:F5:F5 (Unknown)
+
+Read data files from: /usr/share/nmap
+# Nmap done at Sun Jul 26 15:16:42 2026 -- 1 IP address (1 host up) scanned in 31.15 seconds

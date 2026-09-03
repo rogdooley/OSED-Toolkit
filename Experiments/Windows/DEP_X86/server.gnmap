@@ -1,0 +1,5 @@
+# Nmap 7.99 scan initiated Sun Jul 26 15:16:10 2026 as: /usr/lib/nmap/nmap --privileged -T4 -p- -vv -oA server 192.168.1.114
+# Ports scanned: TCP(65535;1-65535) UDP(0;) SCTP(0;) PROTOCOLS(0;)
+Host: 192.168.1.114 ()	Status: Up
+Host: 192.168.1.114 ()	Ports: 135/open/tcp//msrpc///, 139/open/tcp//netbios-ssn///, 445/open/tcp//microsoft-ds///, 3389/open/tcp//ms-wbt-server///, 5040/open/tcp/////, 9999/open/tcp//abyss///, 49664/open/tcp/////, 49665/open/tcp/////, 49666/open/tcp/////, 49667/open/tcp/////, 49668/open/tcp/////, 49669/open/tcp/////, 49670/open/tcp/////	Ignored State: closed (65522)
+# Nmap done at Sun Jul 26 15:16:42 2026 -- 1 IP address (1 host up) scanned in 31.15 seconds
