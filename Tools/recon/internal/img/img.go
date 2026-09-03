@@ -103,6 +103,37 @@ func (im *Image) Exec(va uint64) bool {
 	return false
 }
 
+// CStringAt returns a printable ASCII string starting at VA if one is present
+// in a non-executable (data) section: at least 4 printable bytes terminated by
+// NUL, up to 256 bytes. Requiring a data section keeps code bytes that happen
+// to be printable from being reported as strings.
+func (im *Image) CStringAt(va uint64) (string, bool) {
+	for _, s := range im.segs {
+		if va >= s.va && va < s.va+uint64(len(s.data)) {
+			if s.exec {
+				return "", false
+			}
+			off := va - s.va
+			end := off
+			for end < uint64(len(s.data)) && end-off < 256 {
+				c := s.data[end]
+				if c == 0 {
+					break
+				}
+				if c < 0x20 || c >= 0x7F {
+					return "", false
+				}
+				end++
+			}
+			if end < uint64(len(s.data)) && s.data[end] == 0 && end-off >= 4 {
+				return string(s.data[off:end]), true
+			}
+			return "", false
+		}
+	}
+	return "", false
+}
+
 // APIAt returns the import name for an IAT slot VA, if any.
 func (im *Image) APIAt(va uint64) (string, bool) {
 	n, ok := im.iat[va]

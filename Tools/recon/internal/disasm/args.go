@@ -62,6 +62,37 @@ func espFrame(inst x86asm.Inst, bits int) (int64, bool) {
 	return v, true
 }
 
+// stringRefs returns any printable strings referenced by an instruction's
+// immediate or bare-displacement operands (push offset, lea, mov reg,imm). The
+// second result reports whether at least one operand resolved to a string,
+// used to recognize a pushed format-string argument.
+func stringRefs(im interface {
+	CStringAt(uint64) (string, bool)
+}, inst x86asm.Inst) ([]string, bool) {
+	var out []string
+	for _, a := range inst.Args {
+		if a == nil {
+			break
+		}
+		var cand uint64
+		switch v := a.(type) {
+		case x86asm.Imm:
+			cand = uint64(int64(v)) & 0xFFFFFFFF
+		case x86asm.Mem:
+			if v.Base != 0 || v.Index != 0 || v.Disp == 0 {
+				continue
+			}
+			cand = uint64(v.Disp) & 0xFFFFFFFF
+		default:
+			continue
+		}
+		if s, ok := im.CStringAt(cand); ok {
+			out = append(out, s)
+		}
+	}
+	return out, len(out) > 0
+}
+
 const hexDigits = "0123456789abcdef"
 
 func hex(v uint64) string {

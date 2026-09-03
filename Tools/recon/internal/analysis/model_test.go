@@ -26,3 +26,23 @@ func TestRankPrioritizesSourceAndSink(t *testing.T) {
 		t.Fatalf("handler score = %d, want 16", got[0].Score)
 	}
 }
+
+func TestRankFlagsDynamicFormatString(t *testing.T) {
+	funcs := []Func{
+		{Start: 0x1000, Name: "vuln_log", Calls: []Call{{API: "printf"}}, FormatDynamic: true},
+		{Start: 0x2000, Name: "safe_log", Calls: []Call{{API: "printf"}}},
+	}
+	got := Rank(funcs)
+
+	vuln := got[0]
+	if vuln.Name != "vuln_log" {
+		t.Fatalf("top = %q, want vuln_log", vuln.Name)
+	}
+	// printf: dangerous(5) + format-family(2) + non-constant format(4) = 11
+	if vuln.Score != 11 {
+		t.Fatalf("vuln_log score = %d, want 11", vuln.Score)
+	}
+	if got[1].Score != 7 { // printf without the dynamic-format bonus
+		t.Fatalf("safe_log score = %d, want 7", got[1].Score)
+	}
+}

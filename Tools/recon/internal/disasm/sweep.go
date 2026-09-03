@@ -9,6 +9,7 @@ package disasm
 
 import (
 	"osed/recon/internal/analysis"
+	"osed/recon/internal/apis"
 	"osed/recon/internal/img"
 
 	"golang.org/x/arch/x86/x86asm"
@@ -39,13 +40,19 @@ func Sweep(im *img.Image) []analysis.Func {
 		analyzeFunc(im, fn, &queue)
 	}
 
-	// Resolve internal calls that land on a `jmp [IAT]` thunk to their API.
+	// Resolve internal calls that land on a `jmp [IAT]` thunk to their API,
+	// and tally how many functions call each target.
 	for _, fn := range funcs {
 		for i := range fn.Calls {
 			c := &fn.Calls[i]
 			if c.API == "" && c.Target != 0 {
 				if callee, ok := funcs[c.Target]; ok && callee.ThunkAPI != "" {
 					c.API = callee.ThunkAPI
+				}
+			}
+			if c.Target != 0 {
+				if callee, ok := funcs[c.Target]; ok {
+					callee.Callers++
 				}
 			}
 		}
@@ -65,6 +72,8 @@ func analyzeFunc(im *img.Image, fn *analysis.Func, queue *[]uint64) {
 	visited := map[uint64]bool{}
 	blocks := []uint64{fn.Start}
 	count := 0
+	strSeen := map[string]bool{}
+	lastStrPushAt := -1 // instruction index of the last push of a string pointer
 
 	// Thunk detection: a function whose very first instruction is `jmp [IAT]`.
 	if raw, ok := im.ReadAt(fn.Start); ok {
@@ -97,11 +106,25 @@ func analyzeFunc(im *img.Image, fn *analysis.Func, queue *[]uint64) {
 			count++
 			next := va + uint64(inst.Len)
 
+			// Resolve any string-pointer operands (push offset str, lea, mov imm).
+			if refs, isStr := stringRefs(im, inst); len(refs) > 0 {
+				for _, s := range refs {
+					if !strSeen[s] && len(fn.Strings) < 16 {
+						strSeen[s] = true
+						fn.Strings = append(fn.Strings, s)
+					}
+				}
+				if inst.Op == x86asm.PUSH && isStr {
+					lastStrPushAt = count
+				}
+			}
+
 			switch inst.Op {
 			case x86asm.RET, x86asm.LRET, x86asm.IRET, x86asm.HLT, x86asm.UD2:
 				va = 0
 			case x86asm.CALL:
-				recordCall(im, fn, va, inst, queue)
+				recentStr := lastStrPushAt >= 0 && count-lastStrPushAt <= 5
+				recordCall(im, fn, va, inst, queue, recentStr)
 				va = next
 				continue
 			case x86asm.JMP:
@@ -141,16 +164,22 @@ func analyzeFunc(im *img.Image, fn *analysis.Func, queue *[]uint64) {
 	}
 }
 
-func recordCall(im *img.Image, fn *analysis.Func, site uint64, inst x86asm.Inst, queue *[]uint64) {
+func recordCall(im *img.Image, fn *analysis.Func, site uint64, inst x86asm.Inst, queue *[]uint64, recentStrPush bool) {
+	var api string
 	if t, ok := relTarget(inst, site); ok {
-		fn.Calls = append(fn.Calls, analysis.Call{Site: site, Target: t, API: apiFor(im, t)})
+		api = apiFor(im, t)
+		fn.Calls = append(fn.Calls, analysis.Call{Site: site, Target: t, API: api})
 		enqueue(queue, t)
-		return
-	}
-	if abs, ok := memAbs(inst, im.Bits); ok {
-		if api, ok := im.APIAt(abs); ok {
+	} else if abs, ok := memAbs(inst, im.Bits); ok {
+		if a, ok := im.APIAt(abs); ok {
+			api = a
 			fn.Calls = append(fn.Calls, analysis.Call{Site: site, API: api})
 		}
+	}
+	// Format-string heuristic: a printf-family call with no constant string
+	// pushed just before it means the format argument is attacker-influenced.
+	if api != "" && apis.FormatFamily[api] && !recentStrPush {
+		fn.FormatDynamic = true
 	}
 }
 

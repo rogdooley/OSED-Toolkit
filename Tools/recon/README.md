@@ -28,11 +28,37 @@ All three take `--json` for machine-readable output. `triage`/`cdb` take
 - dangerous copy/format sink (`strcpy`, `sprintf`, `memcpy`, ...): +5
 - input source (`recv`, `WSARecv`, `ReadFile`, ...): +4
 - **source and sink in the same function** (classic remote overflow): +4 bonus
-- format-string family call (check for a non-literal format arg): +2
+- format-string family call: +2
+- **format-family call with a non-constant format string** (no string pushed
+  just before the call, i.e. the format is attacker-influenced - OSED modules
+  12-13): +4 bonus
 - inline `rep movs`/`stos`: +2
 - large stack frame (room for an overflowable local buffer): +1 / +3
 
 Bare `jmp [IAT]` thunks are dropped from the ranked view.
+
+`triage` also resolves and prints, per function: referenced string literals
+(format strings, command strings, protocol tokens - the fastest way to tell
+what a function does without symbols) and the caller count.
+
+## Toolkit integration
+
+`recon` is registered as a console script and has a Python bridge so its JSON
+feeds the rest of the toolkit:
+
+```bash
+recon triage target.exe --top 20     # console script (from the venv)
+```
+
+```python
+from Tools.recon_bridge import pe, triage
+info = pe("target.exe")               # dict: mitigations, sections, ...
+hot  = triage("target.exe", top=0)    # ranked functions as dicts
+# e.g. pick fixed-base modules for ROP, or feed hot[0]["start"] into WinDbg
+```
+
+The bridge finds the binary via `RECON_BIN`, then `Tools/recon/dist/`, then
+`PATH`.
 
 ## Build
 

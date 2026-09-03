@@ -21,6 +21,7 @@ shellforge = "shellforge.cli:main"
 value-convert = "Tools.Value_Conversion_Scripts.cli:main"
 emitter = "Tools.emitter.build:main"
 peinfo = "Tools.peinfo.cli:main"
+recon = "Tools.recon_bridge.cli:main"
 
 [build-system]
 requires = ["setuptools"]

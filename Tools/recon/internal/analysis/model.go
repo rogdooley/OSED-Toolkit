@@ -20,14 +20,17 @@ type Call struct {
 
 // Func is a discovered function plus the signals that make it worth reversing.
 type Func struct {
-	Start     uint64   `json:"start"`
-	Name      string   `json:"name"`
-	FrameSize int64    `json:"frame_size"` // bytes from `sub esp, imm` prologue
-	Calls     []Call   `json:"calls"`
-	StringOps bool     `json:"string_ops"` // rep movs / rep stos present
-	ThunkAPI  string   `json:"thunk_api"`  // set if the function is just `jmp [IAT]`
-	Score     int      `json:"score"`
-	Reasons   []string `json:"reasons"`
+	Start         uint64   `json:"start"`
+	Name          string   `json:"name"`
+	FrameSize     int64    `json:"frame_size"` // bytes from `sub esp, imm` prologue
+	Calls         []Call   `json:"calls"`
+	StringOps     bool     `json:"string_ops"`     // rep movs / rep stos present
+	FormatDynamic bool     `json:"format_dynamic"` // format-family call with no constant format pushed
+	Strings       []string `json:"strings"`        // referenced string literals
+	Callers       int      `json:"callers"`        // number of functions that call this one
+	ThunkAPI      string   `json:"thunk_api"`      // set if the function is just `jmp [IAT]`
+	Score         int      `json:"score"`
+	Reasons       []string `json:"reasons"`
 }
 
 // apiCalls returns the distinct resolved API names called by the function.
@@ -89,6 +92,13 @@ func scoreFunc(f *Func) (int, []string) {
 		if apis.FormatFamily[api] {
 			hasFormat = true
 		}
+	}
+
+	// A format-family call whose format argument is not a constant string is a
+	// strong format-string-bug signal (OSED modules 12-13).
+	if f.FormatDynamic {
+		score += 4
+		reasons = append(reasons, "format-family call with a non-constant format string (likely format-string bug)")
 	}
 
 	// Synergy: an input source and a dangerous sink in the same function is
