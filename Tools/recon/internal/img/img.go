@@ -75,7 +75,43 @@ func Load(path string) (*Image, error) {
 	for va := range im.syms {
 		im.seeds = append(im.seeds, va)
 	}
+	// Stripped binaries (MSVC/MFC) have no symbols and reach most code through
+	// indirect calls, so entry-point recursive descent recovers almost nothing.
+	// Fall back to scanning the code for function prologues, the way IDA does.
+	im.scanPrologues()
 	return im, nil
+}
+
+// scanPrologues seeds a candidate function at every classic frame-pointer
+// prologue in an executable section: `push ebp; mov ebp, esp` (55 8B EC), and
+// the MSVC hot-patch form `mov edi, edi; push ebp; mov ebp, esp` (8B FF 55 8B
+// EC) whose true entry is two bytes earlier. False positives (the bytes
+// appearing mid-instruction) just yield low-scoring junk functions; the real
+// functions get recovered. FPO/omit-frame-pointer functions are still missed.
+func (im *Image) scanPrologues() {
+	seen := map[uint64]bool{}
+	for _, va := range im.seeds {
+		seen[va] = true
+	}
+	for _, s := range im.segs {
+		if !s.exec {
+			continue
+		}
+		d := s.data
+		for i := 0; i+2 < len(d); i++ {
+			if d[i] != 0x55 || d[i+1] != 0x8B || d[i+2] != 0xEC {
+				continue
+			}
+			start := s.va + uint64(i)
+			if i >= 2 && d[i-2] == 0x8B && d[i-1] == 0xFF {
+				start = s.va + uint64(i-2) // include the hot-patch nop
+			}
+			if !seen[start] {
+				seen[start] = true
+				im.seeds = append(im.seeds, start)
+			}
+		}
+	}
 }
 
 // ReadAt returns up to 16 bytes starting at VA, and how many were available.

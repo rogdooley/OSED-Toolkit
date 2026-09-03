@@ -128,3 +128,13 @@ never crashes on bad bytes: indirect `call`/`jmp` end a path, and data
 mistaken for code is decoded until it fails and then abandoned. Treat the
 ranking as "read these first," not as ground truth. The `pe` mitigation and
 gadget data are exact; the function ranking is a heuristic.
+
+**Coverage on stripped binaries.** With symbols (e.g. mingw's vulnserver) the
+sweep recovers the whole binary. Stripped MSVC/MFC apps reach most code through
+indirect calls and function-pointer tables, so recursive descent from the entry
+point alone finds little; `triage` adds function-prologue scanning
+(`push ebp; mov ebp, esp` and the MSVC hot-patch form) to recover far more, but
+FPO/omit-frame-pointer functions in optimized release builds are still missed.
+For GUI/file-parsing overflow targets, the reliable path is dynamic: crash it,
+then `uf` the crashing function in WinDbg and rank that with the `cdb` frontend.
+The `pe` report needs no recovery and is exact regardless.
