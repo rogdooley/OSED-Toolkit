@@ -93,6 +93,43 @@ func stringRefs(im interface {
 	return out, len(out) > 0
 }
 
+// byteCmpImm returns the immediate of an 8-bit compare against a constant
+// (`cmp al, 0Ah`, `cmp byte ptr [edi], 0Dh`, or a `sub` used as a compare).
+// The operand must be byte-sized - an 8-bit register or a 1-byte memory
+// operand - so a wide `cmp eax, 0Ah` (a length/count check, not a delimiter)
+// is excluded. (Inst.DataSize is the mode default, not the operand size, so it
+// cannot be used here.)
+func byteCmpImm(inst x86asm.Inst) (byte, bool) {
+	if inst.Op != x86asm.CMP && inst.Op != x86asm.SUB {
+		return 0, false
+	}
+	byteOperand := false
+	var imm int64
+	hasImm := false
+	for _, a := range inst.Args {
+		if a == nil {
+			break
+		}
+		switch v := a.(type) {
+		case x86asm.Reg:
+			if v >= x86asm.AL && v <= x86asm.R15B { // the 8-bit register block
+				byteOperand = true
+			}
+		case x86asm.Mem:
+			if inst.MemBytes == 1 {
+				byteOperand = true
+			}
+		case x86asm.Imm:
+			imm = int64(v)
+			hasImm = true
+		}
+	}
+	if hasImm && byteOperand && imm >= -128 && imm <= 0xFF {
+		return byte(imm), true
+	}
+	return 0, false
+}
+
 const hexDigits = "0123456789abcdef"
 
 func hex(v uint64) string {

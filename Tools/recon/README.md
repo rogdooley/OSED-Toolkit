@@ -16,10 +16,30 @@ in WinDbg (`uf <addr>`) instead of reading the whole binary.
 | `recon pe <file>` | PE on disk | Static PE report: mitigations (ASLR/DEP/SafeSEH/GS/CFG), sections, categorized imports, gadget pre-count, exploitability score. Stdlib only. Supersedes the Python `peinfo`. |
 | `recon triage <file>` | PE on disk | Recursive-descent disassembly, call graph, IAT resolution, and per-function ranking by dangerous sinks, input sources, stack-frame size and inline copies. |
 | `recon cdb <dump.txt>` | headless-cdb text | Same ranking, driven from a WinDbg/cdb `uf` dump. Use when the target is packed/stripped and the static sweep under-recovers, or when you want to rank on your Kali box from a dump made on the exam box. |
+| `recon badchars <file>` | PE on disk | Static bad-char *prediction*: scans the input-path functions for 8-bit constant compares (delimiter/terminator checks) and null-terminating copies, and reports candidate bad bytes with evidence. A prediction, not a verdict - confirm dynamically. |
+| `recon filter --badchars <spec> [dump]` | address/gadget text | Drops gadget lines whose address contains a bad byte (or `--annotate` tags each). Fills the gap an external gadget finder (osed-windb, mona, rp++) leaves. |
 
-All three default to aligned text, take `--md` for Markdown (paste into notes
-or an exam report) and `--json` for tooling. `triage`/`cdb` take `--top N`
-(0 = all).
+`pe`/`triage`/`cdb`/`badchars` default to aligned text, take `--md` for Markdown
+(paste into notes or an exam report) and `--json` for tooling. `triage`/`cdb`
+take `--top N` (0 = all); `badchars` takes `--all` to scan every function.
+
+## Bad chars: prediction vs. discovery
+
+A definitive bad-char list is a **runtime** property - a byte is bad because of
+what the code does with it as it flows through - so it is found dynamically:
+send `\x01..\xff`, then compare the landed buffer in WinDbg. `recon badchars`
+does not replace that; it **predicts** which bytes that comparison will flag, by
+reading the parse code:
+
+- `0x00` when the input path calls a null-terminating copy (`strcpy`/`sprintf`/...).
+- control/whitespace bytes (`0x0a`, `0x0d`, `0x20`, ...) the parser compares
+  against (`cmp al, 0Ah`) - likely delimiters/terminators.
+- alphanumeric compares are flagged as protocol/keyword bytes (e.g. `'T'` of
+  `TRUN`), *not* bad chars, so they don't pollute the candidate set.
+
+It scopes to the input-reachable functions (the `recv`/`ReadFile` data path);
+`--all` scans everything (noisy on statically-linked binaries). Always finish
+with the dynamic byte-array compare - the tool prints the reminder.
 
 ## Two runtimes, one score
 

@@ -19,19 +19,28 @@ type Call struct {
 	API    string `json:"api"`    // resolved API name, or ""
 }
 
+// ByteCmp records a comparison of an 8-bit operand against a constant, e.g.
+// `cmp al, 0Ah`. In an input-handling function these are candidate bad chars:
+// a byte the parser tests for and treats specially (delimiter/terminator).
+type ByteCmp struct {
+	Imm  byte   `json:"imm"`
+	Site uint64 `json:"site"`
+}
+
 // Func is a discovered function plus the signals that make it worth reversing.
 type Func struct {
-	Start         uint64   `json:"start"`
-	Name          string   `json:"name"`
-	FrameSize     int64    `json:"frame_size"` // bytes from `sub esp, imm` prologue
-	Calls         []Call   `json:"calls"`
-	StringOps     bool     `json:"string_ops"`     // rep movs / rep stos present
-	FormatDynamic bool     `json:"format_dynamic"` // format-family call with no constant format pushed
-	Strings       []string `json:"strings"`        // referenced string literals
-	Callers       int      `json:"callers"`        // number of functions that call this one
-	ThunkAPI      string   `json:"thunk_api"`      // set if the function is just `jmp [IAT]`
-	Score         int      `json:"score"`
-	Reasons       []string `json:"reasons"`
+	Start         uint64    `json:"start"`
+	Name          string    `json:"name"`
+	FrameSize     int64     `json:"frame_size"` // bytes from `sub esp, imm` prologue
+	Calls         []Call    `json:"calls"`
+	StringOps     bool      `json:"string_ops"`     // rep movs / rep stos present
+	FormatDynamic bool      `json:"format_dynamic"` // format-family call with no constant format pushed
+	Strings       []string  `json:"strings"`        // referenced string literals
+	ByteCmps      []ByteCmp `json:"byte_cmps"`      // 8-bit compares against constants
+	Callers       int       `json:"callers"`        // number of functions that call this one
+	ThunkAPI      string    `json:"thunk_api"`      // set if the function is just `jmp [IAT]`
+	Score         int       `json:"score"`
+	Reasons       []string  `json:"reasons"`
 }
 
 // Rank scores every function and returns them sorted most-interesting first.
@@ -40,7 +49,7 @@ type Func struct {
 // function through the call graph, so an unbounded copy in a callee still
 // scores the overflow synergy even when the recv is in an ancestor.
 func Rank(funcs []Func) []Func {
-	reach := inputReachable(funcs)
+	reach := InputReachable(funcs)
 	var out []Func
 	for i := range funcs {
 		f := funcs[i]
@@ -59,11 +68,11 @@ func Rank(funcs []Func) []Func {
 	return out
 }
 
-// inputReachable returns the set of function start addresses that either read
+// InputReachable returns the set of function start addresses that either read
 // attacker input directly or are called (transitively) from one that does.
 // It relies on Call.Target, so it is effective for the disasm frontend; the
 // cdb frontend leaves Target zero and falls back to direct detection only.
-func inputReachable(funcs []Func) map[uint64]bool {
+func InputReachable(funcs []Func) map[uint64]bool {
 	idx := make(map[uint64]int, len(funcs))
 	for i := range funcs {
 		if funcs[i].Start != 0 {

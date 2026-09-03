@@ -106,6 +106,12 @@ func analyzeFunc(im *img.Image, fn *analysis.Func, queue *[]uint64) {
 			count++
 			next := va + uint64(inst.Len)
 
+			// Record 8-bit compares against constants: candidate bad chars in
+			// an input-handling function (delimiter/terminator byte checks).
+			if imm, ok := byteCmpImm(inst); ok && len(fn.ByteCmps) < 64 {
+				fn.ByteCmps = append(fn.ByteCmps, analysis.ByteCmp{Imm: imm, Site: va})
+			}
+
 			// Resolve any string-pointer operands (push offset str, lea, mov imm).
 			if refs, isStr := stringRefs(im, inst); len(refs) > 0 {
 				for _, s := range refs {
