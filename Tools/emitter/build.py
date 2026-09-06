@@ -444,11 +444,15 @@ if __name__ == "__main__":
 
 
 def _bytes_to_hex_str(raw: bytes) -> str:
-    return "".join(f"\\x{b:02x}" for b in raw)
+    chunks = [raw[i:i + 16] for i in range(0, len(raw), 16)]
+    return "\n".join("".join(f"\\x{b:02x}" for b in chunk) for chunk in chunks)
 
 
 def _bytes_to_py(raw: bytes) -> str:
-    return f'shellcode = b"{_bytes_to_hex_str(raw)}"'
+    chunks = [raw[i:i + 16] for i in range(0, len(raw), 16)]
+    lines = [f'"{"".join(f"\\x{b:02x}" for b in chunk)}"' for chunk in chunks]
+    body = "\n".join(lines)
+    return f"shellcode = (\n{body}\n)\n# Length: {len(raw)} bytes"
 
 
 def _bytes_to_c(raw: bytes) -> str:
