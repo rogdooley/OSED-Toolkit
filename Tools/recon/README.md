@@ -18,10 +18,50 @@ in WinDbg (`uf <addr>`) instead of reading the whole binary.
 | `recon cdb <dump.txt>` | headless-cdb text | Same ranking, driven from a WinDbg/cdb `uf` dump. Use when the target is packed/stripped and the static sweep under-recovers, or when you want to rank on your Kali box from a dump made on the exam box. |
 | `recon badchars <file>` | PE on disk | Static bad-char *prediction*: scans the input-path functions for 8-bit constant compares (delimiter/terminator checks) and null-terminating copies, and reports candidate bad bytes with evidence. A prediction, not a verdict - confirm dynamically. |
 | `recon filter --badchars <spec> [dump]` | address/gadget text | Drops gadget lines whose address contains a bad byte (or `--annotate` tags each). Fills the gap an external gadget finder (osed-windb, mona, rp++) leaves. |
+| `recon pseudo [--func NAME] [listing]` | IDA disassembly text | Transliterates a pasted IDA listing into C-like pseudocode. Fills the one hole in the exam RE stack: IDA's disassembler is available but the Hex-Rays *decompiler* is not. |
 
 `pe`/`triage`/`cdb`/`badchars` default to aligned text, take `--md` for Markdown
 (paste into notes or an exam report) and `--json` for tooling. `triage`/`cdb`
 take `--top N` (0 = all); `badchars` takes `--all` to scan every function.
+
+## Pseudocode from an IDA listing (`recon pseudo`)
+
+On the exam you can run IDA's disassembler but not the Hex-Rays decompiler
+(it is a cloud service). `recon pseudo` closes that gap locally: copy a
+function's listing out of IDA (linear `.text:` view or graph view), pipe it in,
+and read C-like pseudocode.
+
+```
+recon pseudo func.txt              # emit every function found
+recon pseudo --func recv func.txt  # only functions whose name contains "recv"
+recon pseudo --list func.txt       # just list the function names
+```
+
+It is a **faithful transliteration, not a decompiler.** By design it:
+
+- keeps register names, so the output lines up with what you step through in
+  WinDbg (no expression graph to reconcile against the debugger);
+- reconstructs **calls** - arguments from the pushes, calling convention from
+  the cleanup (`add esp,N`/`pop ecx` = cdecl, none = stdcall), and the result
+  landing slot (`var_14 = recv(s, buf, 0x830, 0);`);
+- folds **compare-then-branch** into `if (cond) goto label;`;
+- prettifies operands (`[ebp+var_18]` -> `var_18`, `offset aFmt` -> `&aFmt`,
+  `840h` -> `0x840`, byte derefs get a `(char *)` cast);
+- drops prologue/epilogue and register saves, collapses `jmp sub_x` thunks to
+  `return sub_x();`, and denoises CFG-guard / SEH scaffolding;
+- flags stack buffers in a header comment (the overflow targets);
+- **structures** the safe, unambiguous control flow: a single-block back-edge
+  becomes `do { ... } while (cond);` and a forward branch over a block becomes
+  `if (cond) { ... }`. Everything else - shared join points, multi-block loops,
+  switch tables, anything it cannot prove is single-entry and non-escaping -
+  stays an honest `goto`. It never invents structure that is not there.
+
+It does **not** recover types, and it does not fold register dataflow into big
+expressions (register names are kept so the output matches WinDbg). Known rough
+edges: a single `add esp,N` that cleans several stacked cdecl calls at once
+mis-attributes their arguments, and `push reg` / `pop reg` save brackets around
+a block can be read as an argument. When in doubt, the disassembly is the ground
+truth - this is a reading aid.
 
 ## Bad chars: prediction vs. discovery
 

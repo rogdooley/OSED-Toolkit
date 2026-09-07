@@ -27,6 +27,7 @@ usage:
   recon cdb [--json|--md] [--top N] [dump]      rank functions from a cdb text dump (or stdin)
   recon badchars [--json|--md] [--all] <file>   predict bad chars from the input-path disassembly
   recon filter --badchars <spec> [gadgets.txt]  drop gadget lines whose address has a bad byte
+  recon pseudo [--func NAME] [listing.txt]      IDA disassembly listing -> C-like pseudocode
   recon version
 
 Output: default is aligned text; --md is Markdown (for reports/notes); --json for tooling.
@@ -53,6 +54,8 @@ func main() {
 		os.Exit(runBadchars(os.Args[2:]))
 	case "filter":
 		os.Exit(runFilter(os.Args[2:]))
+	case "pseudo":
+		os.Exit(runPseudo(os.Args[2:]))
 	case "version", "-v", "--version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
