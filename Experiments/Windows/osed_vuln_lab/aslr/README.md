@@ -15,13 +15,15 @@ Do not inspect `src`, `instructor.md`, or linker map files during the first atte
 
 ## Build
 
-From a Visual Studio 2017 Developer Command Prompt:
+Choose the commands matching the installed CMake version. CMake selects an
+installed compatible MSVC generator; use `cmake --help` to inspect generators.
+See the parent README for Ninja/NMake and build-directory cache guidance.
 
 Modern CMake 3.13+:
 
 ```bat
 cd Experiments\Windows\osed_vuln_lab
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
+cmake -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
 cmake --build build_aslr_dep --config Release
 ```
 
@@ -31,14 +33,14 @@ Legacy CMake 3.12:
 cd Experiments\Windows\osed_vuln_lab
 if not exist build_aslr_dep mkdir build_aslr_dep
 pushd build_aslr_dep
-cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
+cmake -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
 cmake --build . --config Release
 popd
 ```
 
-Run `build_aslr_dep\Release\osed_vulnsvc.exe 9999` under WinDbg. CMake places
-`osedhelper.dll` in the same directory. Confirm both modules use ASLR and DEP
-before beginning.
+Run the executable from the matching `Release` directory under WinDbg, for
+example `build_aslr_dep\Release\osed_vulnsvc.exe 9999`. CMake places
+`osedhelper.dll` in the same directory. Confirm both modules use ASLR and DEP.
 
 ## Exercises
 

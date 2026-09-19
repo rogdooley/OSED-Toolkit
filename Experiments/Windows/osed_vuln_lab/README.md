@@ -42,15 +42,14 @@ Opcodes:
 Requirements:
 
 - CMake 3.12 or newer
-- Visual Studio 2017 with the **Desktop development with C++** workload
-- A **Developer Command Prompt for VS 2017**
+- An MSVC toolchain with x86 C/C++ build support
 
 First verify the tools and source directory in `cmd.exe`:
 
 ```bat
 where cmake
 cmake --version
-where cl
+cmake --help
 dir CMakeLists.txt
 ```
 
@@ -58,23 +57,42 @@ dir CMakeLists.txt
 `CMakeLists.txt` in the current directory. Use `dir`, not the Unix command
 `ls`, in `cmd.exe`.
 
-From the repository root, choose the command style matching the installed
-CMake version.
+In the `cmake --help` output, the default generator is marked with `*`. CMake
+must recognize a generator for an installed MSVC toolchain. If multiple
+versions are installed, you may add `-G "<generator name from cmake --help>"`.
+The generator name must match the local machine; it is intentionally not
+hardcoded here.
 
-### Modern CMake 3.13+ (including 3.29)
+These labs depend on the MSVC toolchain, not a specific Visual Studio IDE
+release. MSVC-specific SEH syntax and mitigation linker flags are part of the
+lab design.
+
+The commands below assume CMake selected a Visual Studio generator, which
+supports `-A Win32` and `--config Release`. If using Ninja or NMake instead,
+open an **x86** MSVC tools prompt, omit `-A Win32`, configure with
+`-DCMAKE_BUILD_TYPE=Release`, and build without `--config Release`.
+
+A CMake build directory is tied to its original generator and architecture.
+Use a new build directory after changing either one; do not reuse a directory
+left by a failed configure with a different generator.
+
+From the repository root, choose the command style matching the installed
+CMake version. `-A Win32` produces 32-bit lab binaries on a 64-bit host.
+
+### Modern CMake 3.13+
 
 ```bat
 cd Experiments\Windows\osed_vuln_lab
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_easy -DLAB_PROFILE=easy -DHELPER_ASLR=OFF
+cmake -A Win32 -S . -B build_easy -DLAB_PROFILE=easy -DHELPER_ASLR=OFF
 cmake --build build_easy --config Release
 
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_dep -DLAB_PROFILE=dep -DHELPER_ASLR=OFF
+cmake -A Win32 -S . -B build_dep -DLAB_PROFILE=dep -DHELPER_ASLR=OFF
 cmake --build build_dep --config Release
 
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
+cmake -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
 cmake --build build_aslr_dep --config Release
 
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_seh -DLAB_PROFILE=seh -DHELPER_ASLR=OFF
+cmake -A Win32 -S . -B build_seh -DLAB_PROFILE=seh -DHELPER_ASLR=OFF
 cmake --build build_seh --config Release
 ```
 
@@ -87,25 +105,25 @@ directory explicitly:
 cd Experiments\Windows\osed_vuln_lab
 if not exist build_easy mkdir build_easy
 pushd build_easy
-cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=easy -DHELPER_ASLR=OFF ..
+cmake -A Win32 -DLAB_PROFILE=easy -DHELPER_ASLR=OFF ..
 cmake --build . --config Release
 popd
 
 if not exist build_dep mkdir build_dep
 pushd build_dep
-cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=dep -DHELPER_ASLR=OFF ..
+cmake -A Win32 -DLAB_PROFILE=dep -DHELPER_ASLR=OFF ..
 cmake --build . --config Release
 popd
 
 if not exist build_aslr_dep mkdir build_aslr_dep
 pushd build_aslr_dep
-cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
+cmake -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
 cmake --build . --config Release
 popd
 
 if not exist build_seh mkdir build_seh
 pushd build_seh
-cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=seh -DHELPER_ASLR=OFF ..
+cmake -A Win32 -DLAB_PROFILE=seh -DHELPER_ASLR=OFF ..
 cmake --build . --config Release
 popd
 ```
@@ -184,6 +202,6 @@ Profile-specific WinDbg files:
 
 ## Visual Studio Project Notes
 
-The commands above generate Visual Studio 2017 `.sln` and `.vcxproj` files with
-`-G "Visual Studio 15 2017" -A Win32`.
+The commands above generate the matching Visual Studio `.sln` and `.vcxproj`
+files. The selected generator does not change the required Win32 target.
 A manual Visual Studio folder is included for notes/templates only.

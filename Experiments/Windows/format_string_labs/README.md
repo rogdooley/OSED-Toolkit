@@ -4,14 +4,22 @@ Intentionally vulnerable, local-only programs for OSED-style format-string pract
 
 ## Build
 
-Open a **Developer Command Prompt for Visual Studio 2017** and choose the
-command style matching the installed CMake version.
+Choose the commands matching the installed CMake version. CMake selects an
+installed compatible MSVC generator; `cmake --help` lists the available
+generators and marks the default with `*`. Both paths produce Win32/x86
+binaries and do not assume a Visual Studio release.
 
-Modern CMake 3.13+ (including 3.29):
+The examples assume a Visual Studio generator. For Ninja or NMake, open an
+**x86** MSVC tools prompt, omit `-A Win32`, add
+`-DCMAKE_BUILD_TYPE=Release` while configuring, and omit `--config Release`
+while building. Always use a fresh build directory when changing generator or
+architecture.
+
+Modern CMake 3.13+:
 
 ```bat
 cd Experiments\Windows\format_string_labs
-cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build
+cmake -A Win32 -S . -B build
 cmake --build build --config Release
 ```
 
@@ -21,12 +29,14 @@ Legacy CMake 3.12:
 cd Experiments\Windows\format_string_labs
 if not exist build mkdir build
 pushd build
-cmake -G "Visual Studio 15 2017" -A Win32 ..
+cmake -A Win32 ..
 cmake --build . --config Release
 popd
 ```
 
-Binaries and PDBs are written under `build\Release`. The build deliberately uses x86, `/Od`, `/Oy-`, `/GS-`, DEP, and no ASLR. This first level isolates format-string behavior; later levels should add binary-only analysis and ASLR.
+Binaries and PDBs are written under the selected build directory's `Release`
+folder. The build deliberately uses x86, `/Od`, `/Oy-`, `/GS-`, DEP, and no
+ASLR. This first level isolates format-string behavior.
 
 `fmt05_service.exe` is the integrated exception: it enables ASLR and DEP and listens only on `127.0.0.1:31337`.
 
