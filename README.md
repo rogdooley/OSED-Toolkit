@@ -56,6 +56,10 @@ reverse engineers, emitter documentation, and IAT resolution technique notes.
 **`DRILLS/`** -- Structured exercise templates for practising reverse
 engineering, crash analysis, ROP construction, and related skills.
 
+**`Experiments/Windows/format_string_labs/`** -- Eight Windows x86 labs moving
+from isolated argument leaks and `%n` writes to a network target with arbitrary
+reads, ASLR recovery, byte writes, and benign control-flow redirection.
+
 **`Notes/`** -- Personal notes on stack mechanics, exploit control flow,
 egghunters, and protocol bad characters.
 

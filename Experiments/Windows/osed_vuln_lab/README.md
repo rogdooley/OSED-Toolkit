@@ -11,6 +11,8 @@ This lab target is intentionally vulnerable and intended only for local Windows 
 - `gadgets/gadgets_template.json`: User-maintained gadget metadata template.
 - `gadget_json_schema.md`: JSON format rules for module/gadget metadata.
 - `training_path.md`: staged training sequence and expected outcomes.
+- `aslr/README.md`: OSED-style leak, base recovery, and ASLR control-flow track.
+- `python/aslr_scaffold.py`: transport and address-arithmetic scaffold with no target values.
 - `CHANGELOG.md`: local change history for this lab target.
 - `windbg_easy.txt`: WinDbg command workflow for the `easy` profile.
 - `windbg_dep.txt`: WinDbg command workflow for the `dep` profile.

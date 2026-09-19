@@ -71,6 +71,7 @@ Expected outcomes
 
 Reference
 - `windbg_aslr_dep.txt`
+- `aslr/README.md` for the complete four-exercise leak-to-control-flow track.
 
 ## Supporting Workflow
 
