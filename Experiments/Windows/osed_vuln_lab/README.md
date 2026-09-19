@@ -1,13 +1,19 @@
-# OSED Vulnerable Service Lab (VM-Only)
+# OSED Vulnerable Service Lab - Authoring Guide (VM-Only)
 
 This lab target is intentionally vulnerable and intended only for local Windows x86 VM training.
+
+> **Instructor material:** this source tree contains protocol and vulnerability
+> spoilers. Give learners only the generated `student_bundle` directory. The
+> student brief makes protocol recovery in IDA Pro the first exercise.
 
 ## Components
 
 - `osed_vulnsvc`: Win32 TCP service with opcode-based vulnerable handlers.
 - `osedhelper.dll`: Harmless helper DLL with exported functions for module/gadget analysis.
-- `python/exploit_scaffold.py`: CLI for patterns, offsets, bad characters, raw payloads, and student-supplied layouts.
-- `python/protocol_smoketest.py`: Safe `OP_PING` connectivity test with no disclosure or crash.
+- `student/`: spoiler-free brief and protocol-reversing worksheet.
+- `instructor/protocol_reference.md`: protocol solution and build-validation commands.
+- `python/exploit_scaffold.py`: instructor/post-discovery validation CLI.
+- `python/protocol_smoketest.py`: instructor build smoke test.
 - `gadgets/gadgets_template.json`: User-maintained gadget metadata template.
 - `gadget_json_schema.md`: JSON format rules for module/gadget metadata.
 - `training_path.md`: staged training sequence and expected outcomes.
@@ -19,24 +25,15 @@ This lab target is intentionally vulnerable and intended only for local Windows 
 - `windbg_aslr_dep.txt`: WinDbg command workflow for the `aslr_dep` profile.
 - `windbg_seh.txt`: WinDbg command workflow for the `seh` profile.
 
-## Protocol
+## Student Distribution
 
-Packet format (`little endian`):
+The student handout intentionally omits the packet format, command values,
+payload limits, handler names, and protocol-aware scripts. See
+`instructor/protocol_reference.md` only when validating or teaching the lab.
 
-- `uint32 magic` = `0x4F534544` (`OSED`)
-- `uint16 opcode`
-- `uint16 reserved` (unused)
-- `uint32 length`
-- `length` bytes payload
-
-Opcodes:
-
-- `0x1000 OP_PING`: neutral connectivity check that returns `PONG`.
-- `0x1001 OP_STACK`: classic stack overflow path.
-- `0x1002 OP_SEH`: SEH overwrite training path.
-- `0x1003 OP_SMALLBUF`: constrained overflow for egghunter-style staging.
-- `0x1004 OP_LEAK`: controlled pointer leak (`helper_get_anchor` pointer disclosure).
-- `0x1005 OP_ROP`: overflow path for DEP + VirtualProtect ROP workflow.
+The target itself is not obfuscated or packed. MSVC optimization, inlining, and
+frame-pointer omission are disabled so imports, receive boundaries, field
+checks, dispatch logic, and vulnerable copies remain straightforward in IDA.
 
 ## Build (CMake + MSVC, x86)
 
@@ -97,6 +94,17 @@ cmake -A Win32 -S . -B build_seh -DLAB_PROFILE=seh -DHELPER_ASLR=OFF
 cmake --build build_seh --config Release
 ```
 
+After building the desired profile, generate the student handout:
+
+```bat
+cmake --build build_easy --config Release --target student_bundle
+```
+
+For a different profile, replace `build_easy` with its build directory. Give
+the learner only `build_easy\student_bundle` (or the corresponding profile
+directory). It contains the EXE, required DLL, brief, and worksheet; it excludes
+source, PDB files, headers, and protocol-aware Python clients.
+
 ### Legacy CMake 3.12
 
 CMake 3.12 does not support `-S` and `-B`, so create and enter each build
@@ -152,67 +160,23 @@ Use the matching build directory for the selected profile, such as
 `build_aslr_dep\Release\osed_vulnsvc.exe 9999`. Keep `osedhelper.dll` in the
 same `Release` directory as the executable.
 
-Debug logs print:
+Runtime output is intentionally sparse so the executable does not disclose the
+dispatcher map or helper-module address before the learner recovers them.
 
-- opcode
-- declared length
-- copied length
-- handler name
+## Instructor Validation
 
-## Safe Smoke Test
+Protocol details and validation-client commands are isolated in
+`instructor/protocol_reference.md`. Do not provide that file or `python/` to a
+learner before protocol recovery is complete.
 
-```bat
-python python\protocol_smoketest.py --host 127.0.0.1 --port 9999
-```
+## Post-Discovery WinDbg Workflow
 
-Expected output format:
-
-- `PONG`
-
-This test does not exercise the stack overflow or leak an address. `OP_LEAK`
-is reserved for the `aslr_dep` stage.
-
-## Easy Profile Workflow
-
-Run the service under WinDbg, verify connectivity, and then send a cyclic
-pattern that remains below the protocol's 8192-byte payload limit:
-
-```bat
-python python\exploit_scaffold.py ping
-python python\exploit_scaffold.py pattern --opcode stack --length 800
-```
-
-After WinDbg reports the overwritten EIP value, calculate its offset:
-
-```bat
-python python\exploit_scaffold.py offset --eip 0xXXXXXXXX --length 800
-```
-
-Build a bad-character test only after independently confirming the offset and
-choosing a debugger-validated return address:
-
-```bat
-python python\exploit_scaffold.py badchars --opcode stack --offset OFFSET --return-address 0xADDRESS --exclude 00,0a,0d
-```
-
-The CLI also supports `raw` payload files and a `layout` command for combining
-student-supplied padding, return addresses, ROP bytes, and benign proof bytes.
-Run `python python\exploit_scaffold.py --help` for the complete interface.
-
-## WinDbg Workflow (Training)
-
-1. Find offset:
-   - send cyclic pattern via scaffold and identify EIP/SEH overwrite offset.
-2. Verify badchars:
-   - use scaffold badchar mode and compare memory view in debugger.
-3. Identify modules:
-   - map loaded modules and mitigation flags (`!mona modules` equivalent workflow).
-4. Select gadgets:
-   - gather gadget addresses from non-ASLR/ASLR-appropriate modules and store them in your own JSON.
-5. Build ROP chain:
-   - construct chain bytes in your own tooling and place them in scaffold placeholders.
-6. Verify VirtualProtect call:
-   - confirm stack/register layout and benign proof execution path.
+1. Recover and document the message envelope and dispatcher from the binary.
+2. Write a minimal client from those findings and confirm a harmless command.
+3. Locate the simplest vulnerable handler and send a cyclic pattern.
+4. Calculate and verify the EIP or SEH overwrite offset.
+5. Check bad characters directly in debugger memory.
+6. Continue with module analysis and the selected mitigation profile.
 
 Profile-specific WinDbg files:
 
@@ -226,11 +190,12 @@ Profile-specific WinDbg files:
 - Follow staged progression in `training_path.md`.
 - Use `gadget_json_schema.md` for exact key/field rules and validation expectations.
 
-## Python Scaffolding Notes
+## Instructor Tool Notes
 
 - No weaponized payloads are shipped.
 - Payload bytes are user-supplied and should remain benign (`MessageBoxA`, `calc.exe`, proof file write).
-- Payloads larger than 8192 bytes are rejected by both the client and service before reaching a vulnerable handler.
+- The protocol-aware clients are build-validation or post-discovery aids, not
+  part of the student handout.
 
 ## Visual Studio Project Notes
 

@@ -14,8 +14,9 @@ if(MSVC)
     add_compile_options(/arch:IA32)
   endif()
 
-  # Shared compiler defaults for lab reproducibility.
-  add_compile_options(/W4 /Zi /GS-)
+  # Preserve simple function boundaries and stack frames for beginner IDA work.
+  # Release controls the runtime/link layout; this lab intentionally stays unoptimized.
+  add_compile_options(/W4 /Zi /GS- /Od /Ob0 /Oy-)
 
   if(LAB_PROFILE STREQUAL "easy")
     set(LAB_LINK_FLAGS "/DYNAMICBASE:NO /NXCOMPAT:NO /SAFESEH:NO")
@@ -54,6 +55,25 @@ target_link_libraries(osed_vulnsvc PRIVATE ws2_32 osedhelper)
 if(MSVC)
   set_property(TARGET osed_vulnsvc APPEND_STRING PROPERTY LINK_FLAGS " ${LAB_LINK_FLAGS}")
 endif()
+
+set(STUDENT_BUNDLE_DIR "${CMAKE_BINARY_DIR}/student_bundle")
+add_custom_target(student_bundle
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${STUDENT_BUNDLE_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "$<TARGET_FILE:osed_vulnsvc>"
+          "${STUDENT_BUNDLE_DIR}/osed_vulnsvc.exe"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "$<TARGET_FILE:osedhelper>"
+          "${STUDENT_BUNDLE_DIR}/osedhelper.dll"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_CURRENT_SOURCE_DIR}/student/START_HERE.md"
+          "${STUDENT_BUNDLE_DIR}/START_HERE.md"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_CURRENT_SOURCE_DIR}/student/protocol_notes.md"
+          "${STUDENT_BUNDLE_DIR}/protocol_notes.md"
+  DEPENDS osed_vulnsvc osedhelper
+  COMMENT "Creating spoiler-free student bundle"
+)
 
 message(STATUS "LAB_PROFILE=${LAB_PROFILE}")
 message(STATUS "HELPER_ASLR=${HELPER_ASLR}")

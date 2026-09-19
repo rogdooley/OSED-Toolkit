@@ -7,6 +7,14 @@ The format is based on Keep a Changelog.
 ## [Unreleased]
 
 ### Changed
+- Split student and instructor material so protocol recovery is required before
+  exploit construction.
+- Added a `student_bundle` build target containing only the service, helper DLL,
+  spoiler-free brief, and reversing worksheet.
+- Disabled MSVC optimization, inlining, and frame-pointer omission to preserve
+  beginner-readable function boundaries and control flow in IDA Pro.
+- Removed startup pointer disclosure and handler/opcode debug logging from the
+  service binary.
 - Added neutral `OP_PING`/`PONG` connectivity handling so the smoke test no longer exercises the ASLR disclosure primitive.
 - Replaced the hardcoded exploit demo with a validated CLI for cyclic patterns, offset lookup, bad-character buffers, raw payloads, and student-supplied layouts.
 - Removed the stale `vulnserver_trigger.py`, which targeted an unrelated protocol and port.

@@ -2,6 +2,10 @@
 
 This path sequences profile usage from lowest complexity to highest constraints.
 
+Begin every stage from the generated `student_bundle`. The source tree,
+`instructor/`, and `python/` are instructor material until the learner has
+recovered the protocol and written a working client.
+
 ## Stage 1: easy
 
 Profile
@@ -9,12 +13,16 @@ Profile
 - Mitigations: `/GS- /DYNAMICBASE:NO /NXCOMPAT:NO`
 
 Primary goals
-- Confirm protocol handling and deterministic crashes.
-- Find `OP_STACK` EIP offset with cyclic pattern.
+- Recover the message envelope, validation logic, and dispatcher from the
+  binary without using source or PDB files.
+- Write a minimal client based on documented evidence.
+- Identify the simplest vulnerable command and find its EIP offset with a
+  cyclic pattern.
 - Establish badchar process with controlled memory checks.
 
 Expected outcomes
-- Reliable EIP control on `OP_STACK`.
+- Completed protocol worksheet with static and dynamic evidence.
+- Reliable EIP control on the identified stack-overflow command.
 - Documented badchar set for your VM/debugger/toolchain.
 
 Reference
@@ -75,11 +83,15 @@ Reference
 
 ## Supporting Workflow
 
-1. Start service: `osed_vulnsvc.exe 9999`
-2. Confirm connectivity with neutral `OP_PING`: `python python\\protocol_smoketest.py`
-3. Use `python\\exploit_scaffold.py pattern --opcode stack --length 800` to begin Stage 1.
-4. Keep module/gadget metadata in `gadgets/gadgets_template.json` format.
-5. Follow profile-specific WinDbg command file.
+1. Build the chosen profile and its `student_bundle` target.
+2. Move only the generated bundle into the isolated training VM.
+3. Start `osed_vulnsvc.exe 9999` and reverse the receive path in IDA Pro.
+4. Create a client from the recovered framing and dispatcher behavior.
+5. Continue with the profile-specific WinDbg workflow after reaching the
+   intended handler.
+
+Instructor validation clients under `python/` may be introduced after the
+learner submits the protocol worksheet. They are not starting solutions.
 
 ## Guardrails
 
