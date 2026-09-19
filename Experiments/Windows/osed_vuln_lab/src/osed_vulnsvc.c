@@ -42,6 +42,11 @@ static int recv_exact(SOCKET s, char *buf, int need) {
     return got;
 }
 
+static void handler_ping(SOCKET client) {
+    static const char response[] = "PONG\n";
+    send(client, response, (int)(sizeof(response) - 1), 0);
+}
+
 static void __declspec(noinline) handler_stack(const uint8_t *data, uint32_t len) {
     char stackbuf[256];
     DEBUG_CTX ctx = { "OP_STACK", OP_STACK, len, (size_t)len };
@@ -101,7 +106,7 @@ static void __declspec(noinline) handler_leak(const uint8_t *data, uint32_t len,
     debug_log(&ctx);
 
     char out[64];
-    int n = _snprintf(out, sizeof(out), "LEAK:%p\n", (void *)leak);
+    int n = _snprintf(out, sizeof(out), "LEAK:0x%08lX\n", (unsigned long)leak);
     if (n > 0) {
         send(client, out, n, 0);
     }
@@ -129,6 +134,9 @@ static void __declspec(noinline) handler_rop(const uint8_t *data, uint32_t len) 
 
 static int dispatch_packet(SOCKET client, const OSED_PACKET_HEADER *hdr, const uint8_t *body) {
     switch (hdr->opcode) {
+    case OP_PING:
+        handler_ping(client);
+        return 0;
     case OP_STACK:
         handler_stack(body, hdr->length);
         return 0;

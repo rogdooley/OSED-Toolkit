@@ -1,7 +1,4 @@
-"""Safe protocol smoke test for osed_vulnsvc.
-
-Exercises only OP_LEAK for connectivity and parser verification.
-"""
+"""Safe connectivity smoke test for osed_vulnsvc using OP_PING."""
 
 from __future__ import annotations
 
@@ -10,7 +7,7 @@ from socket import AF_INET, SOCK_STREAM, socket
 from struct import pack
 
 OSED_MAGIC = 0x4F534544
-OP_LEAK = 0x1004
+OP_PING = 0x1000
 
 
 def build_packet(opcode: int, payload: bytes) -> bytes:
@@ -18,7 +15,7 @@ def build_packet(opcode: int, payload: bytes) -> bytes:
 
 
 def run(host: str, port: int) -> bytes:
-    packet = build_packet(OP_LEAK, b"PING")
+    packet = build_packet(OP_PING, b"")
     with socket(AF_INET, SOCK_STREAM) as s:
         s.connect((host, port))
         s.sendall(packet)
@@ -26,13 +23,15 @@ def run(host: str, port: int) -> bytes:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Safe OP_LEAK smoke test")
+    parser = argparse.ArgumentParser(description="Safe OP_PING connectivity test")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=9999)
     args = parser.parse_args()
 
     response = run(args.host, args.port)
-    print(response.decode("ascii", errors="replace").strip())
+    if response != b"PONG\n":
+        raise RuntimeError(f"unexpected server response: {response!r}")
+    print("PONG")
 
 
 if __name__ == "__main__":

@@ -6,8 +6,8 @@ This lab target is intentionally vulnerable and intended only for local Windows 
 
 - `osed_vulnsvc`: Win32 TCP service with opcode-based vulnerable handlers.
 - `osedhelper.dll`: Harmless helper DLL with exported functions for module/gadget analysis.
-- `python/exploit_scaffold.py`: Benign exploit-development scaffolding.
-- `python/protocol_smoketest.py`: Safe connectivity/parser test that exercises only `OP_LEAK`.
+- `python/exploit_scaffold.py`: CLI for patterns, offsets, bad characters, raw payloads, and student-supplied layouts.
+- `python/protocol_smoketest.py`: Safe `OP_PING` connectivity test with no disclosure or crash.
 - `gadgets/gadgets_template.json`: User-maintained gadget metadata template.
 - `gadget_json_schema.md`: JSON format rules for module/gadget metadata.
 - `training_path.md`: staged training sequence and expected outcomes.
@@ -31,6 +31,7 @@ Packet format (`little endian`):
 
 Opcodes:
 
+- `0x1000 OP_PING`: neutral connectivity check that returns `PONG`.
 - `0x1001 OP_STACK`: classic stack overflow path.
 - `0x1002 OP_SEH`: SEH overwrite training path.
 - `0x1003 OP_SMALLBUF`: constrained overflow for egghunter-style staging.
@@ -166,7 +167,37 @@ python python\protocol_smoketest.py --host 127.0.0.1 --port 9999
 
 Expected output format:
 
-- `LEAK:0x...`
+- `PONG`
+
+This test does not exercise the stack overflow or leak an address. `OP_LEAK`
+is reserved for the `aslr_dep` stage.
+
+## Easy Profile Workflow
+
+Run the service under WinDbg, verify connectivity, and then send a cyclic
+pattern that remains below the protocol's 8192-byte payload limit:
+
+```bat
+python python\exploit_scaffold.py ping
+python python\exploit_scaffold.py pattern --opcode stack --length 800
+```
+
+After WinDbg reports the overwritten EIP value, calculate its offset:
+
+```bat
+python python\exploit_scaffold.py offset --eip 0xXXXXXXXX --length 800
+```
+
+Build a bad-character test only after independently confirming the offset and
+choosing a debugger-validated return address:
+
+```bat
+python python\exploit_scaffold.py badchars --opcode stack --offset OFFSET --return-address 0xADDRESS --exclude 00,0a,0d
+```
+
+The CLI also supports `raw` payload files and a `layout` command for combining
+student-supplied padding, return addresses, ROP bytes, and benign proof bytes.
+Run `python python\exploit_scaffold.py --help` for the complete interface.
 
 ## WinDbg Workflow (Training)
 
@@ -199,6 +230,7 @@ Profile-specific WinDbg files:
 
 - No weaponized payloads are shipped.
 - Payload bytes are user-supplied and should remain benign (`MessageBoxA`, `calc.exe`, proof file write).
+- Payloads larger than 8192 bytes are rejected by both the client and service before reaching a vulnerable handler.
 
 ## Visual Studio Project Notes
 

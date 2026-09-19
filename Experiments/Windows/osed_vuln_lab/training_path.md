@@ -76,8 +76,8 @@ Reference
 ## Supporting Workflow
 
 1. Start service: `osed_vulnsvc.exe 9999`
-2. Confirm connectivity: `python python\\protocol_smoketest.py`
-3. Use `python\\exploit_scaffold.py` with benign, user-supplied bytes.
+2. Confirm connectivity with neutral `OP_PING`: `python python\\protocol_smoketest.py`
+3. Use `python\\exploit_scaffold.py pattern --opcode stack --length 800` to begin Stage 1.
 4. Keep module/gadget metadata in `gadgets/gadgets_template.json` format.
 5. Follow profile-specific WinDbg command file.
 

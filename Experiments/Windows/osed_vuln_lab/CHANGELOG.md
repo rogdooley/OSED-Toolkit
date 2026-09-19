@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed
+- Added neutral `OP_PING`/`PONG` connectivity handling so the smoke test no longer exercises the ASLR disclosure primitive.
+- Replaced the hardcoded exploit demo with a validated CLI for cyclic patterns, offset lookup, bad-character buffers, raw payloads, and student-supplied layouts.
+- Removed the stale `vulnserver_trigger.py`, which targeted an unrelated protocol and port.
+
 ## [0.1.0] - 2026-05-17
 
 ### Added

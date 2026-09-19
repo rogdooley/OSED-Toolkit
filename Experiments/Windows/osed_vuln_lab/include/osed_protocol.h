@@ -5,6 +5,7 @@
 #define OSED_MAGIC 0x4F534544u /* 'OSED' */
 
 typedef enum OSED_OPCODE {
+    OP_PING = 0x1000,
     OP_STACK = 0x1001,
     OP_SEH = 0x1002,
     OP_SMALLBUF = 0x1003,
