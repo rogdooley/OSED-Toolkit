@@ -4,12 +4,26 @@ Intentionally vulnerable, local-only programs for OSED-style format-string pract
 
 ## Build
 
-Open an **x86 Native Tools Command Prompt for Visual Studio 2022**:
+Open a **Developer Command Prompt for Visual Studio 2017** and choose the
+command style matching the installed CMake version.
+
+Modern CMake 3.13+ (including 3.29):
 
 ```bat
 cd Experiments\Windows\format_string_labs
-cmake -S . -B build -A Win32
+cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build
 cmake --build build --config Release
+```
+
+Legacy CMake 3.12:
+
+```bat
+cd Experiments\Windows\format_string_labs
+if not exist build mkdir build
+pushd build
+cmake -G "Visual Studio 15 2017" -A Win32 ..
+cmake --build . --config Release
+popd
 ```
 
 Binaries and PDBs are written under `build\Release`. The build deliberately uses x86, `/Od`, `/Oy-`, `/GS-`, DEP, and no ASLR. This first level isolates format-string behavior; later levels should add binary-only analysis and ASLR.

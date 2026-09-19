@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.12)
 project(osed_vuln_lab C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -42,7 +42,7 @@ add_library(osedhelper SHARED
 target_include_directories(osedhelper PRIVATE include)
 target_compile_definitions(osedhelper PRIVATE WIN32_LEAN_AND_MEAN)
 if(MSVC)
-  target_link_options(osedhelper PRIVATE ${HELPER_LINK_FLAGS})
+  set_property(TARGET osedhelper APPEND_STRING PROPERTY LINK_FLAGS " ${HELPER_LINK_FLAGS}")
 endif()
 
 add_executable(osed_vulnsvc
@@ -52,7 +52,7 @@ target_include_directories(osed_vulnsvc PRIVATE include)
 target_compile_definitions(osed_vulnsvc PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(osed_vulnsvc PRIVATE ws2_32 osedhelper)
 if(MSVC)
-  target_link_options(osed_vulnsvc PRIVATE ${LAB_LINK_FLAGS})
+  set_property(TARGET osed_vulnsvc APPEND_STRING PROPERTY LINK_FLAGS " ${LAB_LINK_FLAGS}")
 endif()
 
 message(STATUS "LAB_PROFILE=${LAB_PROFILE}")

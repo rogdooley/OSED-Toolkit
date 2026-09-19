@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.12)
 project(osed_format_string_labs C)
 
 if(NOT MSVC)
@@ -16,7 +16,8 @@ function(add_format_lab target source)
   target_include_directories(${target} PRIVATE include)
   target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
   target_compile_options(${target} PRIVATE /W4 /Od /Oy- /GS- /Zi)
-  target_link_options(${target} PRIVATE /DEBUG /INCREMENTAL:NO /DYNAMICBASE:NO /NXCOMPAT)
+  set_property(TARGET ${target} APPEND_STRING PROPERTY LINK_FLAGS
+    " /DEBUG /INCREMENTAL:NO /DYNAMICBASE:NO /NXCOMPAT")
 endfunction()
 
 add_format_lab(fmt01_stack_leak src/fmt01_stack_leak.c)
@@ -28,4 +29,5 @@ add_executable(fmt05_service src/fmt05_service.c)
 target_compile_definitions(fmt05_service PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 target_compile_options(fmt05_service PRIVATE /W4 /Od /Oy- /GS- /Zi)
 target_link_libraries(fmt05_service PRIVATE ws2_32)
-target_link_options(fmt05_service PRIVATE /DEBUG /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT)
+set_property(TARGET fmt05_service APPEND_STRING PROPERTY LINK_FLAGS
+  " /DEBUG /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT")

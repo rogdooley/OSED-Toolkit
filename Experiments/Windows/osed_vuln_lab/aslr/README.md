@@ -15,15 +15,30 @@ Do not inspect `src`, `instructor.md`, or linker map files during the first atte
 
 ## Build
 
-From an x86 Native Tools Command Prompt:
+From a Visual Studio 2017 Developer Command Prompt:
+
+Modern CMake 3.13+:
 
 ```bat
 cd Experiments\Windows\osed_vuln_lab
-cmake -S . -B build_aslr_dep -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
+cmake -G "Visual Studio 15 2017" -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
 cmake --build build_aslr_dep --config Release
 ```
 
-Run `osed_vulnsvc.exe 9999` under WinDbg. Keep `osedhelper.dll` beside it. Confirm both modules use ASLR and DEP before beginning.
+Legacy CMake 3.12:
+
+```bat
+cd Experiments\Windows\osed_vuln_lab
+if not exist build_aslr_dep mkdir build_aslr_dep
+pushd build_aslr_dep
+cmake -G "Visual Studio 15 2017" -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
+cmake --build . --config Release
+popd
+```
+
+Run `build_aslr_dep\Release\osed_vulnsvc.exe 9999` under WinDbg. CMake places
+`osedhelper.dll` in the same directory. Confirm both modules use ASLR and DEP
+before beginning.
 
 ## Exercises
 
