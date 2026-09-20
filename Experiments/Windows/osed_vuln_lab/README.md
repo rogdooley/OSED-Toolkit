@@ -9,9 +9,12 @@ This lab target is intentionally vulnerable and intended only for local Windows 
 ## Components
 
 - `osed_vulnsvc`: Win32 TCP service with opcode-based vulnerable handlers.
-- `osedhelper.dll`: Harmless helper DLL with exported functions for module/gadget analysis.
+- `osedhelper.dll`: Harmless helper DLL with deterministic x86 training
+  sequences, writable storage, and a VirtualProtect wrapper.
 - `student/`: spoiler-free brief and protocol-reversing worksheet.
 - `instructor/protocol_reference.md`: protocol solution and build-validation commands.
+- `instructor/profile_matrix.md`: profile architecture, mitigation matrix, and
+  binary-verification expectations.
 - `python/exploit_scaffold.py`: instructor/post-discovery validation CLI.
 - `python/protocol_smoketest.py`: instructor build smoke test.
 - `gadgets/gadgets_template.json`: User-maintained gadget metadata template.
@@ -34,6 +37,8 @@ payload limits, handler names, and protocol-aware scripts. See
 The target itself is not obfuscated or packed. MSVC optimization, inlining, and
 frame-pointer omission are disabled so imports, receive boundaries, field
 checks, dispatch logic, and vulnerable copies remain straightforward in IDA.
+The student workflow assumes IDA Free 7.7, no decompiler, and no Internet
+access; pseudocode and online symbol services are not required.
 
 ## Build (CMake + MSVC, x86)
 
@@ -94,16 +99,26 @@ cmake -A Win32 -S . -B build_seh -DLAB_PROFILE=seh -DHELPER_ASLR=OFF
 cmake --build build_seh --config Release
 ```
 
-After building the desired profile, generate the student handout:
+Building a profile also generates its student handout automatically. To refresh
+only the handout target explicitly, run:
 
 ```bat
 cmake --build build_easy --config Release --target student_bundle
 ```
 
-For a different profile, replace `build_easy` with its build directory. Give
-the learner only `build_easy\student_bundle` (or the corresponding profile
-directory). It contains the EXE, required DLL, brief, and worksheet; it excludes
-source, PDB files, headers, and protocol-aware Python clients.
+When Python 3 is available, the normal MSVC build also runs the PE verifier.
+It can be invoked directly with:
+
+```bat
+cmake --build build_easy --config Release --target verify_lab
+```
+
+For a different profile, replace `build_easy` with its build directory. The
+normal `cmake --build ...` command and the explicit target above both populate
+`build_easy\student_bundle` (or the corresponding profile directory). Give the
+learner only that directory. It contains the EXE, required DLL, brief, and
+worksheet; it excludes source, PDB files, headers, and protocol-aware Python
+clients.
 
 ### Legacy CMake 3.12
 
@@ -141,13 +156,18 @@ popd
 
 - `easy`: `/GS- /DYNAMICBASE:NO /NXCOMPAT:NO`
   - Goal: simplest memory corruption path with executable stack assumptions.
+  - Helper: fixed direct stack-transfer sequences only.
 - `dep`: `/GS- /DYNAMICBASE:NO /NXCOMPAT`
   - Goal: DEP active, stable module base for ROP learning.
+  - Helper: fixed VirtualProtect ROP vocabulary; no SEH-only sequence.
 - `aslr_dep`: `/GS- /DYNAMICBASE /NXCOMPAT`
   - Goal: DEP + ASLR, practice info leak + dynamic chain construction.
+  - Helper: randomized ROP vocabulary recovered from leaked base plus RVAs.
 - `seh`: `/GS- /SAFESEH:NO`
   - Goal: deterministic exception handling path for SEH overwrite exercises.
-- `helper_no_aslr`: build with `-DHELPER_ASLR=OFF` (`/DYNAMICBASE:NO`).
+  - Helper: fixed pop-pop-ret sequence only; no direct stack-transfer export.
+- `helper_no_aslr`: build with `-DHELPER_ASLR=OFF`
+  (`/BASE:0x62500000 /FIXED /DYNAMICBASE:NO /SAFESEH:NO`).
 - `helper_aslr`: build with `-DHELPER_ASLR=ON` (`/DYNAMICBASE`).
 
 ## Runtime

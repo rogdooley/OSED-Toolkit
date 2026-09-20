@@ -36,5 +36,10 @@ Badchar workflow
   - db esp L100
   - db <buffer_address> L100
 
+Redirect workflow
+- Inventory both osed_vulnsvc.exe and osedhelper.dll.
+- Locate and verify a direct stack-transfer instruction in the supplied modules.
+- Confirm the selected module has ASLR disabled before using its absolute address.
+
 Notes
 - Keep payloads benign and local VM only.

@@ -27,8 +27,8 @@
 
   "virtualprotect_ptr": {
     "address": "0xTODO",
-    "module": "kernel32.dll (IAT in libspp.dll)",
-    "instruction": "IAT entry — dword that holds the address of VirtualProtect"
+    "module": "libspp.dll",
+    "instruction": "callable VirtualProtect wrapper, import thunk, or resolved function"
   },
 
   "pop_ebp_ret": {

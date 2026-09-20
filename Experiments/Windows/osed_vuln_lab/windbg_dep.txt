@@ -27,6 +27,15 @@ Module review
 - lmv m osed_vulnsvc
 - lmv m osedhelper
 
+Required PUSHAD-chain inventory
+- pop edi; ret and a standalone ret
+- pop esi; ret and a callable VirtualProtect wrapper/thunk
+- pop ebp; ret and jmp esp
+- pop eax; ret, neg eax; ret, and xchg eax,ebx; ret
+- pop edx; ret and pop ecx; ret
+- pushad; ret and a writable dword
+- Record instruction bytes, absolute addresses, and owning module.
+
 VirtualProtect verification
 - bp kernel32!VirtualProtect
 - g
@@ -35,4 +44,7 @@ VirtualProtect verification
 - g
 
 Notes
-- Use user-maintained gadget JSON and scaffold placeholders.
+- Populate gadgets/gadgets_template.json only from debugger-verified findings.
+- Tools.rop.GadgetDB accepts the template's modules/gadgets envelope.
+- Append a NOP sled and benign proof bytes immediately after the serialized
+  PUSHAD chain.

@@ -25,7 +25,8 @@ Typical usage
 
     DryRunPrinter().print_chain(chain, db, bad_chars=b"\\x00\\x0a\\x0d")
 
-    raw = ChainSerializer().serialize(chain, db, shellcode_addr=0x00419000)
+    raw = ChainSerializer().serialize(chain, db)
+    payload = raw + (b"\x90" * 16) + benign_proof_bytes
 
 For building custom chains use RopChain::
 

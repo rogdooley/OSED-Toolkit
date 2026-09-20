@@ -11,8 +11,17 @@ The format is based on Keep a Changelog.
   exploit construction.
 - Added a `student_bundle` build target containing only the service, helper DLL,
   spoiler-free brief, and reversing worksheet.
+- Made `student_bundle` part of the default build so every compiled profile
+  produces its student handout without a separate target invocation.
 - Disabled MSVC optimization, inlining, and frame-pointer omission to preserve
   beginner-readable function boundaries and control flow in IDA Pro.
+- Made the student workflow explicitly compatible with offline IDA Free 7.7
+  using disassembly, imports, strings, xrefs, and graph/text views only.
+- Added a deterministic x86 gadget bank, writable slot, and VirtualProtect
+  wrapper to `osedhelper.dll` for easy, SEH, DEP/ROP, pivot, and ASLR exercises.
+- Aligned the lab gadget template with `Tools.rop`, taught `GadgetDB` to accept
+  the lab metadata envelope, and corrected the PUSHAD chain so proof bytes
+  follow the serialized chain directly.
 - Removed startup pointer disclosure and handler/opcode debug logging from the
   service binary.
 - Added neutral `OP_PING`/`PONG` connectivity handling so the smoke test no longer exercises the ASLR disclosure primitive.

@@ -45,6 +45,6 @@ OSEDHELPER_API void __stdcall helper_aslr_proof(void) {
 
 /*
  * Lab note:
- * - Build variants intentionally keep ordinary code sequences for gadget hunting.
+ * - osedgadgets.c provides the deterministic instruction sequences.
  * - No embedded payload logic is provided here.
  */

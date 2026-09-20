@@ -3,6 +3,8 @@
 Record only findings supported by disassembly, a debugger trace, or a controlled
 network experiment.
 
+Profile: ____________________
+
 ## Receive Sequence
 
 | Step | Caller address | Destination | Requested bytes | Return handling | Evidence |
@@ -46,3 +48,13 @@ Use neutral labels until behavior is confirmed.
 |---|---|---|
 | Fact | | |
 | Hypothesis | | |
+
+## Profile Evidence
+
+| Item | Address or value | Module | Mitigation/RVA evidence |
+|---|---:|---|---|
+| Control-flow primitive | | | |
+| Writable location | | | |
+| Callable API target | | | |
+| Leaked pointer | | | |
+| Recovered module base | | | |

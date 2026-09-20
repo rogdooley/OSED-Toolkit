@@ -121,6 +121,21 @@ class TestGadgetDB:
         db = GadgetDB.from_file(p)
         assert db.contains("pop_eax_ret")
 
+    def test_from_file_accepts_lab_envelope(self, tmp_path) -> None:
+        p = tmp_path / "gadgets.json"
+        p.write_text(
+            json.dumps({"modules": {"fake.dll": {}}, "gadgets": FAKE_GADGETS}),
+            encoding="utf-8",
+        )
+        db = GadgetDB.from_file(p)
+        assert db.contains("pushad_ret")
+        assert len(db) == len(FAKE_GADGETS)
+
+    def test_from_dict_ignores_metadata_keys(self) -> None:
+        db = GadgetDB.from_dict({"_comment": ["notes"], **FAKE_GADGETS})
+        assert db.contains("pop_eax_ret")
+        assert len(db) == len(FAKE_GADGETS)
+
     def test_from_file_bad_json_raises(self, tmp_path) -> None:
         p = tmp_path / "bad.json"
         p.write_text("{ not json }", encoding="utf-8")
@@ -262,11 +277,11 @@ class TestVirtualProtectChain:
         assert GadgetRef in types
         assert RawDword in types
         assert WritablePtr in types
-        assert ShellcodePtr in types
+        assert ShellcodePtr not in types
 
-    def test_plan_has_exactly_one_shellcode_ptr(self) -> None:
+    def test_plan_has_no_embedded_shellcode_pointer(self) -> None:
         chain = VirtualProtectChain().plan()
-        assert sum(1 for e in chain if isinstance(e, ShellcodePtr)) == 1
+        assert not any(isinstance(e, ShellcodePtr) for e in chain)
 
     def test_plan_has_exactly_one_writable_ptr(self) -> None:
         chain = VirtualProtectChain().plan()
@@ -298,9 +313,10 @@ class TestVirtualProtectChain:
         chain = VirtualProtectChain().plan()
         assert any(isinstance(e, RawDword) and e.value == 0x90909090 for e in chain)
 
-    def test_shellcode_ptr_is_last_element(self) -> None:
+    def test_pushad_is_last_element_so_proof_bytes_follow_directly(self) -> None:
         chain = VirtualProtectChain().plan()
-        assert isinstance(chain[-1], ShellcodePtr)
+        assert isinstance(chain[-1], GadgetRef)
+        assert chain[-1].name == "pushad_ret"
 
     def test_invalid_shellcode_size_zero_raises(self) -> None:
         with pytest.raises(ValueError, match="shellcode_size"):
@@ -506,7 +522,7 @@ class TestChainSerializer:
     def test_full_chain_length(self) -> None:
         db = make_db()
         chain = VirtualProtectChain().plan()
-        result = ChainSerializer().serialize(chain, db, shellcode_addr=0x41414141)
+        result = ChainSerializer().serialize(chain, db)
         assert isinstance(result, bytes)
         # No PaddingBlocks in VP plan; one entry = 4 bytes
         assert len(result) == len(chain) * 4

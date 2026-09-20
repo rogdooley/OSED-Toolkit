@@ -24,6 +24,8 @@ Commands
 SEH-specific checks
 - Trigger OP_SEH with cyclic pattern.
 - Record crash context and walk exception chain.
+- Find and verify a pop-pop-ret sequence in osedhelper.dll.
+- Confirm osedhelper has SafeSEH disabled before using the sequence.
 - Useful views:
   - .exr -1
   - .ecxr
@@ -32,3 +34,5 @@ SEH-specific checks
 
 Notes
 - Handler intentionally forces a deterministic access violation path.
+- The helper DLL deliberately includes a pop-pop-ret candidate; derive its
+  address from the rebuilt DLL rather than copying an instructor address.

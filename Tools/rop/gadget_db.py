@@ -58,6 +58,14 @@ class GadgetDB:
 
     # -- Constructors ---------------------------------------------------------
 
+    @staticmethod
+    def _extract_gadgets(data: dict[str, dict]) -> dict[str, dict]:
+        """Accept a flat database or the lab's modules/gadgets envelope."""
+        gadgets = data.get("gadgets", data)
+        if not isinstance(gadgets, dict):
+            raise GadgetDBError("The 'gadgets' entry must be a JSON object")
+        return {name: entry for name, entry in gadgets.items() if not name.startswith("_")}
+
     @classmethod
     def from_file(cls, path: Path | str) -> GadgetDB:
         """Load from a JSON file on disk."""
@@ -74,12 +82,12 @@ class GadgetDB:
             raise GadgetDBError(
                 f"Gadget file must be a JSON object, got {type(data).__name__}"
             )
-        return cls(data)
+        return cls(cls._extract_gadgets(data))
 
     @classmethod
     def from_dict(cls, data: dict[str, dict]) -> GadgetDB:
         """Construct directly from a Python dict (useful for tests)."""
-        return cls(data)
+        return cls(cls._extract_gadgets(data))
 
     # -- Query interface -------------------------------------------------------
 

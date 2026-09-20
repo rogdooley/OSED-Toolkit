@@ -17,7 +17,7 @@ Top-level object keys:
 
 Each module entry:
 
-- `base`: string hex (`"0x10000000"`) or integer.
+- `base`: string hex (`"0x62500000"`) or integer.
 - `aslr`: boolean.
 - `rebase`: boolean.
 - `safeseh`: boolean.
@@ -28,7 +28,7 @@ Example:
 ```json
 "modules": {
   "osedhelper.dll": {
-    "base": "0x10000000",
+    "base": "0x62500000",
     "aslr": false,
     "rebase": false,
     "safeseh": false,
@@ -43,16 +43,16 @@ Each gadget entry:
 
 - `address`: string hex (`"0x10012345"`) or integer.
 - `module`: module name string.
-- `bytes`: optional disassembly/byte annotation string.
+- `instruction`: disassembly or symbol annotation string.
 
 Example:
 
 ```json
 "gadgets": {
-  "pop_eax": {
+  "pop_eax_ret": {
     "address": "0x10012345",
     "module": "osedhelper.dll",
-    "bytes": "58 C3"
+    "instruction": "pop eax; ret"
   }
 }
 ```
@@ -63,6 +63,10 @@ Example:
 - Hex values should be 32-bit address compatible for x86.
 - Do not use placeholder `0x00000000` in active runs.
 - Revalidate all addresses after process restart when ASLR is enabled.
+- `Tools.rop.GadgetDB` accepts this `modules`/`gadgets` envelope directly and
+  ignores `modules` while resolving chain entries.
+- `virtualprotect_ptr` must be executable: use a callable import thunk, wrapper,
+  or resolved function address, not the address of a data-only IAT slot.
 
 ## Safety Scope
 

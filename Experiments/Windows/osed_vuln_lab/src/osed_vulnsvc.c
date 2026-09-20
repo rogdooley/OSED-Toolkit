@@ -31,6 +31,7 @@ static void __declspec(noinline) handler_ping(SOCKET client) {
     send(client, response, (int)(sizeof(response) - 1), 0);
 }
 
+#if defined(OSED_PROFILE_EASY)
 static void __declspec(noinline) handler_stack(const uint8_t *data, uint32_t len) {
     char stackbuf[256];
 
@@ -42,6 +43,19 @@ static void __declspec(noinline) handler_stack(const uint8_t *data, uint32_t len
     }
 }
 
+static void __declspec(noinline) handler_smallbuf(const uint8_t *data, uint32_t len) {
+    char tiny[64];
+
+    /* INTENTIONAL VULNERABILITY: constrained overwrite for staged-payload practice. */
+    memcpy(tiny, data, len);
+
+    if (tiny[1] == 'Z') {
+        puts("request marker observed");
+    }
+}
+#endif
+
+#if defined(OSED_PROFILE_SEH)
 static LONG WINAPI lab_exception_filter(EXCEPTION_POINTERS *ep) {
     printf("[seh] exception code=0x%08lX eip=0x%08lX\n",
            (unsigned long)ep->ExceptionRecord->ExceptionCode,
@@ -63,18 +77,9 @@ static void __declspec(noinline) handler_seh(const uint8_t *data, uint32_t len) 
         puts("[seh] handler reached");
     }
 }
+#endif
 
-static void __declspec(noinline) handler_smallbuf(const uint8_t *data, uint32_t len) {
-    char tiny[64];
-
-    /* INTENTIONAL VULNERABILITY: constrained overwrite for egghunter staging practice. */
-    memcpy(tiny, data, len);
-
-    if (tiny[1] == 'Z') {
-        puts("request marker observed");
-    }
-}
-
+#if defined(OSED_PROFILE_ASLR_DEP)
 static void __declspec(noinline) handler_leak(const uint8_t *data, uint32_t len, SOCKET client) {
     (void)data;
     (void)len;
@@ -88,7 +93,9 @@ static void __declspec(noinline) handler_leak(const uint8_t *data, uint32_t len,
         send(client, out, n, 0);
     }
 }
+#endif
 
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
 static void __declspec(noinline) rop_target_marker(void) {
     puts("ROP target marker reached");
 }
@@ -106,6 +113,7 @@ static void __declspec(noinline) handler_rop(const uint8_t *data, uint32_t len) 
         rop_target_marker();
     }
 }
+#endif
 
 static int __declspec(noinline) dispatch_packet(
     SOCKET client,
@@ -115,21 +123,29 @@ static int __declspec(noinline) dispatch_packet(
     case OP_PING:
         handler_ping(client);
         return 0;
+#if defined(OSED_PROFILE_EASY)
     case OP_STACK:
         handler_stack(body, hdr->length);
-        return 0;
-    case OP_SEH:
-        handler_seh(body, hdr->length);
         return 0;
     case OP_SMALLBUF:
         handler_smallbuf(body, hdr->length);
         return 0;
+#endif
+#if defined(OSED_PROFILE_SEH)
+    case OP_SEH:
+        handler_seh(body, hdr->length);
+        return 0;
+#endif
+#if defined(OSED_PROFILE_ASLR_DEP)
     case OP_LEAK:
         handler_leak(body, hdr->length, client);
         return 0;
+#endif
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
     case OP_ROP:
         handler_rop(body, hdr->length);
         return 0;
+#endif
     default:
         puts("Unknown opcode");
         return -1;
@@ -237,6 +253,10 @@ int main(int argc, char **argv) {
     const char *port = DEFAULT_PORT;
     if (argc > 1) {
         port = argv[1];
+    }
+
+    if (helper_probe(7) == 0) {
+        return 1;
     }
 
     return run_server(port);

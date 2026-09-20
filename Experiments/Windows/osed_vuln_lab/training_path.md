@@ -24,6 +24,7 @@ Expected outcomes
 - Completed protocol worksheet with static and dynamic evidence.
 - Reliable EIP control on the identified stack-overflow command.
 - Documented badchar set for your VM/debugger/toolchain.
+- Verified direct stack redirect from a supplied non-ASLR module.
 
 Reference
 - `windbg_easy.txt`
@@ -40,6 +41,7 @@ Primary goals
 
 Expected outcomes
 - Reproducible SEH overwrite offset and structured exception analysis notes.
+- Debugger-verified pop-pop-ret candidate from a module with SafeSEH disabled.
 
 Reference
 - `windbg_seh.txt`
@@ -56,8 +58,10 @@ Primary goals
 
 Expected outcomes
 - Stable module inventory.
-- User-maintained gadget metadata JSON with validated addresses.
+- User-maintained gadget metadata JSON containing every primitive required by
+  `Tools.rop.VirtualProtectChain`.
 - Verified debugger break on `kernel32!VirtualProtect` during training flow.
+- Benign proof bytes reached after VirtualProtect returns through `jmp esp`.
 
 Reference
 - `windbg_dep.txt`
@@ -76,6 +80,7 @@ Primary goals
 Expected outcomes
 - Repeatable leak-to-module mapping process.
 - Documented per-run address recalculation workflow.
+- Working DEP chain built from leaked base plus verified gadget RVAs.
 
 Reference
 - `windbg_aslr_dep.txt`

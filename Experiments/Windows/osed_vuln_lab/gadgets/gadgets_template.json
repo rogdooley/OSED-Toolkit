@@ -1,7 +1,7 @@
 {
   "modules": {
     "osedhelper.dll": {
-      "base": "0x10000000",
+      "base": "0x62500000",
       "aslr": false,
       "rebase": false,
       "safeseh": false,
@@ -9,16 +9,27 @@
     }
   },
   "gadgets": {
-    "pivot_or_align": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_ecx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_edx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_ebx": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_edi": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_esi": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "pop_ebp": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "mov_ptr_esi_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "virtualprotect_ptr": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""},
-    "call_eax_or_jmp_eax": {"address": "0x00000000", "module": "osedhelper.dll", "bytes": ""}
+    "pop_edi_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop edi; ret"},
+    "ptr_to_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "ret"},
+    "pop_esi_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop esi; ret"},
+    "virtualprotect_ptr": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "callable helper_memory_protect wrapper or import thunk"},
+    "pop_ebp_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop ebp; ret"},
+    "jmp_esp": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "jmp esp"},
+    "pop_eax_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop eax; ret"},
+    "neg_eax_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "neg eax; ret"},
+    "xchg_eax_ebx_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "xchg eax, ebx; ret"},
+    "pop_edx_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop edx; ret"},
+    "pop_ecx_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop ecx; ret"},
+    "pushad_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pushad; ret"},
+    "writable_ptr": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "writable static dword"},
+    "pop_ebx_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop ebx; ret"},
+    "pop_pop_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "pop eax; pop ebx; ret"},
+    "xchg_eax_esp_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "xchg eax, esp; ret"},
+    "deref_eax_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "mov eax, [eax]; ret"},
+    "xchg_eax_esi_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "xchg eax, esi; ret"},
+    "mov_ptr_esi_eax_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "mov [esi], eax; ret"},
+    "add_esp_10_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "add esp, 0x10; ret"},
+    "call_eax_ret": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "call eax; ret"},
+    "jmp_eax": {"address": "0x00000000", "module": "osedhelper.dll", "instruction": "jmp eax"}
   }
 }

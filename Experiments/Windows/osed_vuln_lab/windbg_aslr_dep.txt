@@ -29,7 +29,9 @@ Leak workflow
 
 ASLR-aware review
 - Re-check module bases each launch.
-- Recompute absolute addresses from leaked/module base values.
+- Record each required gadget RVA once.
+- Recompute every absolute gadget, writable-slot, and API-wrapper address as
+  leaked module base + verified RVA on each process launch.
 
 VirtualProtect verification
 - bp kernel32!VirtualProtect
@@ -37,3 +39,7 @@ VirtualProtect verification
 - r
 - dd esp L20
 - g
+
+Notes
+- Use the same PUSHAD primitive inventory as windbg_dep.txt.
+- Never reuse absolute addresses from the non-ASLR profile.
