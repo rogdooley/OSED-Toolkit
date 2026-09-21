@@ -26,9 +26,21 @@ static int __declspec(noinline) recv_exact(SOCKET s, char *buf, int need) {
     return got;
 }
 
+static int __declspec(noinline) send_exact(SOCKET s, const char *buf, int length) {
+    int sent = 0;
+    while (sent < length) {
+        int result = send(s, buf + sent, length - sent, 0);
+        if (result <= 0) {
+            return -1;
+        }
+        sent += result;
+    }
+    return sent;
+}
+
 static void __declspec(noinline) handler_ping(SOCKET client) {
     static const char response[] = "PONG\n";
-    send(client, response, (int)(sizeof(response) - 1), 0);
+    send_exact(client, response, (int)(sizeof(response) - 1));
 }
 
 #if defined(OSED_PROFILE_EASY)
@@ -77,21 +89,53 @@ static void __declspec(noinline) handler_seh(const uint8_t *data, uint32_t len) 
         puts("[seh] handler reached");
     }
 }
+
+static int __declspec(noinline) dispatch_seh_record(
+    const OSED_PACKET_HEADER *packet,
+    const uint8_t *body) {
+    const OSED_SEH_RECORD *record;
+    uint32_t data_offset;
+
+    if (packet->control != OSED_CONTROL_STRUCTURED ||
+        packet->length < sizeof(OSED_SEH_RECORD)) {
+        return -1;
+    }
+
+    record = (const OSED_SEH_RECORD *)body;
+    if (record->type != OSED_RECORD_DATA) {
+        return -1;
+    }
+
+    data_offset = (uint32_t)sizeof(OSED_SEH_RECORD) + record->name_length;
+    if (data_offset > packet->length ||
+        record->data_length != packet->length - data_offset) {
+        return -1;
+    }
+
+    handler_seh(body + data_offset, record->data_length);
+    return 0;
+}
 #endif
 
 #if defined(OSED_PROFILE_ASLR_DEP)
-static void __declspec(noinline) handler_leak(const uint8_t *data, uint32_t len, SOCKET client) {
-    (void)data;
-    (void)len;
-
+static int __declspec(noinline) handler_leak(SOCKET client) {
     void *fp = (void *)&helper_get_anchor;
     uintptr_t leak = (uintptr_t)fp;
+    OSED_PACKET_HEADER response_header;
+    OSED_V2_RESULT result;
 
-    char out[64];
-    int n = _snprintf(out, sizeof(out), "LEAK:0x%08lX\n", (unsigned long)leak);
-    if (n > 0) {
-        send(client, out, n, 0);
+    response_header.magic = OSED_MAGIC;
+    response_header.opcode = OP_LEAK;
+    response_header.control = OSED_CONTROL_V2_RECORD;
+    response_header.length = (uint32_t)sizeof(result);
+    result.status = 0;
+    result.kind = OSED_RECORD_QUERY;
+    result.value = (uint32_t)leak;
+
+    if (send_exact(client, (const char *)&response_header, (int)sizeof(response_header)) < 0) {
+        return -1;
     }
+    return send_exact(client, (const char *)&result, (int)sizeof(result)) < 0 ? -1 : 0;
 }
 #endif
 
@@ -113,6 +157,33 @@ static void __declspec(noinline) handler_rop(const uint8_t *data, uint32_t len) 
         rop_target_marker();
     }
 }
+
+static int __declspec(noinline) parse_v2_record(
+    const OSED_PACKET_HEADER *packet,
+    const uint8_t *body,
+    uint16_t expected_kind,
+    const uint8_t **data,
+    uint32_t *data_length) {
+    const OSED_V2_RECORD *record;
+
+    if (packet->control != OSED_CONTROL_V2_RECORD ||
+        packet->length < sizeof(OSED_V2_RECORD)) {
+        return -1;
+    }
+
+    record = (const OSED_V2_RECORD *)body;
+    if (record->kind != expected_kind ||
+        record->options != 0 ||
+        record->data_offset < sizeof(OSED_V2_RECORD) ||
+        record->data_offset > packet->length ||
+        record->data_length != packet->length - record->data_offset) {
+        return -1;
+    }
+
+    *data = body + record->data_offset;
+    *data_length = record->data_length;
+    return 0;
+}
 #endif
 
 static int __declspec(noinline) dispatch_packet(
@@ -121,30 +192,61 @@ static int __declspec(noinline) dispatch_packet(
     const uint8_t *body) {
     switch (hdr->opcode) {
     case OP_PING:
+        if (hdr->control != OSED_CONTROL_V1 || hdr->length != 0) {
+            return -1;
+        }
         handler_ping(client);
         return 0;
 #if defined(OSED_PROFILE_EASY)
     case OP_STACK:
+        if (hdr->control != OSED_CONTROL_V1) {
+            return -1;
+        }
         handler_stack(body, hdr->length);
         return 0;
     case OP_SMALLBUF:
+        if (hdr->control != OSED_CONTROL_V1) {
+            return -1;
+        }
         handler_smallbuf(body, hdr->length);
         return 0;
 #endif
 #if defined(OSED_PROFILE_SEH)
     case OP_SEH:
-        handler_seh(body, hdr->length);
-        return 0;
+        return dispatch_seh_record(hdr, body);
 #endif
 #if defined(OSED_PROFILE_ASLR_DEP)
-    case OP_LEAK:
-        handler_leak(body, hdr->length, client);
-        return 0;
+    case OP_LEAK: {
+        const uint8_t *query_data;
+        uint32_t query_length;
+        if (parse_v2_record(
+                hdr,
+                body,
+                OSED_RECORD_QUERY,
+                &query_data,
+                &query_length) != 0 ||
+            query_length != 0) {
+            return -1;
+        }
+        (void)query_data;
+        return handler_leak(client);
+    }
 #endif
 #if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
-    case OP_ROP:
-        handler_rop(body, hdr->length);
+    case OP_ROP: {
+        const uint8_t *record_data;
+        uint32_t record_length;
+        if (parse_v2_record(
+                hdr,
+                body,
+                OSED_RECORD_DATA,
+                &record_data,
+                &record_length) != 0) {
+            return -1;
+        }
+        handler_rop(record_data, record_length);
         return 0;
+    }
 #endif
     default:
         puts("Unknown opcode");

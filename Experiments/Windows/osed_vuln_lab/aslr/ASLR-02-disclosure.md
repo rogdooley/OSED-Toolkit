@@ -8,18 +8,22 @@ Discover and validate the network-reachable information disclosure without readi
 
 - `osed_vulnsvc.exe`
 - `osedhelper.dll`
-- Packet framing documented in the main lab README
+- Your packet and command-body notes recovered from the binary
 
 Do not inspect `osed_protocol.h` or `aslr_scaffold.py` until you have identified the disclosure opcode.
 
 ## Task
 
-Use IDA to locate packet dispatch, identify the opcode that produces a pointer-bearing response, and trace the value backward to its source. Confirm the path dynamically at the send call.
+Use IDA to locate packet dispatch, identify the opcode that produces a
+pointer-bearing response, recover its request and response structures, and
+trace the returned value backward to its source. Confirm the path dynamically
+at the send call.
 
 ## Expected Discoveries
 
 - A distinct opcode reaches a disclosure handler.
-- The response contains a live code pointer into `osedhelper.dll`.
+- A field in the binary response contains a live code pointer into
+  `osedhelper.dll`.
 - The leak is useful because its relationship to the module is stable.
 
 ## Success Condition

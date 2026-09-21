@@ -37,6 +37,7 @@ Profile
 
 Primary goals
 - Understand exception-path control and SEH overwrite behavior via `OP_SEH`.
+- Recover the command-specific record layered inside the familiar envelope.
 - Correlate deterministic AV path with exception context inspection.
 
 Expected outcomes
@@ -54,6 +55,8 @@ Profile
 
 Primary goals
 - Transition from direct code execution assumptions to DEP-aware control flow.
+- Recover the evolved offset-based command body and identify which bytes reach
+  the vulnerable copy.
 - Plan benign `VirtualProtect`-style call setup for `OP_ROP`.
 
 Expected outcomes
@@ -74,6 +77,7 @@ Profile
 
 Primary goals
 - Use `OP_LEAK` to recover runtime pointer context.
+- Parse and validate the binary response rather than relying on a textual label.
 - Recompute address-dependent values each process start.
 - Re-validate DEP-aware benign control flow under ASLR.
 
@@ -91,7 +95,8 @@ Reference
 1. Build the chosen profile and its `student_bundle` target.
 2. Move only the generated bundle into the isolated training VM.
 3. Start `osed_vulnsvc.exe 9999` and reverse the receive path in IDA Pro.
-4. Create a client from the recovered framing and dispatcher behavior.
+4. Create a client from the recovered envelope, command-body parser, and
+   dispatcher behavior.
 5. Continue with the profile-specific WinDbg workflow after reaching the
    intended handler.
 

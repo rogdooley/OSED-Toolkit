@@ -5,9 +5,11 @@ properties that must survive compilation.
 
 ## Architecture Audit
 
-The service uses one fixed-size packet receiver and a profile-specific command
-dispatcher. Vulnerable handlers copy an attacker-declared body length into a
-smaller local stack buffer. `osedhelper.dll` is loaded through `helper_probe`
+The service uses one fixed-size outer packet receiver and a profile-specific
+command dispatcher. The command body grammar evolves cumulatively: easy uses
+raw data, SEH adds a simple record, and DEP/ASLR share an offset-based record.
+Vulnerable handlers copy the validated record data length into a smaller local
+stack buffer. `osedhelper.dll` is loaded through `helper_probe`
 in every profile and supplies only the control-flow primitives appropriate to
 that profile.
 
@@ -16,12 +18,12 @@ present in every build. The helper did not guarantee any useful instruction
 sequence, and the ROP metadata shape did not load in `Tools.rop`. Those gaps
 made easy unreliable and risked unintended shortcuts between later stages.
 
-| Profile | Service ASLR | Service DEP | Helper ASLR | Helper DEP | Helper SafeSEH | Intended technique | Included primitives |
-|---|---|---|---|---|---|---|---|
-| `easy` | off | off | off, fixed | off | off | saved RET overwrite | `jmp esp`, `call esp`, `push esp; ret` |
-| `seh` | off | off | off, fixed | off | off | nSEH/SEH overwrite | one `pop; pop; ret` |
-| `dep` | off | on | off, fixed | on | off | PUSHAD VirtualProtect ROP | register loads, arithmetic, writable slot, callable wrapper, dispatch and pivot sequences |
-| `aslr_dep` | on | on | on | on | off | leak, base recovery, RVA-based ROP | same ROP vocabulary as `dep`, but no fixed application address |
+| Profile | Service ASLR | Service DEP | Helper ASLR | Helper DEP | Helper SafeSEH | Body grammar | Intended technique | Included primitives |
+|---|---|---|---|---|---|---|---|---|
+| `easy` | off | off | off, fixed | off | off | raw version 1 | saved RET overwrite | `jmp esp`, `call esp`, `push esp; ret` |
+| `seh` | off | off | off, fixed | off | off | version 1 structured record | nSEH/SEH overwrite | one `pop; pop; ret` |
+| `dep` | off | on | off, fixed | on | off | version 2 offset record | PUSHAD VirtualProtect ROP | register loads, arithmetic, writable slot, callable wrapper, dispatch and pivot sequences |
+| `aslr_dep` | on | on | on | on | off | version 2 request and binary result | leak, base recovery, RVA-based ROP | same ROP vocabulary as `dep`, but no fixed application address |
 
 The non-ASLR helper uses preferred base `0x62500000` with `/FIXED`; the ASLR
 helper retains relocations and uses `/DYNAMICBASE`. The service compiler uses
@@ -33,12 +35,12 @@ an exported x86 MSVC naked function in `src/osedgadgets.c`.
 
 - `easy`: packet receiver, ping, classic stack handler, constrained small-buffer
   handler, and direct stack-transfer helper exports.
-- `seh`: packet receiver, ping, deterministic exception handler, and only the
-  pop-pop-ret helper export.
-- `dep`: packet receiver, ping, DEP overflow handler, stable ROP exports,
+- `seh`: packet receiver, ping, structured record parser, deterministic
+  exception handler, and only the pop-pop-ret helper export.
+- `dep`: packet receiver, ping, version-2 record parser, DEP overflow handler, stable ROP exports,
   writable storage, and callable VirtualProtect wrapper.
-- `aslr_dep`: DEP handler plus controlled helper pointer leak; the helper ROP
-  exports are randomized with the rest of the DLL.
+- `aslr_dep`: the DEP request grammar plus a framed binary helper-pointer
+  result; the helper ROP exports are randomized with the rest of the DLL.
 
 ## Automated Binary Check
 

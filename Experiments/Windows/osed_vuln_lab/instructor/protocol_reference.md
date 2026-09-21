@@ -12,11 +12,50 @@ All integer fields are little endian.
 |---:|---|---|
 | 0 | `uint32` | magic `0x4F534544` (`OSED`) |
 | 4 | `uint16` | opcode |
-| 6 | `uint16` | reserved |
-| 8 | `uint32` | payload length |
-| 12 | bytes | payload |
+| 6 | `uint16` | control/version flags |
+| 8 | `uint32` | body length |
+| 12 | bytes | body |
 
-The declared payload length must not exceed 8192 bytes.
+The declared body length must not exceed 8192 bytes. The outer envelope remains
+stable across profiles; later profiles evolve the body parser instead of
+introducing an unrelated protocol.
+
+## Control Values and Bodies
+
+| Control | Profiles/commands | Body |
+|---:|---|---|
+| `0x0000` | ping, easy stack commands | Raw command data (`OP_PING` requires zero length). |
+| `0x0001` | SEH | One SEH record followed by its data. |
+| `0x0201` | DEP/ASLR | One version-2 offset record and optional data. |
+
+The SEH record is:
+
+| Offset | Type | Meaning |
+|---:|---|---|
+| 0 | `uint16` | record type (`0x0002` for data) |
+| 2 | `uint16` | name length |
+| 4 | `uint32` | data length |
+| 8 | bytes | optional name, then vulnerable-handler data |
+
+Its data starts at `8 + name_length`, and `data_length` must account for the
+remainder of the outer body.
+
+The DEP/ASLR version-2 request record is:
+
+| Offset | Type | Meaning |
+|---:|---|---|
+| 0 | `uint16` | kind (`0x0001` query or `0x0002` data) |
+| 2 | `uint16` | options (must be zero) |
+| 4 | `uint32` | data offset from the start of this record |
+| 8 | `uint32` | data length |
+
+`OP_ROP` requires a data record. `OP_LEAK` requires a query record with zero
+data. This gives DEP and ASLR the same request grammar while making the ASLR
+exercise add response parsing and pointer provenance.
+
+The leak response uses the same outer header (`OP_LEAK`, control `0x0201`) and
+an 8-byte result body: `uint16 status`, `uint16 kind`, and `uint32 value`.
+Success is status zero, query kind, and a live pointer in `value`.
 
 ## Opcodes
 
@@ -43,7 +82,8 @@ after the learner has independently recovered and documented the protocol.
 
 The scaffold also supports offset calculation, bad-character generation, raw
 payload files, and layouts made from learner-supplied return addresses and ROP
-bytes. It rejects payloads larger than the service limit.
+bytes. It applies the command-specific body wrapper and rejects requests whose
+complete body exceeds the service limit.
 
 ## Deterministic Helper Primitives
 

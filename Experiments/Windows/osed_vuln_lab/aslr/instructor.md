@@ -8,7 +8,10 @@ Require evidence from separate process launches. The invariant is the function R
 
 ## ASLR-02
 
-`OP_LEAK` (`0x1004`) returns the live address of `osedhelper!helper_get_anchor`. The student should prove this with module mapping or `ln`, not infer it from the response label.
+`OP_LEAK` (`0x1004`) accepts an empty version-2 query record and returns a
+framed binary result containing the live address of
+`osedhelper!helper_get_anchor`. The student should recover the response fields
+and prove the value's provenance with module mapping or `ln`.
 
 ## ASLR-03
 

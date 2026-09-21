@@ -189,7 +189,7 @@ PROFILE_EXPECTATIONS = {
         "required": {"helper_sequence_01", "helper_sequence_21", "helper_sequence_22"},
         "forbidden": ROP_SEQUENCES - {"helper_sequence_01"} | {"helper_sequence_13"},
         "markers": [b"request contained a leading NUL"],
-        "absent_markers": [b"[seh]", b"ROP target marker", b"LEAK:"],
+        "absent_markers": [b"[seh]", b"ROP target marker", b"helper_get_anchor"],
     },
     "seh": {
         "service_aslr": False,
@@ -199,7 +199,7 @@ PROFILE_EXPECTATIONS = {
         "required": {"helper_sequence_13"},
         "forbidden": ROP_SEQUENCES | {"helper_sequence_21", "helper_sequence_22"},
         "markers": [b"[seh] handler reached"],
-        "absent_markers": [b"ROP target marker", b"LEAK:"],
+        "absent_markers": [b"ROP target marker", b"helper_get_anchor"],
     },
     "dep": {
         "service_aslr": False,
@@ -209,7 +209,7 @@ PROFILE_EXPECTATIONS = {
         "required": ROP_SEQUENCES | {"helper_memory_protect", "helper_writable_slot"},
         "forbidden": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
         "markers": [b"ROP target marker reached"],
-        "absent_markers": [b"[seh]", b"LEAK:"],
+        "absent_markers": [b"[seh]", b"helper_get_anchor"],
     },
     "aslr_dep": {
         "service_aslr": True,
@@ -218,7 +218,7 @@ PROFILE_EXPECTATIONS = {
         "helper_dep": True,
         "required": ROP_SEQUENCES | {"helper_memory_protect", "helper_writable_slot"},
         "forbidden": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
-        "markers": [b"ROP target marker reached", b"LEAK:"],
+        "markers": [b"ROP target marker reached", b"helper_get_anchor"],
         "absent_markers": [b"[seh]"],
     },
 }

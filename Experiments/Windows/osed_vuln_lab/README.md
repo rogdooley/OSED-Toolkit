@@ -37,6 +37,10 @@ payload limits, handler names, and protocol-aware scripts. See
 The target itself is not obfuscated or packed. MSVC optimization, inlining, and
 frame-pointer omission are disabled so imports, receive boundaries, field
 checks, dispatch logic, and vulnerable copies remain straightforward in IDA.
+The profiles form one protocol family: the outer envelope stays recognizable
+while command bodies gain structure as the exploitation constraints increase.
+Learners should recover each profile's body parser instead of assuming the
+easy-profile request remains sufficient.
 The student workflow assumes IDA Free 7.7, no decompiler, and no Internet
 access; pseudocode and online symbol services are not required.
 

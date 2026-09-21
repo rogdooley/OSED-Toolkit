@@ -27,6 +27,10 @@ The format is based on Keep a Changelog.
 - Added neutral `OP_PING`/`PONG` connectivity handling so the smoke test no longer exercises the ASLR disclosure primitive.
 - Replaced the hardcoded exploit demo with a validated CLI for cyclic patterns, offset lookup, bad-character buffers, raw payloads, and student-supplied layouts.
 - Removed the stale `vulnserver_trigger.py`, which targeted an unrelated protocol and port.
+- Kept the stable opcode family while evolving command bodies across profiles:
+  raw easy data, a structured SEH record, and a shared DEP/ASLR offset record.
+- Replaced the labeled ASLR disclosure string with a framed binary result that
+  requires response-structure recovery and pointer-provenance analysis.
 
 ## [0.1.0] - 2026-05-17
 

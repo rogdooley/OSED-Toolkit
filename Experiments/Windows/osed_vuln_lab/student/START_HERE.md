@@ -100,6 +100,9 @@ the corresponding branch or debugger observation confirms it.
 
 Complete only the section matching the supplied build. Do not assume a
 primitive from one profile exists in another.
+Likewise, do not assume that a command in a later profile accepts the same body
+layout as an earlier one. Re-enter the dispatcher and follow every validation
+branch to the bytes ultimately passed to the vulnerable copy.
 
 ### easy
 
