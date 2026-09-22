@@ -27,3 +27,4 @@ Modules/*
 output/
 emitter_out/*
 emitter_out.local.bak/
+tmp/

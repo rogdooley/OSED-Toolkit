@@ -39,6 +39,7 @@ level reconstruction.
 | 13 | [Printable Worksheets and Checklists](13-printable-worksheets-and-checklists.md) | Reusable print pages for function triage, branches, calls, copies, loops, and exploit analysis. |
 | 14 | [Shellcode Idioms and Position-Independent Patterns](14-shellcode-idioms-and-position-independent-patterns.md) | Recognize call/pop, PEB walking, encoder stubs, egghunters, and null-byte avoidance. |
 | 15 | [ROP Gadgets and Code-Reuse Patterns](15-rop-gadgets-and-code-reuse-patterns.md) | Read gadgets, trace chains through the stack, identify pivots and mid-instruction gadgets. |
+| 16 | [Recovering File and Protocol Formats](16-recovering-file-and-protocol-formats.md) | Reverse headers, magic bytes, versions, opcodes, lengths, flags, checksums, and payload layouts from parser code. |
 
 ## How to use this workbook
 

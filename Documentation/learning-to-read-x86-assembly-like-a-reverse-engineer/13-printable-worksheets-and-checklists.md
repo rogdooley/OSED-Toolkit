@@ -226,6 +226,79 @@ Invariants:
 Trust boundary:
 ```
 
+### File and protocol format worksheet
+
+```text
+Format name or parser function:
+Input source:
+  [ ] recv/socket
+  [ ] ReadFile
+  [ ] mapped file
+  [ ] caller buffer
+  [ ] decompressed/decoded buffer
+
+Initial gate:
+  Required minimum size:
+  Failure return/status:
+
+Magic bytes/signature:
+  Offset:
+  Width:
+  Expected value:
+  Byte order:
+
+Header fields:
+  Offset  Width  Role                 Evidence
+  +0x00
+  +0x02
+  +0x04
+  +0x08
+  +0x0C
+  +0x10
+
+Version/type/opcode dispatch:
+  Field offset:
+  Compare chain or switch:
+  Valid values:
+  Default/reject path:
+
+Length and capacity relationships:
+  Declared length field:
+  Header size added/subtracted:
+  Maximum accepted:
+  Destination capacity:
+  Integer truncation/sign-extension risks:
+
+Payload/body:
+  Body offset:
+  Body length:
+  Terminator required:
+  Alignment/padding:
+  Nested records:
+
+Integrity checks:
+  [ ] checksum
+  [ ] CRC
+  [ ] hash
+  [ ] compression size check
+  [ ] none observed
+  Computed over:
+  Compared against:
+
+Trust boundary:
+  Attacker-controlled fields:
+  Fields validated before use:
+  Fields used before validation:
+
+Test cases to prove the model:
+  Smallest valid input:
+  Bad magic:
+  Bad version/opcode:
+  Short header:
+  Declared length > actual data:
+  Declared length > destination:
+```
+
 ### Loop worksheet
 
 ```text
