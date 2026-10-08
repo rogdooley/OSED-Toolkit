@@ -124,3 +124,27 @@ python -m Tools.badchars.cli.find_badchars \
 [!] Transformed bytes:
 03 -> 20
 ```
+
+## CLI Tool: `badchars`
+
+Generate a complete bad-character test sequence as a pasteable Python 3 bytes
+literal. The null byte is excluded by default:
+
+```bash
+badchars
+```
+
+```python
+badchars = b"\x01\x02\x03...\xff"
+```
+
+Exclude additional bytes with a comma- or space-separated list:
+
+```bash
+badchars --exclude 00,0a,0d
+badchars --exclude "00 0a 0d"
+```
+
+Use `--exclude ''` to include all bytes from `\x00` through `\xff`. Other
+available formats are `--format escaped` and `--format hex`. Run
+`badchars --help` for the complete usage.

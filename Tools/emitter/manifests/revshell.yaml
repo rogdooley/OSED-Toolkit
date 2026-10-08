@@ -1,6 +1,6 @@
 # Reverse shell — kernel32 + ws2_32
 template: reverse_shell
-badchars: ["00", "0a", "0d"]
+badchars: ["00", "0A", "0D"]
 
 functions:
   - CreateProcessA
