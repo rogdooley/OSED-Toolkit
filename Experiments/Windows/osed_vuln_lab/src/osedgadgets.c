@@ -98,7 +98,11 @@ __declspec(dllexport) __declspec(naked) void helper_sequence_11(void) {
 
 __declspec(dllexport) __declspec(naked) void helper_sequence_12(void) {
     __asm {
-        ret
+        /* Emit the near-return opcode directly. A bare `ret` as the sole */
+        /* instruction in a naked function makes the MSVC inline assembler */
+        /* encode a frame-cleanup `ret 0` (C2 00 00); this gadget must be a */
+        /* single-byte near return (C3) ROP NOP/trampoline. */
+        _emit 0xC3
     }
 }
 #endif
