@@ -3,28 +3,25 @@ setlocal EnableExtensions
 
 if /I "%~1"=="clean" (
   if exist dist rmdir /s /q dist
+  if exist build-vs2022 rmdir /s /q build-vs2022
   if exist student\package rmdir /s /q student\package
   exit /b 0
 )
 
-where cl >nul 2>nul
+where cmake >nul 2>nul
 if errorlevel 1 (
-  echo error: run this from the "x86 Native Tools Command Prompt for VS 2022".
+  echo error: CMake is required. Install Visual Studio 2022 CMake tools or add CMake to PATH.
   exit /b 1
 )
 
-if defined VSCMD_ARG_TGT_ARCH if /I not "%VSCMD_ARG_TGT_ARCH%"=="x86" (
-  echo error: this prompt targets %VSCMD_ARG_TGT_ARCH%; use the x86 Native Tools Command Prompt.
-  exit /b 1
-)
-
+cmake -S . -B build-vs2022 -G "Visual Studio 17 2022" -A Win32
+if errorlevel 1 exit /b 1
+cmake --build build-vs2022 --config Release
+if errorlevel 1 exit /b 1
 if not exist dist mkdir dist
-cl /nologo /TC /std:c11 /W4 /Od /Oy- /GS- /Fo"dist\target01.obj" /Fe"dist\target01.exe" src\target01\main.c /link /INCREMENTAL:NO /DYNAMICBASE:NO /NXCOMPAT ws2_32.lib
-if errorlevel 1 exit /b 1
-cl /nologo /TC /std:c11 /W4 /Od /Oy- /GS- /Fo"dist\target02.obj" /Fe"dist\target02.exe" src\target02\main.c /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT ws2_32.lib
-if errorlevel 1 exit /b 1
-cl /nologo /TC /std:c11 /W4 /Od /Oy- /GS- /Fo"dist\target03.obj" /Fe"dist\target03.exe" src\target03\main.c /link /INCREMENTAL:NO /DYNAMICBASE:NO /NXCOMPAT
-if errorlevel 1 exit /b 1
+copy /y build-vs2022\Release\target01.exe dist\ >nul
+copy /y build-vs2022\Release\target02.exe dist\ >nul
+copy /y build-vs2022\Release\target03.exe dist\ >nul
 
 if /I "%~1"=="validate" (
   py -3 tests\validate.py --dist dist
@@ -44,4 +41,4 @@ if /I "%~1"=="student-package" (
   exit /b %errorlevel%
 )
 
-echo Build complete. Run build.bat validate to verify the PE files.
+echo PE32 x86 build complete. Run build.bat validate to verify the PE files.
