@@ -4,7 +4,7 @@ This directory implements the supplied OSED reverse-engineering practice-lab req
 
 ## Build configuration
 
-All targets require `i686-w64-mingw32-gcc`, compile with `-O0`, preserve frame pointers, omit debug symbols from the distributed executables, and disable stack cookies. Targets 01 and 03 disable ASLR while retaining NX compatibility. Target 02 enables ASLR and NX compatibility. MinGW-w64 does not provide an equivalent SafeSEH workflow; SafeSEH is therefore not claimed or configured.
+The primary Windows build uses Visual Studio 2022's x86 `cl.exe`, `/Od`, `/Oy-`, and `/GS-`; distributed executables omit debug symbols. Linux cross-compilation remains available through `i686-w64-mingw32-gcc` and the Makefile. Targets 01 and 03 disable ASLR while retaining NX compatibility. Target 02 enables ASLR and NX compatibility. SafeSEH is not claimed or configured.
 
 ## Validation contract
 

@@ -4,14 +4,21 @@ Three independent Windows x86 programs for black-box reverse-engineering practic
 
 ## Build
 
-Install a MinGW-w64 **i686** toolchain, then run:
+On Windows, open the **x86 Native Tools Command Prompt for VS 2022**, change to this directory, and run:
+
+```bat
+build.bat
+build.bat validate
+```
+
+The batch build uses MSVC `cl.exe` and deliberately refuses an x64 Developer Prompt. To build from Linux, install an i686 MinGW-w64 cross-compiler and run:
 
 ```text
 make
 make validate
 ```
 
-`build.bat` provides the equivalent Windows command sequence. Builds produce:
+Use `build.bat student-package` to assemble the student-only Windows bundle. Builds produce:
 
 ```text
 dist/target01.exe
@@ -25,4 +32,4 @@ Student-facing binaries, launch notes, and harmless sample input are assembled w
 
 ## Validation status
 
-The build and PE/runtime validation must be run on a Windows x86 MinGW-w64 environment. The local macOS checkout intentionally does not substitute a different architecture or claim Windows runtime results.
+The build and PE/runtime validation must be run on Windows. The local macOS checkout intentionally does not substitute a different architecture or claim Windows runtime results.
