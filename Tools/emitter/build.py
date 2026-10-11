@@ -1198,9 +1198,12 @@ def main() -> None:
         choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
-    parser.add_argument("--lhost", default="127.0.0.1", metavar="IP|IFACE",
-                        help="Listener IP address or interface name (e.g. tun0, eth0)")
-    parser.add_argument("--lport", type=int, default=4444)
+    parser.add_argument("--lhost", default=None, metavar="IP|IFACE",
+                        help="Listener/server IP or interface (e.g. tun0). "
+                             "Auto-extracted from --url for http_download.")
+    parser.add_argument("--lport", type=int, default=None,
+                        help="Listener/server port. "
+                             "Auto-extracted from --url for http_download.")
     parser.add_argument("--command", default=None)
     parser.add_argument("--src", default=None)
     parser.add_argument("--dst", default=None)
@@ -1213,16 +1216,21 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    lhost = _resolve_lhost(args.lhost)
+    lhost = _resolve_lhost(args.lhost) if args.lhost else None
     lport = args.lport
 
-    if args.url is not None:
+    if args.url is not None and (lhost is None or lport is None):
         from urllib.parse import urlparse
         parsed = urlparse(args.url)
-        if parsed.hostname and args.lhost == "127.0.0.1":
+        if lhost is None and parsed.hostname:
             lhost = parsed.hostname
-        if parsed.port and args.lport == 4444:
+        if lport is None and parsed.port:
             lport = parsed.port
+
+    if lhost is None:
+        lhost = "127.0.0.1"
+    if lport is None:
+        lport = 4444
 
     config = TemplateConfig(
         lhost=lhost,

@@ -193,10 +193,20 @@ class HttpDownloadTemplate(PayloadTemplate):
         ])
 
     def cheatsheet(self, config: TemplateConfig) -> list[tuple[str, str]]:
+        url = config.url or ""
+        host = config.lhost
+        port = config.lport
+        if url:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            if parsed.hostname:
+                host = parsed.hostname
+            if parsed.port:
+                port = parsed.port
         return [
             ("Serve file via HTTP",
-             f"python3 -m http.server {config.lport} --bind {config.lhost}"),
-            ("URL fetched", config.url or ""),
+             f"python3 -m http.server {port} --bind {host}"),
+            ("URL fetched", url),
             ("File written to", config.dst_path or ""),
         ]
 
