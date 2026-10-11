@@ -839,6 +839,7 @@ def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manif
         functions=list(manifest.functions),
         strings=new_strings,
         variables=list(manifest.variables),
+        template=manifest.template,
     )
 
 
@@ -904,6 +905,7 @@ def _merge_template_requirements(
         functions=list(manifest.functions) + new_funcs,
         strings=manifest.strings,
         variables=manifest.variables,
+        template=manifest.template,
     )
 
 
