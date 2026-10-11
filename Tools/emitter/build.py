@@ -218,6 +218,7 @@ class BuildResult:
     c_array: str | None = None
     test_harness: str | None = None
     debug_runner: str | None = None
+    code_snippet: str | None = None
     layout: StackLayout | None = None
     assembler: str | None = None
     asm_errors: list[str] | None = None
@@ -443,6 +444,120 @@ if __name__ == "__main__":
 '''
 
 
+def _generate_code_snippet(asm: str) -> str:
+    """Generate a standalone Python script with Keystone-compatible assembly.
+
+    The script contains the assembly as CODE = r\"\"\"...\"\"\" and can:
+    1. Assemble it with Keystone and run the shellcode (default)
+    2. Output raw hex with --hex
+    3. Output Python bytes with --py
+    4. Write a .bin file with --bin FILE
+    """
+    ks_asm = _to_keystone(asm)
+    ks_asm = ks_asm.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+    return f'''\
+#!/usr/bin/env python3
+"""Keystone-compatible assembly snippet from the emitter.
+
+Usage on the exam box:
+  python code_snippet.py              # assemble + run (attach WinDbg first)
+  python code_snippet.py --hex        # print raw hex string
+  python code_snippet.py --py         # print Python bytes literal
+  python code_snippet.py --bin sc.bin # write raw binary file
+
+Requires: pip install keystone-engine
+"""
+import argparse
+import ctypes
+import sys
+
+try:
+    from keystone import KS_ARCH_X86, KS_MODE_32, Ks
+except ImportError:
+    print("[-] keystone-engine not installed.", file=sys.stderr)
+    print("    pip install keystone-engine", file=sys.stderr)
+    sys.exit(1)
+
+CODE = r"""
+{ks_asm}
+"""
+
+
+def assemble(code: str) -> bytes:
+    ks = Ks(KS_ARCH_X86, KS_MODE_32)
+    encoding, count = ks.asm(code)
+    print(f"[+] Assembled {{count}} instructions, {{len(encoding)}} bytes", file=sys.stderr)
+    return bytes(encoding)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Assemble and optionally run shellcode")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--hex", action="store_true", help="Print hex string to stdout")
+    group.add_argument("--py", action="store_true", help="Print Python bytes literal")
+    group.add_argument("--bin", metavar="FILE", help="Write raw binary to FILE")
+    group.add_argument("--run", action="store_true", default=True, help="Assemble and run (default)")
+    args = parser.parse_args()
+
+    try:
+        shellcode = assemble(CODE)
+    except Exception as e:
+        print(f"[-] Assembly failed: {{e}}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.hex:
+        print("".join(f"\\\\x{{b:02x}}" for b in shellcode))
+        return
+
+    if args.py:
+        chunks = [shellcode[i:i + 16] for i in range(0, len(shellcode), 16)]
+        lines = ['b"' + "".join(f"\\\\x{{b:02x}}" for b in c) + '"' for c in chunks]
+        print(f"shellcode = (\\n" + "\\n".join(lines) + f"\\n)\\n# Length: {{len(shellcode)}} bytes")
+        return
+
+    if args.bin:
+        with open(args.bin, "wb") as f:
+            f.write(shellcode)
+        print(f"[+] Wrote {{len(shellcode)}} bytes to {{args.bin}}")
+        return
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.VirtualAlloc.restype = ctypes.c_void_p
+    kernel32.VirtualAlloc.argtypes = [
+        ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong,
+    ]
+    kernel32.RtlMoveMemory.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+    ]
+    kernel32.CreateThread.restype = ctypes.c_void_p
+
+    ptr = kernel32.VirtualAlloc(None, len(shellcode), 0x3000, 0x40)
+    if not ptr:
+        print("[-] VirtualAlloc failed", file=sys.stderr)
+        sys.exit(1)
+
+    buf = (ctypes.c_char * len(shellcode)).from_buffer(bytearray(shellcode))
+    kernel32.RtlMoveMemory(ptr, ctypes.addressof(buf), len(shellcode))
+
+    print(f"[+] Shellcode: {{len(shellcode)}} bytes")
+    print(f"[+] Address:   {{ptr:#010x}}")
+    print(f"[+] WinDbg:    bp {{ptr:#010x}}")
+    print()
+    input("... attach WinDbg, then press Enter to execute ...")
+
+    ht = kernel32.CreateThread(None, 0, ptr, None, 0, None)
+    if not ht:
+        print("[-] CreateThread failed", file=sys.stderr)
+        sys.exit(1)
+
+    kernel32.WaitForSingleObject(ht, -1)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
 def _bytes_to_hex_str(raw: bytes) -> str:
     chunks = [raw[i:i + 16] for i in range(0, len(raw), 16)]
     return "\n".join("".join(f"\\x{b:02x}" for b in chunk) for chunk in chunks)
@@ -474,6 +589,26 @@ def _strip_comments(asm: str) -> str:
         line = line.split("#")[0]
         line = line.split(";")[0]
         lines.append(line)
+    return "\n".join(lines)
+
+
+def _to_keystone(asm: str) -> str:
+    """Convert emitter Intel syntax to Keystone-compatible syntax.
+
+    Keystone already accepts the emitter's internal format with minimal
+    changes:
+    - Strip # and ; comments
+    - 'jmp short' -> 'jmp' (Keystone infers short encoding)
+    - Drop blank-only lines (Keystone chokes on trailing whitespace lines)
+    """
+    lines = []
+    for line in asm.splitlines():
+        line = line.split("#")[0]
+        line = line.split(";")[0]
+        line = line.rstrip()
+        line = re.sub(r'\bjmp\s+short\b', 'jmp', line)
+        if line.strip():
+            lines.append(line)
     return "\n".join(lines)
 
 
@@ -955,6 +1090,7 @@ def build(
         c_array=_bytes_to_c(raw) if raw else None,
         test_harness=_generate_test_harness(len(raw)) if raw else None,
         debug_runner=_generate_debug_runner(asm),
+        code_snippet=_generate_code_snippet(asm),
         layout=layout,
         assembler=assembler,
         asm_errors=asm_errors if asm_errors else None,
@@ -971,6 +1107,8 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
 
     _write_text(base / "asm" / "generated.asm", result.asm)
     _write_text(base / "asm" / "debug_runner.py", result.debug_runner)
+    if result.code_snippet:
+        _write_text(base / "asm" / "code_snippet.py", result.code_snippet)
     _write_text(base / "Documentation" / "contract.md", result.contract_md)
 
     if result.shellcode_bytes:
@@ -1087,6 +1225,7 @@ def main() -> None:
 
     print(f"[+] Generated: {args.out}/asm/generated.asm")
     print(f"[+] Debug:     {args.out}/asm/debug_runner.py")
+    print(f"[+] Snippet:   {args.out}/asm/code_snippet.py")
     print(f"[+] Contract:  {args.out}/Documentation/contract.md")
     if result.shellcode_bytes:
         print(f"[+] Assembler: {result.assembler}")
