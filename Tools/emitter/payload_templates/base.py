@@ -18,6 +18,7 @@ class TemplateConfig:
     command: str | None = None
     src_path: str | None = None
     dst_path: str | None = None
+    url: str | None = None
     badchars: set[int] = field(default_factory=lambda: {0x00})
 
 

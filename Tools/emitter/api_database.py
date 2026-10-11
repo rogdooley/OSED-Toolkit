@@ -380,6 +380,61 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("flags", "int",     "0 for default behaviour"),
         ],
     ),
+    # --- wininet.dll : internet ---
+    "InternetOpenA": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "HINTERNET InternetOpenA(LPCSTR lpszAgent, DWORD dwAccessType,"
+            " LPCSTR lpszProxy, LPCSTR lpszProxyBypass, DWORD dwFlags)"
+        ),
+        arguments=[
+            Argument("lpszAgent", "LPCSTR", "user-agent string, e.g. Mozilla/5.0"),
+            Argument("dwAccessType", "DWORD", "INTERNET_OPEN_TYPE_DIRECT = 1"),
+            Argument("lpszProxy", "LPCSTR", "NULL for direct"),
+            Argument("lpszProxyBypass", "LPCSTR", "NULL"),
+            Argument("dwFlags", "DWORD", "0"),
+        ],
+    ),
+    "InternetOpenUrlA": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "HINTERNET InternetOpenUrlA(HINTERNET hInternet, LPCSTR lpszUrl,"
+            " LPCSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwFlags,"
+            " DWORD_PTR dwContext)"
+        ),
+        arguments=[
+            Argument("hInternet", "HINTERNET", "handle from InternetOpenA"),
+            Argument("lpszUrl", "LPCSTR", "full URL, e.g. http://192.168.1.10/payload.exe"),
+            Argument("lpszHeaders", "LPCSTR", "NULL for default headers"),
+            Argument("dwHeadersLength", "DWORD", "0 if lpszHeaders is NULL"),
+            Argument("dwFlags", "DWORD", "INTERNET_FLAG_RELOAD = 0x80000000; or 0"),
+            Argument("dwContext", "DWORD_PTR", "0"),
+        ],
+    ),
+    "InternetReadFile": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "BOOL InternetReadFile(HINTERNET hFile, LPVOID lpBuffer,"
+            " DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)"
+        ),
+        arguments=[
+            Argument("hFile", "HINTERNET", "handle from InternetOpenUrlA"),
+            Argument("lpBuffer", "LPVOID", "pointer to receive buffer"),
+            Argument("dwNumberOfBytesToRead", "DWORD", "size of lpBuffer"),
+            Argument("lpdwNumberOfBytesRead", "LPDWORD", "pointer to DWORD for bytes read"),
+        ],
+    ),
+    "InternetCloseHandle": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype="BOOL InternetCloseHandle(HINTERNET hInternet)",
+        arguments=[
+            Argument("hInternet", "HINTERNET", "any HINTERNET handle to close"),
+        ],
+    ),
 }
 
 
@@ -426,6 +481,7 @@ STRUCT_DATABASE: dict[str, StructRecord] = {
 MODULE_LOAD_ORDER: list[ModuleInfo] = [
     ModuleInfo(dll="kernel32.dll", load_via="peb"),
     ModuleInfo(dll="ws2_32.dll",   load_via="LoadLibraryA"),
+    ModuleInfo(dll="wininet.dll",  load_via="LoadLibraryA"),
 ]
 
 

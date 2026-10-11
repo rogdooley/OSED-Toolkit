@@ -12,6 +12,7 @@ _VALID_REGS = {"eax", "ebx", "ecx", "edx", "esi", "edi"}
 _VALID_TEMPLATES = {
     "reverse_shell", "run_command", "copy_file", "copy_then_run",
     "move_then_run", "tcp_download", "tcp_stager", "bind_shell",
+    "http_download",
 }
 
 
