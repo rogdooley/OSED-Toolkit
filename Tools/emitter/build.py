@@ -1212,9 +1212,21 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    lhost = _resolve_lhost(args.lhost)
+    lport = args.lport
+
+    if args.url is not None:
+        from urllib.parse import urlparse
+        parsed = urlparse(args.url)
+        if parsed.hostname and args.lhost == "127.0.0.1":
+            lhost = parsed.hostname
+        if parsed.port and args.lport == 4444:
+            lport = parsed.port
+
     config = TemplateConfig(
-        lhost=_resolve_lhost(args.lhost),
-        lport=args.lport,
+        lhost=lhost,
+        lport=lport,
         command=args.command,
         src_path=args.src,
         dst_path=args.dst,
