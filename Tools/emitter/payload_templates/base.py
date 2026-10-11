@@ -19,6 +19,7 @@ class TemplateConfig:
     src_path: str | None = None
     dst_path: str | None = None
     url: str | None = None
+    alloc_size: int | None = None
     badchars: set[int] = field(default_factory=lambda: {0x00})
 
 

