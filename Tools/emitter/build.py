@@ -231,15 +231,10 @@ class BuildResult:
 # ---------------------------------------------------------------------------
 
 
-def _emit_stack_reserve(badchars: set[int]) -> list[str]:
-    """Emit badchar-safe 'sub esp, 0x500' to reserve stack frame."""
-    from .encode import encode_byte
-    if 0x05 not in badchars:
-        return [
-            "    mov  ch, 0x05",
-            "    sub  esp, ecx",
-        ]
-    lines = encode_byte(0x05, badchars, "ch")
+def _emit_stack_reserve(frame_size: int, badchars: set[int]) -> list[str]:
+    """Emit badchar-safe 'sub esp, <frame_size>' to reserve stack frame."""
+    from .encode import encode_dword
+    lines = list(encode_dword(frame_size, badchars, "ecx"))
     lines.append("    sub  esp, ecx")
     return lines
 
@@ -964,7 +959,7 @@ def compose_asm(
         "main:",
         "    mov  ebp, esp",
         "    xor  ecx, ecx",
-        *_emit_stack_reserve(config.badchars),
+        *_emit_stack_reserve(layout.frame_size, config.badchars),
         "",
         "    ; Bootstrap: find kernel32 via PEB walk",
         "    call find_module",
@@ -981,8 +976,10 @@ def compose_asm(
 
         if mi.load_via == "LoadLibraryA":
             if "LoadLibraryA" not in manifest.functions:
-                parts.append(f"; NOTE: {mi.dll} requires LoadLibraryA in manifest")
-                continue
+                raise ValueError(
+                    f"Manifest uses APIs from {mi.dll} but does not declare "
+                    f"LoadLibraryA. Add LoadLibraryA to the functions list."
+                )
             parts.append(_dll_load_block(mi.dll, manifest, layout))
 
         resolution = emit_module_resolution(manifest, layout, mi.dll)
@@ -1146,9 +1143,19 @@ def write_outputs(result: BuildResult, out_dir: str) -> None:
         _write_text(base / "bin" / "shellcode_encoded.hex", _bytes_to_hex_str(result.encoded_bytes) or "")
         _write_text(base / "bin" / "shellcode_encoded.py", _bytes_to_py(result.encoded_bytes) or "")
         _write_text(base / "bin" / "shellcode_encoded.c", _bytes_to_c(result.encoded_bytes) or "")
+    else:
+        for name in (
+            "shellcode_encoded.bin",
+            "shellcode_encoded.hex",
+            "shellcode_encoded.py",
+            "shellcode_encoded.c",
+        ):
+            (base / "bin" / name).unlink(missing_ok=True)
 
     if result.encoder_report:
         _write_text(base / "Documentation" / "encoder_report.txt", result.encoder_report)
+    else:
+        (base / "Documentation" / "encoder_report.txt").unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1291,13 +1298,19 @@ def main() -> None:
         if result.asm_errors:
             for err in result.asm_errors:
                 print(f"    {err}", file=sys.stderr)
+            if not result.encoded_bytes:
+                sys.exit(1)
     else:
         if result.asm_errors:
             print("[!] Assembly failed:")
             for err in result.asm_errors:
                 print(f"    {err}")
+            sys.exit(1)
+        elif not args.no_assemble:
+            print("[!] Assembly requested but no assembler available")
+            sys.exit(1)
         else:
-            print("[*] Assembly skipped (no assembler available or --no-assemble)")
+            print("[*] Assembly skipped (--no-assemble)")
 
 
 if __name__ == "__main__":

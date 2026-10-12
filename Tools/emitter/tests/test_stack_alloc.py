@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 
-STACK_FRAME_SIZE = 0x500
 
 
 # ---------------------------------------------------------------------------
@@ -226,10 +225,11 @@ def test_invariant_no_address_overlap(any_layout):
 
 
 def test_invariant_all_slots_within_frame(any_layout):
-    """Every slot must fit inside the 0x500-byte stack frame."""
+    """Every slot must fit inside the dynamically computed frame."""
+    frame = any_layout.frame_size
     for s in any_layout.all_slots():
-        assert s.offset <= STACK_FRAME_SIZE, (
-            f"'{s.name}' offset 0x{s.offset:x} exceeds frame size 0x{STACK_FRAME_SIZE:x}"
+        assert s.offset <= frame, (
+            f"'{s.name}' offset 0x{s.offset:x} exceeds frame size 0x{frame:x}"
         )
         lo, _ = _addr_range(s)
         assert lo >= 0, (

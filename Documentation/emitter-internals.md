@@ -29,12 +29,16 @@ relocations, no imports. It runs from any memory location.
 
 ## The stack frame
 
-On entry, the shellcode captures the stack pointer and reserves a fixed
-frame:
+On entry, the shellcode captures the stack pointer and reserves a
+dynamically sized frame. The allocator computes the high-water mark
+from all slots and rounds up to the next 0x100 boundary (e.g. 0x500
+for a typical manifest, larger when strings are long). The subtraction
+immediate is then encoded badchar-safe:
 
 ```asm
 mov  ebp, esp          ; snapshot the stack pointer
-sub  esp, 0x500        ; reserve 1280 bytes (badchar-safe encoding)
+<encode frame_size into ecx, avoiding badchars>
+sub  esp, ecx          ; reserve frame_size bytes
 ```
 
 EBP becomes the anchor for all subsequent data. Every resolved API
@@ -54,11 +58,13 @@ EBP  ------------->| (original stack data)      |
                     +---------------------------+
                     | Variables                 |  one DWORD per runtime variable
                     +---------------------------+
+                    | Structures                |  fixed start at 0x80 boundary
+                    +---------------------------+
                     | Strings                   |  variable-length, 4-byte aligned
                     +---------------------------+
                     | (unused / headroom)       |
                     +---------------------------+
-ESP = EBP - 0x500  | (stack grows downward)     |
+ESP = EBP - N      | (N = frame_size, see above) |
                     +---------------------------+
 Lower addresses
 ```
@@ -84,9 +90,16 @@ is just `call dword ptr [ebp-0xNN]`.
 handles, buffer pointers, byte counters. The payload template reads and
 writes these during execution.
 
+**Structures**: Fixed-size structures (e.g., `STARTUPINFOA` at 0x44
+bytes) that begin at the `0x80` boundary from EBP. Structure order is
+determined by scanning the manifest's function list: each API record
+in `api_database.py` may declare a `requires_structs` field, and
+structures appear in the order they are first encountered.
+
 **Strings**: Null-terminated strings built by the emitter's encoding
 pipeline. Each string is 4-byte aligned and constructed via one of four
-methods (see String Construction below).
+methods (see String Construction below). Strings follow structures in
+the frame.
 
 The exact offset for every slot in a given build is printed in the
 generated `contract.md`. Offsets shift whenever you add or remove
@@ -111,10 +124,10 @@ TEB             fs:[0x00]
 ```
 
 Each entry in the list contains the module's base address and its name
-as a Unicode string. The shellcode checks the first few characters of
-each module name against the Unicode values for "K", "E", "3"
-(matching `KERNEL32.DLL` or `kernel32.dll`) and returns the base
-address when found.
+as a Unicode string. The shellcode assumes the loader stores
+`KERNEL32.DLL` in uppercase (which is the case on all observed Windows
+versions) and performs case-sensitive comparisons against the uppercase
+Unicode values for "K" (0x004B), "E" (0x0045), and "3" (0x0033).
 
 ```asm
 get_first_ldr_entry:
@@ -290,8 +303,10 @@ that DLL's APIs before moving to the next.
 ## Phase 4: String construction
 
 Strings (URLs, file paths, command lines, user-agent strings) are built
-on the stack frame at their assigned offsets. Four encoding methods
-are available:
+on the stack frame. The `mov`, `shiftor`, and `xor` methods write to
+the string's assigned frame offset. The `push` method is different --
+it builds the string at ESP (see below). Four encoding methods are
+available:
 
 ### mov method
 
@@ -317,8 +332,11 @@ mov  [edi+0x1C], eax
 ### push method
 
 Pushes DWORDs onto the stack in reverse order. After all pushes, ESP
-points to the start of the string. Used for short strings like DLL
-names that are consumed immediately by LoadLibraryA:
+points to the start of the string -- it lives at the current stack
+top, not at the string's assigned frame offset (that offset exists
+only for documentation in the layout). Used for short strings like
+DLL names that are consumed immediately by LoadLibraryA and then
+cleaned up:
 
 ```asm
 push 0x016d6d65                ; last chunk (encoded)
@@ -338,16 +356,26 @@ patterns that mov might produce in certain badchar configurations.
 XOR-encodes each DWORD against a computed mask that avoids all
 badchars.
 
-### Automatic badchar avoidance
+### Automatic badchar avoidance in string data
 
-All string methods automatically handle badchar bytes. When a DWORD
-contains a forbidden byte (e.g., 0x00 for a null terminator, 0x0a,
-0x0d), the emitter computes an XOR mask where:
+The `mov` and `push` string methods primarily target null bytes: when a
+DWORD would contain 0x00 (as padding or a null terminator), the emitter
+computes an XOR mask so that:
 - The XOR of the value and mask produces the desired bytes
-- Neither the value nor the mask contains any forbidden byte
+- Neither the value nor the mask contains a null byte
 
 The mask `0x01010101` is the most common choice. The decoder
 instruction (`xor eax, 0x01010101`) is emitted inline.
+
+If other badchars (e.g. 0x0a, 0x0d) appear in the string data, the
+build reports them rather than silently removing them -- the `xor`
+method or the `--encode` flag should be used instead.
+
+Note: this covers the data values only. Fixed opcodes, ModRM/SIB
+bytes, and branch displacements in the assembled output may still
+contain forbidden bytes. The `safe_*` helpers handle most instruction
+encodings, but final assembled-byte scanning (and `--encode` if
+needed) remain the last line of defense.
 
 ---
 
@@ -359,7 +387,8 @@ variable slot is allocated. The payload template code runs next.
 
 A template is a sequence of Win32 API calls using the stdcall calling
 convention: push arguments right-to-left, call through the resolved
-pointer, check the return value in EAX.
+pointer. API return values are placed in EAX; templates should validate
+them when subsequent operations depend on success.
 
 ### Example: HTTP download flow
 
@@ -488,8 +517,8 @@ E8 [d0 d1 d2 d3]            call decoder       ; pushes &payload onto stack
 
 ### Decoder stub layout (fnstenv-based)
 
-Used when the call-based stub cannot avoid 0xFF in the call
-displacement:
+Used as a fallback when no call-based stub variant can avoid the
+configured badchars (typically 0xFF in the call displacement):
 
 ```
 D9 EE                      fldz               ; push +0.0 onto FPU stack
@@ -528,8 +557,8 @@ every layer of code generation:
 |                          | dereference and call patterns                    |
 | ROR-13 hash              | Hash immediates are checked; XOR-encoded if      |
 |                          | they contain forbidden bytes                     |
-| Stack reservation        | `sub esp, 0x500` encoded as `add esp, 0xFFFFFB00`|
-|                          | or equivalent to avoid null bytes                |
+| Stack reservation        | Frame size encoded into a register, then         |
+|                          | `sub esp, ecx` -- avoids nulls in the immediate  |
 | XOR encoder (optional)   | Whole-payload encoding as a last resort          |
 
 The manifest's `badchars` list is the single source of truth. It flows
@@ -561,7 +590,7 @@ _stub_trampoline2:
 
 main:
     mov ebp, esp
-    sub esp, 0x500
+    sub esp, <frame_size>       ; badchar-safe encoding of total frame
     ; ... phases 2-5 ...
 ```
 
@@ -605,14 +634,15 @@ class MyTemplate(PayloadTemplate):
 ```
 
 The `probe_slots()` method (inherited from `PayloadTemplate`)
-auto-discovers which APIs, variables, and strings a template uses by
-running `emit()` against a recording layout. The build pipeline uses
-this to auto-derive manifest requirements -- if the template calls
+auto-discovers which API functions a template uses by running `emit()`
+against a recording layout. The build pipeline uses this to auto-derive
+missing API requirements -- if the template calls
 `layout.slot("VirtualAlloc")` but the manifest doesn't list
 `VirtualAlloc`, the build adds it automatically.
 
-This means templates never declare their requirements manually. The
-code IS the declaration.
+Note: `probe_slots()` only auto-adds API functions. Variables and
+strings must still be declared in the manifest -- the probe has no way
+to infer their types or initial values.
 
 ---
 

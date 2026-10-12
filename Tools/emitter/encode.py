@@ -438,11 +438,26 @@ def safe_call_mem(
     return setup + [f"    call dword ptr {addr}"]
 
 
+_TMP_CANDIDATES = ("ecx", "edx", "eax")
+
+
+def _pick_tmp(preferred: str, *conflicts: str) -> str:
+    """Return preferred unless it conflicts with any listed register."""
+    conflict_set = set(conflicts)
+    if preferred not in conflict_set:
+        return preferred
+    for candidate in _TMP_CANDIDATES:
+        if candidate not in conflict_set:
+            return candidate
+    raise ValueError(f"No scratch register available (conflicts: {conflicts})")
+
+
 def safe_add_from_mem(
     dst: str, base: str, offset: int, badchars: set[int],
     *, tmp: str = "ecx",
 ) -> list[str]:
     """Emit a badchar-safe add dst, [base+offset]."""
+    tmp = _pick_tmp(tmp, dst, base)
     setup, addr = _safe_addr(base, offset, badchars, tmp)
     return setup + [f"    add  {dst}, {addr}"]
 
@@ -452,6 +467,7 @@ def safe_sub_from_mem(
     *, tmp: str = "ecx",
 ) -> list[str]:
     """Emit a badchar-safe sub dst, [base+offset]."""
+    tmp = _pick_tmp(tmp, dst, base)
     setup, addr = _safe_addr(base, offset, badchars, tmp)
     return setup + [f"    sub  {dst}, {addr}"]
 
@@ -461,6 +477,7 @@ def safe_add_to_mem(
     *, tmp: str = "ecx",
 ) -> list[str]:
     """Emit a badchar-safe add [base+offset], src."""
+    tmp = _pick_tmp(tmp, src, base)
     setup, addr = _safe_addr(base, offset, badchars, tmp)
     return setup + [f"    add  {addr}, {src}"]
 
@@ -470,5 +487,6 @@ def safe_cmp_with_mem(
     *, tmp: str = "ecx",
 ) -> list[str]:
     """Emit a badchar-safe cmp reg, [base+offset]."""
+    tmp = _pick_tmp(tmp, reg, base)
     setup, addr = _safe_addr(base, offset, badchars, tmp)
     return setup + [f"    cmp  {reg}, {addr}"]

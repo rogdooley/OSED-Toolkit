@@ -395,7 +395,7 @@ def test_build_rejects_assembled_badchars(monkeypatch, manifest_dir, tmp_path):
 
     assert result.shellcode_bytes == b"\x90\x00\xc3"
     assert result.hex_str == r"\x90\x00\xc3"
-    assert result.py_bytes == 'shellcode = b"\\x90\\x00\\xc3"'
+    assert result.py_bytes == 'shellcode = (\nb"\\x90\\x00\\xc3"\n)\n# Length: 3 bytes'
     assert result.c_array is not None
     assert result.test_harness is not None
     assert result.assembler == "keystone"
@@ -423,7 +423,9 @@ def test_cli_prints_assembler_errors(monkeypatch, capsys, tmp_path):
         ["emitter", "manifest.yaml", "--out", str(tmp_path)],
     )
 
-    build_module.main()
+    with pytest.raises(SystemExit) as exc_info:
+        build_module.main()
+    assert exc_info.value.code == 1
 
     output = capsys.readouterr().out
     assert "[!] Assembly failed:" in output

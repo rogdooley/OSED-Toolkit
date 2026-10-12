@@ -166,3 +166,84 @@ def _eval_dword_lines(lines: list[str]) -> int:
 def _eval_word_lines(lines: list[str]) -> int:
     """Same as _eval_dword_lines but masked to 16 bits."""
     return _eval_dword_lines(lines) & 0xFFFF
+
+
+# ---------------------------------------------------------------------------
+# ecx clobber avoidance
+# ---------------------------------------------------------------------------
+
+class TestTmpRegisterConflict:
+    """Verify that memory-arithmetic helpers pick a non-conflicting scratch register.
+
+    Offset -0x45 encodes as the DWORD 0xFFFFFFBB, so 0xBB must be in the
+    badchar set to force the dirty-displacement path through _safe_addr.
+    """
+
+    DIRTY_BC = {0x00, 0x0a, 0x0d, 0xBB}
+
+    def _assert_no_clobber(self, lines: list[str], dst: str, base: str):
+        """Verify the scratch register differs from both dst and base."""
+        for line in lines:
+            if "add" in line and base in line and dst not in line:
+                parts = line.split()
+                tmp_used = parts[1].rstrip(",")
+                assert tmp_used != dst, f"scratch {tmp_used} clobbers dst {dst}"
+                assert tmp_used != base, f"scratch {tmp_used} clobbers base {base}"
+
+    def test_safe_sub_from_mem_ecx_dst(self):
+        from Tools.emitter.encode import safe_sub_from_mem
+        lines = safe_sub_from_mem("ecx", "ebp", -0x45, self.DIRTY_BC)
+        assert len(lines) > 1, "should use dirty-displacement path"
+        self._assert_no_clobber(lines, "ecx", "ebp")
+        assert any("sub  ecx" in l for l in lines)
+
+    def test_safe_sub_from_mem_base_conflict(self):
+        from Tools.emitter.encode import safe_sub_from_mem
+        lines = safe_sub_from_mem("ecx", "edx", -0x45, self.DIRTY_BC)
+        assert len(lines) > 1, "should use dirty-displacement path"
+        self._assert_no_clobber(lines, "ecx", "edx")
+
+    def test_safe_add_from_mem_ecx_dst(self):
+        from Tools.emitter.encode import safe_add_from_mem
+        lines = safe_add_from_mem("ecx", "ebp", -0x45, self.DIRTY_BC)
+        assert len(lines) > 1, "should use dirty-displacement path"
+        self._assert_no_clobber(lines, "ecx", "ebp")
+        assert any("add  ecx" in l for l in lines)
+
+    def test_safe_add_to_mem_ecx_src(self):
+        from Tools.emitter.encode import safe_add_to_mem
+        lines = safe_add_to_mem("ebp", -0x45, "ecx", self.DIRTY_BC)
+        assert len(lines) > 1, "should use dirty-displacement path"
+        self._assert_no_clobber(lines, "ecx", "ebp")
+
+    def test_safe_cmp_with_mem_ecx_reg(self):
+        from Tools.emitter.encode import safe_cmp_with_mem
+        lines = safe_cmp_with_mem("ecx", "ebp", -0x45, self.DIRTY_BC)
+        assert len(lines) > 1, "should use dirty-displacement path"
+        self._assert_no_clobber(lines, "ecx", "ebp")
+        assert any("cmp  ecx" in l for l in lines)
+
+    def test_pick_tmp_avoids_dst_and_base(self):
+        from Tools.emitter.encode import _pick_tmp
+        assert _pick_tmp("ecx", "ecx", "ebp") != "ecx"
+        assert _pick_tmp("edx", "edx", "ebp") != "edx"
+        assert _pick_tmp("ecx", "eax", "ebp") == "ecx"
+        result = _pick_tmp("ecx", "ecx", "edx")
+        assert result not in ("ecx", "edx")
+
+
+# ---------------------------------------------------------------------------
+# Frame size
+# ---------------------------------------------------------------------------
+
+class TestFrameSize:
+
+    def test_frame_size_rounds_up(self):
+        from Tools.emitter.stack_alloc import build_layout
+        from Tools.emitter.schema import load
+        import pathlib
+        manifest_dir = pathlib.Path(__file__).parent.parent / "manifests"
+        manifest = load(str(manifest_dir / "revshell.yaml"))
+        layout = build_layout(manifest)
+        assert layout.frame_size >= max(s.offset for s in layout.all_slots())
+        assert layout.frame_size % 0x100 == 0

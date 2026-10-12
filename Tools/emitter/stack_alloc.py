@@ -71,6 +71,14 @@ class StackLayout:
         """All slots in allocation order: module_base -> api -> variable -> structure -> string."""
         return list(self._slots)
 
+    @property
+    def frame_size(self) -> int:
+        """Total frame bytes needed, rounded up to next 0x100 boundary."""
+        if not self._slots:
+            return 0x100
+        high_water = max(s.offset for s in self._slots)
+        return ((high_water + 0xFF) & ~0xFF)
+
 
 class RecordingLayout:
     """Dummy layout that records every slot() call without needing a real manifest.
@@ -188,4 +196,13 @@ def build_layout(manifest: Manifest) -> StackLayout:
             Slot(name=entry.label, offset=string_cursor, size=slot_size, category="string")
         )
 
-    return StackLayout(slots)
+    layout = StackLayout(slots)
+    if layout.frame_size > 0x1000:
+        raise ValueError(
+            f"Frame size 0x{layout.frame_size:x} exceeds one page (0x1000). "
+            f"Windows commits stack pages via a guard page that must be touched "
+            f"sequentially; a single sub esp,N that skips past the guard causes "
+            f"an access violation. Stack probing is not yet implemented -- "
+            f"reduce string lengths or split the manifest."
+        )
+    return layout

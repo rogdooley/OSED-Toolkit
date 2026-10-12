@@ -52,8 +52,9 @@ def emit_stack_layout_md(manifest: Manifest, layout: StackLayout) -> str:
     # Title + frame info
     lines.append("# Stack Layout")
     lines.append("")
+    frame = layout.frame_size
     lines.append(
-        "Frame: `mov ebp, esp` / `add esp, 0xfffffb00` (0x500 bytes reserved)"
+        f"Frame: `mov ebp, esp` / `sub esp, 0x{frame:x}` (0x{frame:x} bytes reserved)"
     )
     lines.append("")
 

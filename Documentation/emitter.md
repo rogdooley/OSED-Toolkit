@@ -314,8 +314,9 @@ uv run emitter Tools/emitter/manifests/revshell.yaml \
 
 ## Stack layout
 
-The emitter allocates a fixed frame with `mov ebp, esp` / `add esp, 0xfffffb00`
-(0x500 bytes reserved). Slots are assigned in strict zones:
+The emitter allocates a dynamically sized frame with `mov ebp, esp` /
+`sub esp, <frame_size>` (rounded up to the next 0x100 boundary from the
+layout high-water mark). Slots are assigned in strict zones:
 
 | Zone | Offsets | Contents |
 |---|---|---|
