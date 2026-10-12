@@ -198,6 +198,12 @@ integration test must assert that ESP equals the first proof-byte address, so
 the captured original-ESP slot is the intended `lpAddress`. Merely loading the
 API arguments into registers is not sufficient.
 
+Before the complete instructor solution is accepted, a Windows integration
+gate must prove the selected final gadget sequence reaches the pivot, enters
+the staged chain, and leaves ESP at the proof-byte address immediately before
+`PUSHAD`. A register table or a serialized chain alone is not evidence that
+this execution path is feasible.
+
 ### Proof-status contract
 
 The stage-copy routine clears the private proof-status DWORD before each
@@ -219,7 +225,9 @@ for the staging buffer; it is not provided through the network protocol.
 | DEP enforcement | The proof page is non-executable before and has the requested executable protection after the successful `VirtualProtect` transition. |
 | Successful proof | Staged proof bytes execute and change the private proof-status DWORD to the expected value. |
 | ASLR behavior | `aslr_dep2` succeeds across fresh launches with different helper bases. |
-| Student bundle | It excludes instructor solution code, test tooling, debugger automation, and generated address manifests. |
+| ASLR disclosure provenance | The existing leak is verified to contain the intended helper-relative anchor, and the instructor solution derives the current helper base from that leak plus the anchor RVA. A hardcoded base is rejected. |
+| Student bundle | It excludes instructor solution code, test tooling, debugger automation, generated address manifests, PDBs, map files, build logs, and packaged source artifacts. |
+| Reproducible validation | The instructor record names the MSVC toolset, Win32 architecture, compiler/linker flags, and SHA-256 hashes of the binaries used for the passing debugger run. |
 
 ## Verification
 
@@ -267,7 +275,20 @@ that:
 - exercises malformed stage addresses, incorrect pivot setup, and an invalid
   `PUSHAD` frame as controlled failures; and
 - for `aslr_dep2`, repeats across at least two fresh processes and asserts that
-  helper bases differ while the leak-plus-RVA solution continues to work.
+  helper bases differ while the leak-plus-RVA solution continues to work; it
+  also verifies the leak equals the helper base plus the documented anchor RVA,
+  and rejects a payload derived from a prior base.
+
+The runtime evidence must be gathered from the final Release Win32 binary,
+not inferred from a development build. The deliberate out-of-bounds copy is a
+synthetic training vulnerability; the compiled release image and debugger
+trace are authoritative for its layout.
+
+After each successful Windows run, instructor-only tooling writes a concise
+validation manifest containing the MSVC toolset version, target architecture,
+optimization and linker-mitigation flags, CMake generator/profile, and
+SHA-256 hashes of the validated service and helper. The manifest is retained
+with instructor validation records and excluded from `student_bundle`.
 
 The test does not attempt to prove that no imaginable exploitation shortcut
 exists. Its goal is to eliminate the obvious routes and reject regressions that
