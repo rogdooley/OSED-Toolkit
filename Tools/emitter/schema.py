@@ -13,6 +13,7 @@ _VALID_TEMPLATES = {
     "reverse_shell", "run_command", "copy_file", "copy_then_run",
     "move_then_run", "tcp_download", "tcp_stager", "bind_shell",
     "http_download",
+    "http_exfil",
 }
 
 

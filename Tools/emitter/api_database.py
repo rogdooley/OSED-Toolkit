@@ -396,6 +396,25 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("dwFlags", "DWORD", "0"),
         ],
     ),
+    "InternetConnectA": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "HINTERNET InternetConnectA(HINTERNET hInternet, LPCSTR lpszServerName,"
+            " INTERNET_PORT nServerPort, LPCSTR lpszUserName, LPCSTR lpszPassword,"
+            " DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)"
+        ),
+        arguments=[
+            Argument("hInternet", "HINTERNET", "handle from InternetOpenA"),
+            Argument("lpszServerName", "LPCSTR", "hostname or IP, e.g. 192.168.1.10"),
+            Argument("nServerPort", "INTERNET_PORT", "port number (e.g. 80, 8000)"),
+            Argument("lpszUserName", "LPCSTR", "NULL for anonymous"),
+            Argument("lpszPassword", "LPCSTR", "NULL for anonymous"),
+            Argument("dwService", "DWORD", "INTERNET_SERVICE_HTTP = 3"),
+            Argument("dwFlags", "DWORD", "0"),
+            Argument("dwContext", "DWORD_PTR", "0"),
+        ],
+    ),
     "InternetOpenUrlA": APIRecord(
         module="wininet.dll",
         category="internet",
@@ -425,6 +444,40 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("lpBuffer", "LPVOID", "pointer to receive buffer"),
             Argument("dwNumberOfBytesToRead", "DWORD", "size of lpBuffer"),
             Argument("lpdwNumberOfBytesRead", "LPDWORD", "pointer to DWORD for bytes read"),
+        ],
+    ),
+    "HttpOpenRequestA": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "HINTERNET HttpOpenRequestA(HINTERNET hConnect, LPCSTR lpszVerb,"
+            " LPCSTR lpszObjectName, LPCSTR lpszVersion, LPCSTR lpszReferrer,"
+            " LPCSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext)"
+        ),
+        arguments=[
+            Argument("hConnect", "HINTERNET", "handle from InternetConnectA"),
+            Argument("lpszVerb", "LPCSTR", "HTTP method, e.g. POST"),
+            Argument("lpszObjectName", "LPCSTR", "URL path, e.g. /upload"),
+            Argument("lpszVersion", "LPCSTR", "NULL for HTTP/1.1"),
+            Argument("lpszReferrer", "LPCSTR", "NULL"),
+            Argument("lplpszAcceptTypes", "LPCSTR*", "NULL for */*"),
+            Argument("dwFlags", "DWORD", "0"),
+            Argument("dwContext", "DWORD_PTR", "0"),
+        ],
+    ),
+    "HttpSendRequestA": APIRecord(
+        module="wininet.dll",
+        category="internet",
+        prototype=(
+            "BOOL HttpSendRequestA(HINTERNET hRequest, LPCSTR lpszHeaders,"
+            " DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)"
+        ),
+        arguments=[
+            Argument("hRequest", "HINTERNET", "handle from HttpOpenRequestA"),
+            Argument("lpszHeaders", "LPCSTR", "NULL for default"),
+            Argument("dwHeadersLength", "DWORD", "0 if lpszHeaders is NULL"),
+            Argument("lpOptional", "LPVOID", "pointer to POST body data"),
+            Argument("dwOptionalLength", "DWORD", "size of POST body in bytes"),
         ],
     ),
     "InternetCloseHandle": APIRecord(
