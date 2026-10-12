@@ -43,12 +43,10 @@ There is no new opcode, header, record, or network round trip.
 
 ### Runtime preparation
 
-The helper owns three private static objects in its writable image section
-(`.data`):
+The helper owns three private static objects in writable image memory:
 
-1. An explicitly initialized `OSED_STAGE_BYTES` (8192-byte) staging buffer in
-   a raw-data-backed writable image section. It receives an exact copy of the
-   complete validated ROP data region.
+1. An `OSED_STAGE_BYTES` (8192-byte) staging buffer. It receives an exact copy
+   of the complete validated ROP data region.
 2. A cached `VirtualProtect` function pointer.
 3. A proof-status DWORD used only as a deterministic, local execution witness.
 
@@ -65,16 +63,15 @@ the private slot are intentionally visible in the helper DLL.
 After the existing version-2 parser accepts a request, its record data and
 record length are the ROP data region. The helper stages that entire region;
 the packet header and version-2 descriptor are not restaged. Before each copy,
-the stage routine clears the full buffer and the proof-status DWORD. Explicit
-initialization ensures the stage buffer has a stable image RVA rather than
-depending on heap allocation or an allocator result.
+the stage routine clears the full buffer and the proof-status DWORD. Static
+image storage, rather than initialization style, gives the buffer a stable RVA
+for a particular build; it must not be heap allocated.
 
 ### Data flow
 
 ```text
 TCP request -> existing packet validation -> existing v2 record validation
     -> helper stage-copy routine copies the full body into private storage
-    -> vulnerable handler zeroes its stack buffer
     -> handler copies only the calibrated first-stage prefix into that buffer
     -> saved EIP executes the short pivot sequence
     -> ESP moves into the staged second-chain area
@@ -125,21 +122,23 @@ saved EIP, or exactly two controlled DWORDs after saved EIP:
 saved EIP:       pop eax; ret
 ESP + 0:         chosen staged-chain address
 ESP + 4:         xchg eax, esp; ret
-ESP + 8 onward:  zeroed, uncontrolled tail
+ESP + 8 onward:  caller-stack state, not attacker-controlled by this request
 ```
 
 This permits the intended pivot but cannot fit a conventional `stdcall`
 `VirtualProtect` frame, which requires a target, return address, and four
-arguments after saved EIP. The handler must zero the stack buffer before its
-limited copy so bytes beyond the controlled prefix cannot become an accidental
-continuation.
+arguments after saved EIP. The implementation makes no claim about physically
+zeroing caller-stack bytes beyond the local frame. Instead, it constrains the
+request-controlled prefix to the three stated DWORDs; bytes after that boundary
+must not originate from attacker input in the current request.
 
 `DEP2_STAGE1_COPY_BYTES` is calibrated from the actual MSVC Win32 saved-EIP
 offset: it equals the observed offset plus twelve bytes. The Windows integration
 test is authoritative: it sends the calibrated prefix, verifies all three
-controlled DWORDs, and inspects the zeroed tail at runtime. A compiler or flag
-change that shifts the frame makes that test fail rather than silently weakening
-the exercise.
+controlled DWORDs, confirms distinct sentinels placed later in the request do
+not appear after the boundary, and records the adjacent caller-stack state for
+diagnosis. A compiler or flag change that shifts the frame makes that test fail
+rather than silently weakening the exercise.
 
 ### Required staged ROP vocabulary
 
@@ -193,8 +192,10 @@ Immediately before `pushad; ret`, the staged chain must establish:
 ```
 
 The instructor solution and integration test must validate this exact memory
-layout at the selected dispatch sequence; merely loading the API arguments into
-registers is not sufficient.
+layout at the selected dispatch sequence. Immediately before `PUSHAD`, the
+integration test must assert that ESP equals the first proof-byte address, so
+the captured original-ESP slot is the intended `lpAddress`. Merely loading the
+API arguments into registers is not sufficient.
 
 ### Proof-status contract
 
@@ -210,11 +211,11 @@ for the staging buffer; it is not provided through the network protocol.
 | Requirement | Acceptance criterion |
 |---|---|
 | First-stage capacity | Runtime inspection shows exactly three controlled DWORDs beginning at saved EIP. |
-| Stack initialization | Bytes after the third controlled DWORD are zeroed and cannot extend the initial chain. |
+| Post-EIP boundary | Bytes after the third controlled DWORD do not come from later request bytes; the debugger records their caller-stack state. |
 | Staging address | The private static stage buffer is discoverable in helper code/data and equals helper base plus stage RVA. |
 | Cached API pointer | It is nonzero before command processing and resolves through the readable startup path. |
 | `PUSHAD` layout | The debugger validates the stated EDI/ESI/EBP/original-ESP/EBX/EDX/ECX layout at dispatch. |
-| DEP enforcement | Proof bytes cannot execute before the successful `VirtualProtect` transition. |
+| DEP enforcement | The proof page is non-executable before and has the requested executable protection after the successful `VirtualProtect` transition. |
 | Successful proof | Staged proof bytes execute and change the private proof-status DWORD to the expected value. |
 | ASLR behavior | `aslr_dep2` succeeds across fresh launches with different helper bases. |
 | Student bundle | It excludes instructor solution code, test tooling, debugger automation, and generated address manifests. |
@@ -252,9 +253,13 @@ that:
 - confirms the cached API pointer is nonzero before command processing;
 - proves no staging pointer is conveniently available in a volatile register at
   the overflow return point;
-- demonstrates the pivot changes ESP into the private staging allocation;
+- proves the first stage reaches the selected pivot gadget;
+- proves the pivot sets ESP inside the designated second-stage region and that
+  its immediate `ret` consumes the expected first second-stage DWORD;
 - confirms the staged chain reaches `VirtualProtect` with the expected call
-  frame;
+  frame, including the pre-`PUSHAD` ESP precondition;
+- queries and verifies the protection of the page containing the proof region
+  before and after the call;
 - verifies proof execution occurs at an address within staged storage;
 - verifies the proof-status DWORD changes only after successful staged proof
   execution;
