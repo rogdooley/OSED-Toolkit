@@ -43,11 +43,14 @@ There is no new opcode, header, record, or network round trip.
 
 ### Runtime preparation
 
-The helper owns two private static objects:
+The helper owns three private static objects in its writable image section
+(`.data`):
 
-1. A writable staging allocation that receives an exact copy of the complete
-   validated command body.
+1. An explicitly initialized `OSED_STAGE_BYTES` (8192-byte) staging buffer in
+   a raw-data-backed writable image section. It receives an exact copy of the
+   complete validated ROP data region.
 2. A cached `VirtualProtect` function pointer.
+3. A proof-status DWORD used only as a deterministic, local execution witness.
 
 During normal service startup, a readable helper initialization routine resolves
 `VirtualProtect` with standard Windows loader APIs and stores it in the private
@@ -58,6 +61,13 @@ The helper does not import `VirtualProtect` directly and does not export a
 callable memory-protection wrapper. It may import the standard loader APIs
 needed to resolve the cached pointer. The resolution code and the references to
 the private slot are intentionally visible in the helper DLL.
+
+After the existing version-2 parser accepts a request, its record data and
+record length are the ROP data region. The helper stages that entire region;
+the packet header and version-2 descriptor are not restaged. Before each copy,
+the stage routine clears the full buffer and the proof-status DWORD. Explicit
+initialization ensures the stage buffer has a stable image RVA rather than
+depending on heap allocation or an allocator result.
 
 ### Data flow
 
@@ -79,12 +89,12 @@ at that point to catch an accidental compiler-created shortcut.
 
 ### Staging and proof regions
 
-The private allocation has one physical backing store but three conceptual
+The private static staging buffer has three conceptual
 regions in a learner request:
 
 | Region | Address expression | Purpose | Required protection before proof |
 |---|---|---|---|
-| First-stage mirror | `stage_base + 0` | Copy of the short initial bytes; diagnostic context only | writable, non-executable |
+| First-stage mirror | `stage_base + 0` | Copy of the full body, including its initial prefix | writable, non-executable |
 | Second-stage chain | `stage_base + stage2_offset` | ROP stack read by `ret` and `pushad` | writable, non-executable |
 | Proof bytes | immediately after the serialized second-stage chain | Benign bytes reached only after the protection change | executable after `VirtualProtect` |
 
@@ -94,15 +104,22 @@ size must cover the proof-byte region. Windows page rounding may also mark part
 of the preceding chain storage executable; this does not alter the intended
 control flow.
 
-For `dep2`, all helper addresses are obtained from the fixed-base DLL. For
-`aslr_dep2`, the learner must calculate `stage_base`, the cached-pointer slot,
-and every gadget from the current helper base plus independently recovered
-RVAs.
+For `dep2`, the stage-buffer, cached-pointer, proof-status, and gadget
+addresses are the fixed helper base plus their discovered RVAs. For
+`aslr_dep2`, the learner must derive that same helper base from the existing
+leak, then add the corresponding independently recovered RVAs. No heap address
+or additional disclosure is involved.
+
+```text
+stage_base        = helper_base + stage_rva
+cached_pointer_va = helper_base + cached_pointer_rva
+proof_status_va   = helper_base + proof_status_rva
+```
 
 ### Structural first-stage constraint
 
-The initial controlled stack area is specified in **DWORDs after saved EIP**.
-The build must provide exactly two controlled DWORDs after saved EIP:
+The first-stage capacity is specified as three controlled DWORDs beginning at
+saved EIP, or exactly two controlled DWORDs after saved EIP:
 
 ```text
 saved EIP:       pop eax; ret
@@ -118,11 +135,11 @@ limited copy so bytes beyond the controlled prefix cannot become an accidental
 continuation.
 
 `DEP2_STAGE1_COPY_BYTES` is calibrated from the actual MSVC Win32 saved-EIP
-offset: it equals the observed offset plus eight bytes. The Windows integration
-test is authoritative: it sends the calibrated prefix, verifies saved-EIP
-control, and inspects the two controlled DWORDs and the zeroed tail at runtime.
-A compiler or flag change that shifts the frame makes that test fail rather than
-silently weakening the exercise.
+offset: it equals the observed offset plus twelve bytes. The Windows integration
+test is authoritative: it sends the calibrated prefix, verifies all three
+controlled DWORDs, and inspects the zeroed tail at runtime. A compiler or flag
+change that shifts the frame makes that test fail rather than silently weakening
+the exercise.
 
 ### Required staged ROP vocabulary
 
@@ -147,6 +164,61 @@ The instructor solution documents the x86 `PUSHAD` register-to-stack mapping,
 the two-return trampoline, every gadget's precondition and side effect, the
 cached-pointer dereference, and why the final return reaches the proof region.
 
+### PUSHAD call-frame contract
+
+Immediately before `pushad; ret`, the staged chain must establish:
+
+| Register | Required value | Later use |
+|---|---|---|
+| `EDI` | address of a single `ret` | first `pushad` trampoline |
+| `ESI` | dereferenced cached `VirtualProtect` pointer | second trampoline / API entry |
+| `EBP` | `jmp esp` address | `VirtualProtect` return address |
+| `EBX` | proof-region size | `dwSize` |
+| `EDX` | executable page protection | `flNewProtect` |
+| `ECX` | writable old-protection location | `lpflOldProtect` |
+| `ESP` | first proof-byte address | `lpAddress` captured by `PUSHAD` |
+
+`PUSHAD` saves `EAX`, `ECX`, `EDX`, `EBX`, original `ESP`, `EBP`, `ESI`, then
+`EDI`. Because the stack grows downward, it leaves this layout at the new ESP:
+
+```text
++0x00 EDI             -> ret pops this and transfers to EDI
++0x04 ESI             -> EDI's ret transfers to resolved VirtualProtect
++0x08 EBP             -> VirtualProtect return address (jmp esp)
++0x0c original ESP    -> lpAddress (first proof byte)
++0x10 EBX             -> dwSize
++0x14 EDX             -> flNewProtect
++0x18 ECX             -> lpflOldProtect
++0x1c EAX             -> unused filler
+```
+
+The instructor solution and integration test must validate this exact memory
+layout at the selected dispatch sequence; merely loading the API arguments into
+registers is not sufficient.
+
+### Proof-status contract
+
+The stage-copy routine clears the private proof-status DWORD before each
+request. The instructor proof bytes execute from the newly executable proof
+region and write a fixed success value to that status DWORD before returning.
+The instruction sequence is local, deterministic, and benign. Its absolute
+status address is derived from the same helper base plus RVA calculation used
+for the staging buffer; it is not provided through the network protocol.
+
+## Acceptance criteria
+
+| Requirement | Acceptance criterion |
+|---|---|
+| First-stage capacity | Runtime inspection shows exactly three controlled DWORDs beginning at saved EIP. |
+| Stack initialization | Bytes after the third controlled DWORD are zeroed and cannot extend the initial chain. |
+| Staging address | The private static stage buffer is discoverable in helper code/data and equals helper base plus stage RVA. |
+| Cached API pointer | It is nonzero before command processing and resolves through the readable startup path. |
+| `PUSHAD` layout | The debugger validates the stated EDI/ESI/EBP/original-ESP/EBX/EDX/ECX layout at dispatch. |
+| DEP enforcement | Proof bytes cannot execute before the successful `VirtualProtect` transition. |
+| Successful proof | Staged proof bytes execute and change the private proof-status DWORD to the expected value. |
+| ASLR behavior | `aslr_dep2` succeeds across fresh launches with different helper bases. |
+| Student bundle | It excludes instructor solution code, test tooling, debugger automation, and generated address manifests. |
+
 ## Verification
 
 ### Static PE verification
@@ -167,7 +239,7 @@ Extend `verify_binaries.py` to:
 Add instructor-only tests for:
 
 - request layout compatibility with the unchanged `OP_ROP` framing;
-- the intended two-DWORD pivot layout after saved EIP;
+- the intended three-DWORD first-stage layout beginning at saved EIP;
 - second-stage serialization and proof-region placement;
 - required and forbidden DEP-2 gadget sets; and
 - address derivation for fixed-base and leak-derived ASLR cases.
@@ -184,6 +256,8 @@ that:
 - confirms the staged chain reaches `VirtualProtect` with the expected call
   frame;
 - verifies proof execution occurs at an address within staged storage;
+- verifies the proof-status DWORD changes only after successful staged proof
+  execution;
 - exercises malformed stage addresses, incorrect pivot setup, and an invalid
   `PUSHAD` frame as controlled failures; and
 - for `aslr_dep2`, repeats across at least two fresh processes and asserts that
