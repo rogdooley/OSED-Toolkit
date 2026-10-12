@@ -132,13 +132,14 @@ zeroing caller-stack bytes beyond the local frame. Instead, it constrains the
 request-controlled prefix to the three stated DWORDs; bytes after that boundary
 must not originate from attacker input in the current request.
 
-`DEP2_STAGE1_COPY_BYTES` is calibrated from the actual MSVC Win32 saved-EIP
-offset: it equals the observed offset plus twelve bytes. The Windows integration
-test is authoritative: it sends the calibrated prefix, verifies all three
-controlled DWORDs, confirms distinct sentinels placed later in the request do
-not appear after the boundary, and records the adjacent caller-stack state for
-diagnosis. A compiler or flag change that shifts the frame makes that test fail
-rather than silently weakening the exercise.
+The non-inlined x86 handler derives the saved-return-address location at runtime
+with MSVC's `_AddressOfReturnAddress()` intrinsic. It computes the copy bound as
+the byte distance from the local buffer to that address plus
+`3 * sizeof(uint32_t)`. This writes exactly through saved EIP and the two
+post-EIP DWORDs without depending on a hardcoded frame offset. The Windows
+integration test verifies all three controlled DWORDs, confirms distinct
+sentinels placed later in the request do not appear after the boundary, and
+records the adjacent caller-stack state for diagnosis.
 
 ### Required staged ROP vocabulary
 
