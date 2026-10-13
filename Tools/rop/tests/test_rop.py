@@ -13,7 +13,12 @@ import struct
 
 import pytest
 
-from Tools.rop.chain import RopChain, VirtualProtectChain, VIRTUALPROTECT_REQUIRED_GADGETS
+from Tools.rop.chain import (
+    CachedVirtualProtectChain,
+    RopChain,
+    VirtualProtectChain,
+    VIRTUALPROTECT_REQUIRED_GADGETS,
+)
 from Tools.rop.gadget_db import GadgetDB, GadgetDBError
 from Tools.rop.models import (
     GadgetRef,
@@ -337,6 +342,30 @@ class TestVirtualProtectChain:
     def test_valid_protect_flags_page_execute_writecopy(self) -> None:
         vp = VirtualProtectChain(protect_flags=0x80)
         assert vp.protect_flags == 0x80
+
+
+class TestCachedVirtualProtectChain:
+    def test_plan_dereferences_cached_slot_before_pushad_setup(self) -> None:
+        chain = CachedVirtualProtectChain(cached_pointer_slot=0x4141414E).plan()
+        names = [element.name for element in chain if isinstance(element, GadgetRef)]
+        slot_index = next(
+            index
+            for index, element in enumerate(chain)
+            if isinstance(element, RawDword) and element.value == 0x4141414E
+        )
+
+        assert names.index("pop_eax_ret") < names.index("mov_eax_ptr_eax_ret")
+        assert names.index("mov_eax_ptr_eax_ret") < names.index("xchg_eax_esi_ret")
+        assert isinstance(chain[slot_index - 1], GadgetRef)
+        assert chain[slot_index - 1].name == "pop_eax_ret"
+        assert names.index("xchg_eax_esi_ret") < names.index("pushad_ret")
+
+    def test_plan_omits_direct_dispatch_gadgets(self) -> None:
+        chain = CachedVirtualProtectChain(cached_pointer_slot=0x4141414E).plan()
+        names = {element.name for element in chain if isinstance(element, GadgetRef)}
+
+        assert "call_eax_ret" not in names
+        assert "jmp_eax" not in names
 
 
 # -- ChainValidator ------------------------------------------------------------

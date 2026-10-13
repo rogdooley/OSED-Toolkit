@@ -40,7 +40,12 @@ For building custom chains use RopChain::
     )
 """
 
-from Tools.rop.chain import RopChain, VirtualProtectChain, VIRTUALPROTECT_REQUIRED_GADGETS
+from Tools.rop.chain import (
+    CachedVirtualProtectChain,
+    RopChain,
+    VirtualProtectChain,
+    VIRTUALPROTECT_REQUIRED_GADGETS,
+)
 from Tools.rop.gadget_db import GadgetDB, GadgetDBError
 from Tools.rop.models import (
     ChainElement,
@@ -60,6 +65,7 @@ __all__ = [
     # Chain builders
     "RopChain",
     "VirtualProtectChain",
+    "CachedVirtualProtectChain",
     "VIRTUALPROTECT_REQUIRED_GADGETS",
     # Gadget database
     "GadgetDB",
