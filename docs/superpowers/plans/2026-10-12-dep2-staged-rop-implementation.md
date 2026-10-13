@@ -35,7 +35,7 @@
 
 ---
 
-### Task 0: Establish the Release Win32 Pivot Feasibility Gate
+### Task 0: Prepare the Release Win32 Pivot Feasibility Gate
 
 **Files:**
 - Create: `Experiments/Windows/osed_vuln_lab/python/verify_dep2_feasibility.py`
@@ -45,7 +45,7 @@
 **Interfaces:**
 - Produces: `verify_dep2_feasibility.py --service PATH --helper PATH --cdb PATH`, which accepts an explicitly supplied first-stage request and expected stage/proof addresses and returns nonzero on any failed breakpoint assertion.
 - Consumes later: the same PDB symbol resolution and structured CDB transcript format used by the full Task 4 verifier.
-- Constraint: this is an instructor-only Release Win32 gate. It proves control-flow feasibility, not a complete DEP bypass, and it never enters `student_bundle`.
+- Constraint: this is an instructor-only Release Win32 gate. Its parser and transcript contract are implemented first; its executable target and CDB run are completed immediately after Tasks 1 through 3 produce the cached-pointer chain, staging runtime, and structural handler. It proves control-flow feasibility, not a complete DEP bypass, and it never enters `student_bundle`.
 
 - [ ] **Step 1: Write failing feasibility transcript tests**
 
@@ -57,13 +57,13 @@ Run: `rtk python3 -m unittest discover -s Experiments/Windows/osed_vuln_lab/pyth
 
 Expected: FAIL because the feasibility verifier does not exist.
 
-- [ ] **Step 3: Implement the feasibility parser and CMake target**
+- [ ] **Step 3: Implement the feasibility parser and defer target wiring to Task 3**
 
-Implement a structured CDB-command generator/transcript parser and a non-default `verify_dep2_feasibility` CMake target. The target must require the Release Win32 service/helper and matching PDBs, fail clearly when they are absent, and record the selected build configuration.
+Implement a structured CDB-command generator/transcript parser. Task 3 adds the non-default `verify_dep2_feasibility` CMake target once the `dep2` service and helper profiles exist. That target must require the Release Win32 service/helper and matching PDBs, fail clearly when they are absent, and record the selected build configuration.
 
-- [ ] **Step 4: Run the Release Win32 gate before full chain work**
+- [ ] **Step 4: Run the Release Win32 gate immediately after Task 3**
 
-On the Windows build host, configure and build `dep2` as Release Win32, then run the feasibility target with an instructor-only controlled staged request. Capture evidence that the exact final pivot path reaches the selected `PUSHAD` instruction with ESP equal to proof-start. If this fails, resolve the actual gadget/stack layout before continuing; do not proceed on a register-table assumption.
+After Task 3 creates the `dep2` profile, configure and build it as Release Win32 on the Windows build host, then run the feasibility target with an instructor-only controlled staged request. Capture evidence that the exact final pivot path reaches the selected `PUSHAD` instruction with ESP equal to proof-start. If this fails, resolve the actual gadget/stack layout before beginning Task 4; do not proceed on a register-table assumption.
 
 - [ ] **Step 5: Commit**
 
@@ -226,6 +226,10 @@ Run: `rtk python3 -m unittest discover -s Experiments/Windows/osed_vuln_lab/pyth
 Run configurations for `easy`, `seh`, `dep`, `dep2`, `aslr_dep`, and `aslr_dep2` in separate `/tmp` directories.
 
 Expected: all Python tests pass; CMake generation succeeds; no non-Windows result is described as a compiled PE or runtime result.
+
+- [ ] **Step 5a: Wire the Task 0 CMake target and execute its Release Win32 gate**
+
+Add the non-default `verify_dep2_feasibility` CMake target from Task 0. On the Windows host, configure a Release Win32 `dep2` build and run the target with matching PDBs. Treat this as a hard gate for Task 4: record a passing pivot/staged-return/pre-`PUSHAD` transcript or stop for a layout ruling.
 
 - [ ] **Step 6: Commit**
 
