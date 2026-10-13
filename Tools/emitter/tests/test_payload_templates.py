@@ -1210,6 +1210,31 @@ def test_registry_persist_error_check(registry_persist_layout, rp_config):
     assert "jnz  rp_done" in asm
 
 
+def test_registry_persist_cbdata_matches_slot(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    slot_size = registry_persist_layout.slot("dst_path").size
+    assert f"cbData = {slot_size}" in asm
+
+
+def test_registry_persist_service_name_override(manifest_dir, tmp_path):
+    from Tools.emitter.build import build
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    config = TemplateConfig(
+        service_name="CustomVal",
+        dst_path="C:\\Windows\\Temp\\svc.exe",
+    )
+    result = build(
+        str(manifest_dir / "registry_persist.yaml"),
+        config=config,
+        out_dir=str(tmp_path),
+        assemble=False,
+    )
+    assert "CustomVal" in result.asm
+    assert "UpdateSvc" not in result.asm
+
+
 class TestRegistryPersistProbeSlots:
     def test_discovers_api_slots(self, rp_config):
         from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate

