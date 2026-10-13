@@ -67,11 +67,13 @@ OSEDHELPER_API int __stdcall helper_probe(int value) {
     return (int)(x ^ y);
 }
 
+#if defined(OSED_PROFILE_ASLR_DEP)
 OSEDHELPER_API void __stdcall helper_aslr_proof(void) {
     puts("[success] ASLR-derived control flow reached osedhelper!helper_aslr_proof.");
     fflush(stdout);
     ExitProcess(0);
 }
+#endif
 
 /*
  * Lab note:

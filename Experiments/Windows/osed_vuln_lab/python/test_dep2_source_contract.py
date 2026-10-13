@@ -31,6 +31,12 @@ class Dep2SourceContractTests(unittest.TestCase):
         self.assertIn("_AddressOfReturnAddress", service)
         self.assertIn("3 * sizeof(uint32_t)", service)
 
+    def test_staged_profiles_do_not_include_the_legacy_aslr_proof_export(self) -> None:
+        helper = (ROOT / "src" / "osedhelper.c").read_text(encoding="utf-8")
+
+        self.assertIn("#if defined(OSED_PROFILE_ASLR_DEP)", helper)
+        self.assertIn("helper_aslr_proof", helper)
+
 
 if __name__ == "__main__":
     unittest.main()
