@@ -4,7 +4,7 @@
 #error osedgadgets.c requires the 32-bit MSVC compiler
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 __declspec(dllexport) volatile DWORD helper_writable_slot[4] = {0};
 
 /* Keeps a VirtualProtect import and import thunk in the helper DLL. */
@@ -17,7 +17,7 @@ __declspec(dllexport) BOOL __stdcall helper_memory_protect(
 }
 #endif
 
-#if defined(OSED_PROFILE_EASY) || defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_EASY) || defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 __declspec(dllexport) __declspec(naked) void helper_sequence_01(void) {
     __asm {
         jmp esp
@@ -25,7 +25,7 @@ __declspec(dllexport) __declspec(naked) void helper_sequence_01(void) {
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 __declspec(dllexport) __declspec(naked) void helper_sequence_02(void) {
     __asm {
         pop eax
@@ -117,7 +117,7 @@ __declspec(dllexport) __declspec(naked) void helper_sequence_13(void) {
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 __declspec(dllexport) __declspec(naked) void helper_sequence_14(void) {
     __asm {
         xchg eax, esp
@@ -153,6 +153,7 @@ __declspec(dllexport) __declspec(naked) void helper_sequence_18(void) {
     }
 }
 
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
 __declspec(dllexport) __declspec(naked) void helper_sequence_19(void) {
     __asm {
         call eax
@@ -165,6 +166,7 @@ __declspec(dllexport) __declspec(naked) void helper_sequence_20(void) {
         jmp eax
     }
 }
+#endif
 #endif
 
 #if defined(OSED_PROFILE_EASY)

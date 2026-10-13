@@ -17,6 +17,8 @@ OSEDHELPER_API int __stdcall helper_xor_fold(const unsigned char *data, int len)
 OSEDHELPER_API void * __stdcall helper_get_anchor(void);
 OSEDHELPER_API int __stdcall helper_probe(int value);
 OSEDHELPER_API void __stdcall helper_aslr_proof(void);
+OSEDHELPER_API int __stdcall helper_prepare_rop_runtime(void);
+OSEDHELPER_API int __stdcall helper_stage_record(const unsigned char *data, DWORD length);
 
 #ifdef __cplusplus
 }

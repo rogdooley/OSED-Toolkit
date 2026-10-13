@@ -3,6 +3,36 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#define OSED_STAGE_BYTES 8192u
+
+static unsigned char helper_rop_stage[OSED_STAGE_BYTES];
+static FARPROC helper_cached_virtualprotect;
+static volatile DWORD helper_proof_status;
+
+OSEDHELPER_API int __stdcall helper_prepare_rop_runtime(void) {
+    HMODULE kernel32 = GetModuleHandleA("kernel32.dll");
+    if (kernel32 == NULL) {
+        return 0;
+    }
+    helper_cached_virtualprotect = GetProcAddress(kernel32, "VirtualProtect");
+    return helper_cached_virtualprotect != NULL;
+}
+
+OSEDHELPER_API int __stdcall helper_stage_record(const unsigned char *data, DWORD length) {
+    if (length > OSED_STAGE_BYTES || (data == NULL && length != 0)) {
+        return 0;
+    }
+    memset(helper_rop_stage, 0, sizeof(helper_rop_stage));
+    helper_proof_status = 0;
+    if (length != 0) {
+        memcpy(helper_rop_stage, data, length);
+    }
+    return 1;
+}
+#endif
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
     (void)module;

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <intrin.h>
 
 #include "osed_protocol.h"
 #include "osedhelper.h"
@@ -117,7 +118,7 @@ static int __declspec(noinline) dispatch_seh_record(
 }
 #endif
 
-#if defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_ASLR_DEP2)
 static int __declspec(noinline) handler_leak(SOCKET client) {
     void *fp = (void *)&helper_get_anchor;
     uintptr_t leak = (uintptr_t)fp;
@@ -139,7 +140,7 @@ static int __declspec(noinline) handler_leak(SOCKET client) {
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 static void __declspec(noinline) rop_target_marker(void) {
     puts("ROP target marker reached");
 }
@@ -186,6 +187,26 @@ static int __declspec(noinline) parse_v2_record(
 }
 #endif
 
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_t len) {
+    char pivotbuf[300];
+    uintptr_t saved_eip_address = (uintptr_t)_AddressOfReturnAddress();
+    uintptr_t pivotbuf_address = (uintptr_t)pivotbuf;
+    size_t copy_length;
+
+    if (saved_eip_address < pivotbuf_address) {
+        return;
+    }
+    copy_length = (size_t)(saved_eip_address - pivotbuf_address) + 3 * sizeof(uint32_t);
+    if (len < copy_length || !helper_stage_record(data, len)) {
+        return;
+    }
+
+    /* INTENTIONAL VULNERABILITY: exactly saved EIP plus two post-EIP DWORDs. */
+    memcpy(pivotbuf, data, copy_length);
+}
+#endif
+
 static int __declspec(noinline) dispatch_packet(
     SOCKET client,
     const OSED_PACKET_HEADER *hdr,
@@ -215,7 +236,7 @@ static int __declspec(noinline) dispatch_packet(
     case OP_SEH:
         return dispatch_seh_record(hdr, body);
 #endif
-#if defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_ASLR_DEP2)
     case OP_LEAK: {
         const uint8_t *query_data;
         uint32_t query_length;
@@ -232,7 +253,7 @@ static int __declspec(noinline) dispatch_packet(
         return handler_leak(client);
     }
 #endif
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
     case OP_ROP: {
         const uint8_t *record_data;
         uint32_t record_length;
@@ -244,7 +265,11 @@ static int __declspec(noinline) dispatch_packet(
                 &record_length) != 0) {
             return -1;
         }
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+        handler_rop_staged(record_data, record_length);
+#else
         handler_rop(record_data, record_length);
+#endif
         return 0;
     }
 #endif
@@ -360,6 +385,12 @@ int main(int argc, char **argv) {
     if (helper_probe(7) == 0) {
         return 1;
     }
+
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+    if (!helper_prepare_rop_runtime()) {
+        return 1;
+    }
+#endif
 
     return run_server(port);
 }
