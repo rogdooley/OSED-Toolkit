@@ -14,6 +14,10 @@ _VALID_TEMPLATES = {
     "move_then_run", "tcp_download", "tcp_stager", "bind_shell",
     "http_download",
     "http_exfil",
+    "process_replace",
+    "service_persist",
+    "dll_inject",
+    "registry_persist",
 }
 
 

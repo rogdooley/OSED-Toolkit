@@ -85,6 +85,54 @@ API_DATABASE: dict[str, APIRecord] = {
         ],
         requires_structs=("STARTUPINFOA", "PROCESS_INFORMATION"),
     ),
+    "CreateToolhelp32Snapshot": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="HANDLE CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID)",
+        arguments=[
+            Argument("dwFlags", "DWORD", "TH32CS_SNAPPROCESS = 0x02"),
+            Argument("th32ProcessID", "DWORD", "0 for all processes"),
+        ],
+    ),
+    "Process32First": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="BOOL Process32First(HANDLE hSnapshot, LPPROCESSENTRY32 lppe)",
+        arguments=[
+            Argument("hSnapshot", "HANDLE", "from CreateToolhelp32Snapshot"),
+            Argument("lppe", "LPPROCESSENTRY32", "cb must be set to sizeof(PROCESSENTRY32)"),
+        ],
+        requires_structs=("PROCESSENTRY32",),
+    ),
+    "Process32Next": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="BOOL Process32Next(HANDLE hSnapshot, LPPROCESSENTRY32 lppe)",
+        arguments=[
+            Argument("hSnapshot", "HANDLE", "from CreateToolhelp32Snapshot"),
+            Argument("lppe", "LPPROCESSENTRY32", "reused from Process32First"),
+        ],
+        requires_structs=("PROCESSENTRY32",),
+    ),
+    "OpenProcess": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId)",
+        arguments=[
+            Argument("dwDesiredAccess", "DWORD", "PROCESS_TERMINATE = 0x0001"),
+            Argument("bInheritHandle", "BOOL", "FALSE"),
+            Argument("dwProcessId", "DWORD", "from PROCESSENTRY32.th32ProcessID"),
+        ],
+    ),
+    "TerminateProcess": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype="BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode)",
+        arguments=[
+            Argument("hProcess", "HANDLE", "from OpenProcess"),
+            Argument("uExitCode", "UINT", "0"),
+        ],
+    ),
     # --- kernel32.dll : filesystem ---
     "CopyFileA": APIRecord(
         module="kernel32.dll",
@@ -171,6 +219,55 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("dwSize", "SIZE_T", "size of region in bytes"),
             Argument("flAllocationType", "DWORD", "MEM_COMMIT|MEM_RESERVE = 0x3000"),
             Argument("flProtect", "DWORD", "PAGE_EXECUTE_READWRITE = 0x40"),
+        ],
+    ),
+    "VirtualAllocEx": APIRecord(
+        module="kernel32.dll",
+        category="memory",
+        prototype=(
+            "LPVOID VirtualAllocEx(HANDLE hProcess, LPVOID lpAddress,"
+            " SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)"
+        ),
+        arguments=[
+            Argument("hProcess", "HANDLE", "target process handle from OpenProcess"),
+            Argument("lpAddress", "LPVOID", "NULL to let OS choose"),
+            Argument("dwSize", "SIZE_T", "size of region in bytes"),
+            Argument("flAllocationType", "DWORD", "MEM_COMMIT|MEM_RESERVE = 0x3000"),
+            Argument("flProtect", "DWORD", "PAGE_EXECUTE_READWRITE = 0x40"),
+        ],
+    ),
+    "WriteProcessMemory": APIRecord(
+        module="kernel32.dll",
+        category="memory",
+        prototype=(
+            "BOOL WriteProcessMemory(HANDLE hProcess, LPVOID lpBaseAddress,"
+            " LPCVOID lpBuffer, SIZE_T nSize, SIZE_T *lpNumberOfBytesWritten)"
+        ),
+        arguments=[
+            Argument("hProcess", "HANDLE", "target process handle"),
+            Argument("lpBaseAddress", "LPVOID", "address in target process from VirtualAllocEx"),
+            Argument("lpBuffer", "LPCVOID", "local buffer to write from"),
+            Argument("nSize", "SIZE_T", "number of bytes to write"),
+            Argument("lpNumberOfBytesWritten", "SIZE_T*", "NULL or pointer to SIZE_T"),
+        ],
+    ),
+    "CreateRemoteThread": APIRecord(
+        module="kernel32.dll",
+        category="process",
+        prototype=(
+            "HANDLE CreateRemoteThread(HANDLE hProcess,"
+            " LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize,"
+            " LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter,"
+            " DWORD dwCreationFlags, LPDWORD lpThreadId)"
+        ),
+        arguments=[
+            Argument("hProcess", "HANDLE", "target process handle"),
+            Argument("lpThreadAttributes", "LPSECURITY_ATTRIBUTES", "NULL"),
+            Argument("dwStackSize", "SIZE_T", "0 for default"),
+            Argument("lpStartAddress", "LPTHREAD_START_ROUTINE", "LoadLibraryA address in target"),
+            Argument("lpParameter", "LPVOID", "remote buffer with DLL path"),
+            Argument("dwCreationFlags", "DWORD", "0 to run immediately"),
+            Argument("lpThreadId", "LPDWORD", "NULL"),
         ],
     ),
     "VirtualProtect": APIRecord(
@@ -488,6 +585,102 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("hInternet", "HINTERNET", "any HINTERNET handle to close"),
         ],
     ),
+    # --- advapi32.dll : service ---
+    "OpenSCManagerA": APIRecord(
+        module="advapi32.dll",
+        category="service",
+        prototype="SC_HANDLE OpenSCManagerA(LPCSTR lpMachineName, LPCSTR lpDatabaseName, DWORD dwDesiredAccess)",
+        arguments=[
+            Argument("lpMachineName", "LPCSTR", "NULL for local machine"),
+            Argument("lpDatabaseName", "LPCSTR", "NULL for SERVICES_ACTIVE_DATABASE"),
+            Argument("dwDesiredAccess", "DWORD", "SC_MANAGER_CREATE_SERVICE = 0x0002"),
+        ],
+    ),
+    "CreateServiceA": APIRecord(
+        module="advapi32.dll",
+        category="service",
+        prototype=(
+            "SC_HANDLE CreateServiceA(SC_HANDLE hSCManager, LPCSTR lpServiceName,"
+            " LPCSTR lpDisplayName, DWORD dwDesiredAccess, DWORD dwServiceType,"
+            " DWORD dwStartType, DWORD dwErrorControl, LPCSTR lpBinaryPathName,"
+            " LPCSTR lpLoadOrderGroup, LPDWORD lpdwTagId, LPCSTR lpDependencies,"
+            " LPCSTR lpServiceStartName, LPCSTR lpPassword)"
+        ),
+        arguments=[
+            Argument("hSCManager", "SC_HANDLE", "from OpenSCManagerA"),
+            Argument("lpServiceName", "LPCSTR", "internal service name"),
+            Argument("lpDisplayName", "LPCSTR", "display name (can match service name)"),
+            Argument("dwDesiredAccess", "DWORD", "SERVICE_ALL_ACCESS = 0xF01FF"),
+            Argument("dwServiceType", "DWORD", "SERVICE_WIN32_OWN_PROCESS = 0x10"),
+            Argument("dwStartType", "DWORD", "SERVICE_AUTO_START = 0x02"),
+            Argument("dwErrorControl", "DWORD", "SERVICE_ERROR_IGNORE = 0x00"),
+            Argument("lpBinaryPathName", "LPCSTR", "path to service executable"),
+            Argument("lpLoadOrderGroup", "LPCSTR", "NULL"),
+            Argument("lpdwTagId", "LPDWORD", "NULL"),
+            Argument("lpDependencies", "LPCSTR", "NULL"),
+            Argument("lpServiceStartName", "LPCSTR", "NULL (LocalSystem)"),
+            Argument("lpPassword", "LPCSTR", "NULL"),
+        ],
+    ),
+    "StartServiceA": APIRecord(
+        module="advapi32.dll",
+        category="service",
+        prototype="BOOL StartServiceA(SC_HANDLE hService, DWORD dwNumServiceArgs, LPCSTR *lpServiceArgVectors)",
+        arguments=[
+            Argument("hService", "SC_HANDLE", "from CreateServiceA"),
+            Argument("dwNumServiceArgs", "DWORD", "0"),
+            Argument("lpServiceArgVectors", "LPCSTR *", "NULL"),
+        ],
+    ),
+    "CloseServiceHandle": APIRecord(
+        module="advapi32.dll",
+        category="service",
+        prototype="BOOL CloseServiceHandle(SC_HANDLE hSCObject)",
+        arguments=[
+            Argument("hSCObject", "SC_HANDLE", "SCM or service handle"),
+        ],
+    ),
+    # --- advapi32.dll : registry ---
+    "RegOpenKeyExA": APIRecord(
+        module="advapi32.dll",
+        category="registry",
+        prototype=(
+            "LSTATUS RegOpenKeyExA(HKEY hKey, LPCSTR lpSubKey,"
+            " DWORD ulOptions, REGSAM samDesired, PHKEY phkResult)"
+        ),
+        arguments=[
+            Argument("hKey", "HKEY", "HKEY_LOCAL_MACHINE = 0x80000002 or HKEY_CURRENT_USER = 0x80000001"),
+            Argument("lpSubKey", "LPCSTR", "registry path string"),
+            Argument("ulOptions", "DWORD", "0"),
+            Argument("samDesired", "REGSAM", "KEY_SET_VALUE = 0x0002"),
+            Argument("phkResult", "PHKEY", "pointer to HKEY output"),
+        ],
+    ),
+    "RegSetValueExA": APIRecord(
+        module="advapi32.dll",
+        category="registry",
+        prototype=(
+            "LSTATUS RegSetValueExA(HKEY hKey, LPCSTR lpValueName,"
+            " DWORD Reserved, DWORD dwType, const BYTE *lpData,"
+            " DWORD cbData)"
+        ),
+        arguments=[
+            Argument("hKey", "HKEY", "opened registry key handle"),
+            Argument("lpValueName", "LPCSTR", "value name string"),
+            Argument("Reserved", "DWORD", "0"),
+            Argument("dwType", "DWORD", "REG_SZ = 1"),
+            Argument("lpData", "const BYTE*", "pointer to data (string for REG_SZ)"),
+            Argument("cbData", "DWORD", "size of data in bytes including null terminator"),
+        ],
+    ),
+    "RegCloseKey": APIRecord(
+        module="advapi32.dll",
+        category="registry",
+        prototype="LSTATUS RegCloseKey(HKEY hKey)",
+        arguments=[
+            Argument("hKey", "HKEY", "opened registry key handle"),
+        ],
+    ),
 }
 
 
@@ -513,6 +706,15 @@ STRUCT_DATABASE: dict[str, StructRecord] = {
             StructField(0x0c, "dwThreadId",  4, "populated by Windows"),
         ],
     ),
+    "PROCESSENTRY32": StructRecord(
+        size=0x128,
+        alignment=4,
+        fields=[
+            StructField(0x00, "dwSize",        4, "must be 0x128 = sizeof(PROCESSENTRY32)"),
+            StructField(0x08, "th32ProcessID",  4, "PID of the process"),
+            StructField(0x24, "szExeFile",    260, "null-terminated process name (MAX_PATH)"),
+        ],
+    ),
     "sockaddr_in": StructRecord(
         size=0x10,
         alignment=4,
@@ -535,6 +737,7 @@ MODULE_LOAD_ORDER: list[ModuleInfo] = [
     ModuleInfo(dll="kernel32.dll", load_via="peb"),
     ModuleInfo(dll="ws2_32.dll",   load_via="LoadLibraryA"),
     ModuleInfo(dll="wininet.dll",  load_via="LoadLibraryA"),
+    ModuleInfo(dll="advapi32.dll", load_via="LoadLibraryA"),
 ]
 
 

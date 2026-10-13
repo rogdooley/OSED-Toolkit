@@ -36,6 +36,38 @@ def http_download_layout(manifest_dir):
 
 
 @pytest.fixture
+def process_replace_layout(manifest_dir):
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    manifest = load(str(manifest_dir / "process_replace.yaml"))
+    return build_layout(manifest)
+
+
+@pytest.fixture
+def service_persist_layout(manifest_dir):
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    manifest = load(str(manifest_dir / "service_persist.yaml"))
+    return build_layout(manifest)
+
+
+@pytest.fixture
+def dll_inject_layout(manifest_dir):
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    manifest = load(str(manifest_dir / "dll_inject.yaml"))
+    return build_layout(manifest)
+
+
+@pytest.fixture
+def registry_persist_layout(manifest_dir):
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    manifest = load(str(manifest_dir / "registry_persist.yaml"))
+    return build_layout(manifest)
+
+
+@pytest.fixture
 def http_exfil_layout(manifest_dir):
     from Tools.emitter.schema import load
     from Tools.emitter.stack_alloc import build_layout
