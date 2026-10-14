@@ -144,6 +144,43 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("bFailIfExists", "BOOL", "FALSE to overwrite"),
         ],
     ),
+    "CopyFileExA": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype=(
+            "BOOL CopyFileExA(LPCSTR lpExistingFileName, LPCSTR lpNewFileName,"
+            " LPPROGRESS_ROUTINE lpProgressRoutine, LPVOID lpData,"
+            " LPBOOL pbCancel, DWORD dwCopyFlags)"
+        ),
+        arguments=[
+            Argument("lpExistingFileName", "LPCSTR", ""),
+            Argument("lpNewFileName", "LPCSTR", ""),
+            Argument("lpProgressRoutine", "LPPROGRESS_ROUTINE", "NULL"),
+            Argument("lpData", "LPVOID", "NULL"),
+            Argument("pbCancel", "LPBOOL", "NULL"),
+            Argument("dwCopyFlags", "DWORD", "0; or COPY_FILE_ALLOW_DECRYPTED_DESTINATION = 0x8"),
+        ],
+    ),
+    "CreateDirectoryA": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype="BOOL CreateDirectoryA(LPCSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes)",
+        arguments=[
+            Argument("lpPathName", "LPCSTR", "directory path to create"),
+            Argument("lpSecurityAttributes", "LPSECURITY_ATTRIBUTES", "NULL for default security"),
+        ],
+    ),
+    "SetFileAttributesA": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype="BOOL SetFileAttributesA(LPCSTR lpFileName, DWORD dwFileAttributes)",
+        arguments=[
+            Argument("lpFileName", "LPCSTR", ""),
+            Argument("dwFileAttributes", "DWORD",
+                     "FILE_ATTRIBUTE_HIDDEN=0x02, FILE_ATTRIBUTE_SYSTEM=0x04, "
+                     "FILE_ATTRIBUTE_NORMAL=0x80"),
+        ],
+    ),
     "DeleteFileA": APIRecord(
         module="kernel32.dll",
         category="filesystem",
@@ -309,6 +346,14 @@ API_DATABASE: dict[str, APIRecord] = {
         arguments=[],
     ),
     # --- kernel32.dll : synchronization ---
+    "Sleep": APIRecord(
+        module="kernel32.dll",
+        category="synchronization",
+        prototype="void Sleep(DWORD dwMilliseconds)",
+        arguments=[
+            Argument("dwMilliseconds", "DWORD", "delay in milliseconds"),
+        ],
+    ),
     "WaitForSingleObject": APIRecord(
         module="kernel32.dll",
         category="synchronization",
