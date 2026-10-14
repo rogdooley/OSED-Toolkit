@@ -60,6 +60,14 @@ def dll_inject_layout(manifest_dir):
 
 
 @pytest.fixture
+def check_path_layout(manifest_dir):
+    from Tools.emitter.schema import load
+    from Tools.emitter.stack_alloc import build_layout
+    manifest = load(str(manifest_dir / "check_path.yaml"))
+    return build_layout(manifest)
+
+
+@pytest.fixture
 def registry_persist_layout(manifest_dir):
     from Tools.emitter.schema import load
     from Tools.emitter.stack_alloc import build_layout

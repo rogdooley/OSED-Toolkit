@@ -1259,3 +1259,122 @@ class TestRegistryPersistAutoDerive:
         )
         assert result.shellcode_bytes is not None
         assert len(result.shellcode_bytes) > 0
+
+
+# ---------------------------------------------------------------------------
+# Check Path (Primitive)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def cp_config():
+    from Tools.emitter.payload_templates.base import TemplateConfig
+    return TemplateConfig(
+        dst_path="C:\\Windows\\System32\\cmd.exe",
+    )
+
+
+def test_check_path_getfileattr_slot(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    assert check_path_layout.slot("GetFileAttributesA").ebp_ref in asm
+
+
+def test_check_path_variable_slot(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    assert check_path_layout.slot("path_attrs").ebp_ref in asm
+
+
+def test_check_path_string_slot(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    assert check_path_layout.slot("check_path").ebp_ref in asm
+
+
+def test_check_path_no_hardcoded_offsets(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    import re
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    known_refs = {s.ebp_ref for s in check_path_layout.all_slots()}
+    for ref in re.findall(r'\[ebp-0x[0-9a-f]+\]', asm):
+        assert ref in known_refs, f"Hardcoded offset {ref} not in layout"
+
+
+def test_check_path_branches(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    assert "cp_present:" in asm
+    assert "cp_missing:" in asm
+    assert "cp_done:" in asm
+    assert "je   cp_missing" in asm
+
+
+def test_check_path_invalid_file_attributes(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    assert "INVALID_FILE_ATTRIBUTES" in asm
+    assert "cmp  eax, 0xFFFFFFFF" in asm
+
+
+def test_check_path_stores_result(check_path_layout, cp_config):
+    from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+    t = CheckPathTemplate()
+    asm = t.emit(check_path_layout, cp_config)
+    attrs_ref = check_path_layout.slot("path_attrs").ebp_ref
+    assert attrs_ref in asm
+
+
+class TestCheckPathProbeSlots:
+    def test_discovers_api_slot(self, cp_config):
+        from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+        t = CheckPathTemplate()
+        slots = t.probe_slots(cp_config)
+        assert "GetFileAttributesA" in slots
+
+    def test_discovers_variable_slot(self, cp_config):
+        from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+        t = CheckPathTemplate()
+        slots = t.probe_slots(cp_config)
+        assert "path_attrs" in slots
+
+    def test_discovers_string_slot(self, cp_config):
+        from Tools.emitter.payload_templates.check_path import CheckPathTemplate
+        t = CheckPathTemplate()
+        slots = t.probe_slots(cp_config)
+        assert "check_path" in slots
+
+
+class TestCheckPathAutoDerive:
+    def test_full_build_assembles(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            dst_path="C:\\Windows\\System32\\cmd.exe",
+        )
+        result = build(
+            str(manifest_dir / "check_path.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+        )
+        assert result.shellcode_bytes is not None
+        assert len(result.shellcode_bytes) > 0
+
+    def test_dst_override_reaches_check_path(self, manifest_dir, tmp_path):
+        from Tools.emitter.build import build
+        from Tools.emitter.payload_templates.base import TemplateConfig
+        config = TemplateConfig(
+            dst_path="C:\\custom\\target.exe",
+        )
+        result = build(
+            str(manifest_dir / "check_path.yaml"),
+            config=config,
+            out_dir=str(tmp_path),
+            assemble=False,
+        )
+        assert "C:\\custom\\target.exe" in result.asm

@@ -18,6 +18,7 @@ _VALID_TEMPLATES = {
     "service_persist",
     "dll_inject",
     "registry_persist",
+    "check_path",
 }
 
 

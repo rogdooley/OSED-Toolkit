@@ -760,6 +760,7 @@ def _load_template(name: str) -> PayloadTemplate:
         "service_persist": "Tools.emitter.payload_templates.service_persist.ServicePersistTemplate",
         "dll_inject":      "Tools.emitter.payload_templates.dll_inject.DllInjectTemplate",
         "registry_persist": "Tools.emitter.payload_templates.registry_persist.RegistryPersistTemplate",
+        "check_path":      "Tools.emitter.payload_templates.check_path.CheckPathTemplate",
     }
     if name not in registry:
         raise ValueError(
@@ -783,7 +784,7 @@ def _load_template(name: str) -> PayloadTemplate:
 _CONFIG_TO_LABELS: dict[str, list[str]] = {
     "command": ["cmd"],
     "src_path": ["src_path"],
-    "dst_path": ["dst_path"],
+    "dst_path": ["dst_path", "check_path"],
     "url": ["url"],
     "url_path": ["url_path"],
     "lhost": ["exfil_host"],
@@ -1224,7 +1225,7 @@ def main() -> None:
     parser.add_argument("manifest", help="Path to manifest YAML file")
     parser.add_argument(
         "--template",
-        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download", "http_exfil", "process_replace", "service_persist", "dll_inject", "registry_persist"],
+        choices=["reverse_shell", "run_command", "copy_file", "copy_then_run", "move_then_run", "tcp_download", "tcp_stager", "bind_shell", "http_download", "http_exfil", "process_replace", "service_persist", "dll_inject", "registry_persist", "check_path"],
     )
     parser.add_argument("--out", default="emitter_out", help="Output directory")
     parser.add_argument("--lhost", default=None, metavar="IP|IFACE",

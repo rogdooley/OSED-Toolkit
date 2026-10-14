@@ -170,6 +170,14 @@ API_DATABASE: dict[str, APIRecord] = {
             Argument("lpSecurityAttributes", "LPSECURITY_ATTRIBUTES", "NULL for default security"),
         ],
     ),
+    "GetFileAttributesA": APIRecord(
+        module="kernel32.dll",
+        category="filesystem",
+        prototype="DWORD GetFileAttributesA(LPCSTR lpFileName)",
+        arguments=[
+            Argument("lpFileName", "LPCSTR", "path to check"),
+        ],
+    ),
     "SetFileAttributesA": APIRecord(
         module="kernel32.dll",
         category="filesystem",
