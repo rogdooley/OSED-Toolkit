@@ -24,6 +24,5 @@ def test_remaining_challenges_do_not_repeat_net01s_c_string_behavior() -> None:
     file01 = (ROOT / "challenges" / "file01" / "file01.c").read_text(encoding="utf-8")
     net03 = (ROOT / "challenges" / "net03" / "net03.c").read_text(encoding="utf-8")
     assert "strcpy(" not in file01
-    assert "0x1A" in file01
-    assert "0x7F" in net03
-    assert "0xFF" in net03
+    assert "kind" in file01 and "count" in file01
+    assert "count" in net03 and "record_index" in net03

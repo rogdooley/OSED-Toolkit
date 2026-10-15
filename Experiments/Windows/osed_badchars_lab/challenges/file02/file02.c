@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     uint8_t *decoded = NULL;
     size_t record_length = 0;
     size_t payload_length;
-    size_t index;
+    size_t index = 0, output_length = 0, chunk_index = 0;
     wchar_t path[MAX_PATH];
     int result = 1;
 
@@ -33,11 +33,20 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     stage_trace_capture(STAGE_INITIAL_INPUT, record + 8, payload_length);
-    for (index = 0; index < payload_length; ++index) {
-        decoded[index] = record[8 + index] ^ 0x23;
+    while (index < payload_length) {
+        size_t count = record[8 + index++];
+        size_t item;
+        if (count == 0) continue;
+        if (count > payload_length - index) goto cleanup;
+        for (item = 0; item < count; ++item) {
+            decoded[output_length++] = record[8 + index + item] ^ (uint8_t)((chunk_index + 1) * 0x11);
+        }
+        index += count;
+        ++chunk_index;
     }
-    stage_trace_capture(STAGE_POST_TRANSFORM, decoded, payload_length);
-    stage_trace_capture(STAGE_FINAL_DESTINATION, decoded, payload_length);
+    stage_trace_capture(STAGE_PRE_TRANSFORM, record + 8, payload_length);
+    stage_trace_capture(STAGE_POST_TRANSFORM, decoded, output_length);
+    stage_trace_capture(STAGE_FINAL_DESTINATION, decoded, output_length);
     result = 0;
 
 cleanup:

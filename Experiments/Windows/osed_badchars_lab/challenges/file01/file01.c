@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     uint8_t *record = NULL;
     size_t record_length = 0;
     size_t payload_length;
-    size_t source_index;
+    size_t source_index = 0;
     size_t destination_index = 0;
     wchar_t path[MAX_PATH];
     char vulnerable_destination[128];
@@ -32,15 +32,20 @@ int main(int argc, char **argv) {
     }
     payload_length = record_length - 8;
     memcpy(file01_received, record + 8, payload_length);
-    file01_received[payload_length] = '\0';
     stage_trace_capture(STAGE_INITIAL_INPUT, file01_received, payload_length);
-    stage_trace_capture(STAGE_PRE_TRANSFORM, file01_received, payload_length);
-    /* Intentional legacy record marker: this is not C-string processing. */
-    for (source_index = 0; source_index < payload_length; ++source_index) {
-        if (file01_received[source_index] == 0x1A) {
-            break;
+    while (source_index < payload_length) {
+        uint8_t kind, count;
+        size_t index;
+        if (payload_length - source_index < 2) goto cleanup;
+        kind = file01_received[source_index++]; count = file01_received[source_index++];
+        if (count > payload_length - source_index) goto cleanup;
+        stage_trace_capture(STAGE_PRE_TRANSFORM, file01_received + source_index, count);
+        for (index = 0; index < count; ++index) {
+            uint8_t value = file01_received[source_index++];
+            if ((kind & 1) && value == 0x1A) break;
+            vulnerable_destination[destination_index++] = (char)value;
         }
-        vulnerable_destination[destination_index++] = (char)file01_received[source_index];
+        source_index += count - index;
     }
     vulnerable_destination[destination_index] = '\0';
     stage_trace_capture(STAGE_FINAL_DESTINATION, (const uint8_t *)vulnerable_destination,

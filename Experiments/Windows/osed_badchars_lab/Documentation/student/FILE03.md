@@ -1,8 +1,9 @@
 # FILE-03 — stateful record decoding
 
 `file03.exe` processes a record through a heap decode buffer and then stages a
-bounded prefix on the stack. Some observations depend on a byte's neighbour,
-so single-byte testing alone is insufficient.
+bounded prefix on the stack. Some observations depend on a byte's neighbour
+and whether it crosses a record boundary, so single-byte testing alone is
+insufficient.
 
 Generate each input with `generate_file.py --challenge file03`. First verify a
 known-good record, then compare short individual probes with ordered pairwise

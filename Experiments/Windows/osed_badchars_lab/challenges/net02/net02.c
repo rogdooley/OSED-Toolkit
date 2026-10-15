@@ -8,10 +8,19 @@
 typedef struct { char magic[4]; uint8_t version,kind; uint16_t length; } net02_header;
 typedef struct { uint8_t *candidate; size_t length; } net02_session;
 static int net02_process_candidate(net02_session *session) {
-    uint8_t *normalized=(uint8_t *)HeapAlloc(GetProcessHeap(),0,session->length+1); size_t i,out=0;
+    uint8_t *normalized=(uint8_t *)HeapAlloc(GetProcessHeap(),0,session->length+1); size_t i,out=0; int quoted=0,escaped=0;
     if(!normalized) return 1;
     stage_trace_capture(STAGE_PRE_TRANSFORM,session->candidate,session->length);
-    for(i=0;i<session->length;i++) { uint8_t value=session->candidate[i]; if(value=='|') break; if(value>='a'&&value<='z') value=(uint8_t)(value-32); normalized[out++]=value; }
+    for(i=0;i<session->length;i++) {
+        uint8_t value=session->candidate[i];
+        if(escaped) { normalized[out++]=(uint8_t)(value^0x20); escaped=0; }
+        else if(value=='\\') escaped=1;
+        else if(value=='"') quoted=!quoted;
+        else if(value==';'&&!quoted) normalized[out++]='|';
+        else if(!quoted&&value>='a'&&value<='z') normalized[out++]=(uint8_t)(value-0x20);
+        else normalized[out++]=value;
+    }
+    if(escaped) normalized[out++]='\\';
     normalized[out]=0; stage_trace_capture(STAGE_POST_TRANSFORM,normalized,out); stage_trace_capture(STAGE_FINAL_DESTINATION,normalized,out); HeapFree(GetProcessHeap(),0,normalized); return 0;
 }
 static int net02_handle_client(SOCKET client) {

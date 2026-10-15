@@ -13,27 +13,43 @@ typedef struct net03_header {
 } net03_header;
 
 /* Heap input is decoded in place, then staged onto the stack. */
-static void net03_decode_and_stage(uint8_t *heap_bytes, size_t length) {
+static int net03_decode_and_stage(const uint8_t *heap_bytes, size_t length) {
     uint8_t stack_stage[256];
-    size_t decoded_length = 0;
+    uint8_t *decoded = (uint8_t *)HeapAlloc(GetProcessHeap(), 0, length);
+    size_t decoded_length = 0, input_index = 0, record_index = 0;
     size_t copy_length;
-    size_t input_index;
+    if (decoded == NULL) return 1;
 
-    stage_trace_capture(STAGE_PRE_TRANSFORM, heap_bytes, length);
-    for (input_index = 0; input_index < length; ++input_index) {
-        uint8_t value = heap_bytes[input_index];
-        if (value == 0xFF) {
-            continue;
-        }
-        if (value == 0x7F) {
-            value = 0x3F;
-        }
-        heap_bytes[decoded_length++] = value;
+    while (input_index < length) {
+        size_t count = heap_bytes[input_index++];
+        size_t index;
+        if (count == 0) continue;
+        if (count > length - input_index) { HeapFree(GetProcessHeap(), 0, decoded); return 1; }
+        memcpy(decoded + decoded_length, heap_bytes + input_index, count);
+        decoded_length += count;
+        input_index += count;
+        ++record_index;
     }
-    stage_trace_capture(STAGE_POST_TRANSFORM, heap_bytes, decoded_length);
+    stage_trace_capture(STAGE_PRE_TRANSFORM, decoded, decoded_length);
+    input_index = 0;
+    decoded_length = 0;
+    record_index = 0;
+    while (input_index < length) {
+        size_t count = heap_bytes[input_index++];
+        size_t index;
+        if (count == 0) continue;
+        for (index = 0; index < count; ++index) {
+            decoded[decoded_length++] ^= (uint8_t)((record_index + 1) * 0x11);
+        }
+        input_index += count;
+        ++record_index;
+    }
+    stage_trace_capture(STAGE_POST_TRANSFORM, decoded, decoded_length);
     copy_length = decoded_length < sizeof(stack_stage) ? decoded_length : sizeof(stack_stage);
-    memcpy(stack_stage, heap_bytes, copy_length);
+    memcpy(stack_stage, decoded, copy_length);
     stage_trace_capture(STAGE_FINAL_DESTINATION, stack_stage, copy_length);
+    HeapFree(GetProcessHeap(), 0, decoded);
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -73,8 +89,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     stage_trace_capture(STAGE_INITIAL_INPUT, candidate, header.length);
-    net03_decode_and_stage(candidate, header.length);
-    result = 0;
+    result = net03_decode_and_stage(candidate, header.length);
 
 cleanup:
     if (candidate != NULL) {

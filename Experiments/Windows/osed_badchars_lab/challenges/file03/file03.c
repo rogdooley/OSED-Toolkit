@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     uint8_t *decoded = NULL;
     size_t record_length = 0;
     size_t payload_length;
-    size_t input_index;
+    size_t input_index = 0;
     size_t output_length = 0;
     wchar_t path[MAX_PATH];
     uint8_t stack_stage[256];
@@ -35,13 +35,20 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     stage_trace_capture(STAGE_INITIAL_INPUT, record + 8, payload_length);
-    for (input_index = 0; input_index < payload_length; ++input_index) {
-        if (record[8 + input_index] == '\\' && input_index + 1 < payload_length) {
-            ++input_index;
-            decoded[output_length++] = record[8 + input_index] ^ 0x20;
-        } else {
-            decoded[output_length++] = record[8 + input_index];
+    while (input_index < payload_length) {
+        uint8_t kind, count;
+        size_t item;
+        int escaped = 0;
+        if (payload_length - input_index < 2) goto cleanup;
+        kind = record[8 + input_index++]; count = record[8 + input_index++];
+        if (count > payload_length - input_index) goto cleanup;
+        for (item = 0; item < count; ++item) {
+            uint8_t value = record[8 + input_index++];
+            if ((kind & 1) && escaped) { decoded[output_length++] = value ^ 0x20; escaped = 0; }
+            else if ((kind & 1) && value == '\\') escaped = 1;
+            else decoded[output_length++] = value;
         }
+        if (escaped) decoded[output_length++] = '\\';
     }
     stage_trace_capture(STAGE_POST_TRANSFORM, decoded, output_length);
     if (output_length > sizeof(stack_stage)) {
