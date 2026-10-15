@@ -8,6 +8,14 @@ Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "net01", "challenges\net01\n
 EndProject
 Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "net02", "challenges\net02\net02.vcxproj", "{9A07EF42-FFAF-4B5A-A5B0-0CA17B588003}"
 EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "net03", "challenges\net03\net03.vcxproj", "{9A07EF42-FFAF-4B5A-A5B0-0CA17B588004}"
+EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "file01", "challenges\file01\file01.vcxproj", "{9A07EF42-FFAF-4B5A-A5B0-0CA17B588005}"
+EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "file02", "challenges\file02\file02.vcxproj", "{9A07EF42-FFAF-4B5A-A5B0-0CA17B588006}"
+EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "file03", "challenges\file03\file03.vcxproj", "{9A07EF42-FFAF-4B5A-A5B0-0CA17B588007}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -26,5 +34,21 @@ Global
 		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588003}.Debug|Win32.Build.0 = Debug|Win32
 		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588003}.Release|Win32.ActiveCfg = Release|Win32
 		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588003}.Release|Win32.Build.0 = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588004}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588004}.Debug|Win32.Build.0 = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588004}.Release|Win32.ActiveCfg = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588004}.Release|Win32.Build.0 = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588005}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588005}.Debug|Win32.Build.0 = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588005}.Release|Win32.ActiveCfg = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588005}.Release|Win32.Build.0 = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588006}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588006}.Debug|Win32.Build.0 = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588006}.Release|Win32.ActiveCfg = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588006}.Release|Win32.Build.0 = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588007}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588007}.Debug|Win32.Build.0 = Debug|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588007}.Release|Win32.ActiveCfg = Release|Win32
+		{9A07EF42-FFAF-4B5A-A5B0-0CA17B588007}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 EndGlobal

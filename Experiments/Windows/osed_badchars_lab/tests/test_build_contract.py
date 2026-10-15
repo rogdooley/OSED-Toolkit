@@ -25,7 +25,7 @@ def _project_properties(path: Path) -> dict[str, list[str]]:
 
 def test_projects_declare_only_win32_and_required_mitigation_settings() -> None:
     """Changing a project to x64 or dropping a lab mitigation must fail here."""
-    for project_name in ("net01", "net02"):
+    for project_name in ("net01", "net02", "net03", "file01", "file02", "file03"):
         properties = _project_properties(
             LAB_ROOT / "challenges" / project_name / f"{project_name}.vcxproj"
         )

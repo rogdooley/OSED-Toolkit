@@ -8,3 +8,12 @@ def test_bytearray_and_comparison_are_observational():
  assert b.build_bytearray(0,3,{1},2)==b"\x00\x02\x03\x00\x02\x03"
  report=c.compare_bytes(b"\x01\x02\x03",b"\x01\x04")
  assert report.truncation_at==2 and report.mismatches==[(1,2,4)]
+
+
+def test_file_generator_preserves_candidate_and_declares_length():
+ g=_load("generate_file")
+ candidate=b"\x00\x41\xff"
+ record=g.build_record("file03",candidate)
+ assert record[:4]==b"BCF3"
+ assert record[6:8]==len(candidate).to_bytes(2,"little")
+ assert record[8:]==candidate
