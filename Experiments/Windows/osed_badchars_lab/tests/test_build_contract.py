@@ -30,6 +30,7 @@ def test_projects_declare_only_win32_and_required_mitigation_settings() -> None:
             LAB_ROOT / "challenges" / project_name / f"{project_name}.vcxproj"
         )
         assert set(properties["Platform"]) == {"Win32"}
+        assert set(properties["PlatformToolset"]) == {"v143"}
         assert set(properties["Optimization"]) == {"Disabled"}
         assert set(properties["BufferSecurityCheck"]) == {"false"}
         assert set(properties["RandomizedBaseAddress"]) == {"false"}
