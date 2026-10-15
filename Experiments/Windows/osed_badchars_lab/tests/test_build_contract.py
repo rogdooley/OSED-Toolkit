@@ -36,6 +36,7 @@ def test_projects_declare_only_win32_and_required_mitigation_settings() -> None:
         assert set(properties["RandomizedBaseAddress"]) == {"false"}
         assert set(properties["DataExecutionPrevention"]) == {"false"}
         assert "ProgramDatabase" in properties["DebugInformationFormat"]
+        assert "Ws2_32.lib;%(AdditionalDependencies)" in properties["AdditionalDependencies"]
 
 
 def test_build_script_declares_supported_configurations_and_uses_win32() -> None:
