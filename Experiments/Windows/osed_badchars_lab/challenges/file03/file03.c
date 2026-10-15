@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
     stage_trace_capture(STAGE_INITIAL_INPUT, record + 8, payload_length);
+    stage_trace_capture(STAGE_PRE_TRANSFORM, record + 8, payload_length);
     while (input_index < payload_length) {
         uint8_t kind, count;
         size_t item;

@@ -48,6 +48,8 @@ int main(int argc, char **argv) {
         source_index += count - index;
     }
     vulnerable_destination[destination_index] = '\0';
+    stage_trace_capture(STAGE_POST_TRANSFORM, (const uint8_t *)vulnerable_destination,
+                        destination_index);
     stage_trace_capture(STAGE_FINAL_DESTINATION, (const uint8_t *)vulnerable_destination,
                         destination_index);
     result = 0;
