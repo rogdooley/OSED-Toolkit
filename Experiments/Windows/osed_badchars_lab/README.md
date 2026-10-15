@@ -22,6 +22,14 @@ without altering candidate bytes.
 All TCP services bind to loopback only. Match the harness target and port, for
 example: `python tools\\send_tcp.py --challenge net02 --mode probe --candidate-file candidate.bin --port 32102`.
 
+## Byte-behavior progression
+
+The targets intentionally do not repeat one C-string lesson. NET-01 is the
+baseline C-string exercise. The remaining targets cover, respectively, a
+protocol field delimiter, conditional deletion/substitution, a legacy record
+terminator, whole-record decoding, and context-dependent escaping. Student
+material describes observation strategy, not the values or rules to discover.
+
 Build from a Visual Studio 2017, 2019, or 2022 Developer Command Prompt:
 
 ```bat

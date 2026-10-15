@@ -19,6 +19,8 @@ int main(int argc, char **argv) {
     uint8_t *record = NULL;
     size_t record_length = 0;
     size_t payload_length;
+    size_t source_index;
+    size_t destination_index = 0;
     wchar_t path[MAX_PATH];
     char vulnerable_destination[128];
     int result = 1;
@@ -33,10 +35,16 @@ int main(int argc, char **argv) {
     file01_received[payload_length] = '\0';
     stage_trace_capture(STAGE_INITIAL_INPUT, file01_received, payload_length);
     stage_trace_capture(STAGE_PRE_TRANSFORM, file01_received, payload_length);
-    /* Intentional lab operation: embedded NUL terminates this vulnerable copy. */
-    strcpy(vulnerable_destination, (const char *)file01_received);
+    /* Intentional legacy record marker: this is not C-string processing. */
+    for (source_index = 0; source_index < payload_length; ++source_index) {
+        if (file01_received[source_index] == 0x1A) {
+            break;
+        }
+        vulnerable_destination[destination_index++] = (char)file01_received[source_index];
+    }
+    vulnerable_destination[destination_index] = '\0';
     stage_trace_capture(STAGE_FINAL_DESTINATION, (const uint8_t *)vulnerable_destination,
-                        strlen(vulnerable_destination));
+                        destination_index);
     result = 0;
 
 cleanup:

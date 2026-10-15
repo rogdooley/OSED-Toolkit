@@ -17,3 +17,13 @@ def test_file_generator_and_net03_harness_support_are_present() -> None:
     assert (ROOT / "tools" / "generate_file.py").exists()
     harness = (ROOT / "tools" / "send_tcp.py").read_text(encoding="utf-8")
     assert '"net03"' in harness
+
+
+def test_remaining_challenges_do_not_repeat_net01s_c_string_behavior() -> None:
+    """The baseline NUL lesson belongs to NET-01, not every target."""
+    file01 = (ROOT / "challenges" / "file01" / "file01.c").read_text(encoding="utf-8")
+    net03 = (ROOT / "challenges" / "net03" / "net03.c").read_text(encoding="utf-8")
+    assert "strcpy(" not in file01
+    assert "0x1A" in file01
+    assert "0x7F" in net03
+    assert "0xFF" in net03

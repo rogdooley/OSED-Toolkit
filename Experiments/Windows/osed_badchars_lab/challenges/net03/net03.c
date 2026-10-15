@@ -15,14 +15,23 @@ typedef struct net03_header {
 /* Heap input is decoded in place, then staged onto the stack. */
 static void net03_decode_and_stage(uint8_t *heap_bytes, size_t length) {
     uint8_t stack_stage[256];
-    size_t copy_length = length < sizeof(stack_stage) ? length : sizeof(stack_stage);
-    size_t index;
+    size_t decoded_length = 0;
+    size_t copy_length;
+    size_t input_index;
 
     stage_trace_capture(STAGE_PRE_TRANSFORM, heap_bytes, length);
-    for (index = 0; index < length; ++index) {
-        heap_bytes[index] ^= 0x55;
+    for (input_index = 0; input_index < length; ++input_index) {
+        uint8_t value = heap_bytes[input_index];
+        if (value == 0xFF) {
+            continue;
+        }
+        if (value == 0x7F) {
+            value = 0x3F;
+        }
+        heap_bytes[decoded_length++] = value;
     }
-    stage_trace_capture(STAGE_POST_TRANSFORM, heap_bytes, length);
+    stage_trace_capture(STAGE_POST_TRANSFORM, heap_bytes, decoded_length);
+    copy_length = decoded_length < sizeof(stack_stage) ? decoded_length : sizeof(stack_stage);
     memcpy(stack_stage, heap_bytes, copy_length);
     stage_trace_capture(STAGE_FINAL_DESTINATION, stack_stage, copy_length);
 }
