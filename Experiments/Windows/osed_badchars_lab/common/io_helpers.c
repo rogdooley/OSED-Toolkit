@@ -82,7 +82,7 @@ int common_read_file_all(const wchar_t *path, uint8_t **out, size_t *out_len, si
     }
     if (!GetFileSizeEx(file, &file_size) || file_size.QuadPart < 0 ||
         (unsigned long long)file_size.QuadPart > (unsigned long long)max_len ||
-        (unsigned long long)file_size.QuadPart > (unsigned long long)DWORD_MAX) {
+        (unsigned long long)file_size.QuadPart > (unsigned long long)MAXDWORD) {
         CloseHandle(file);
         return COMMON_LIMIT_EXCEEDED;
     }

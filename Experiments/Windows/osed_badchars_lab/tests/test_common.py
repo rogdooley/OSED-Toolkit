@@ -20,6 +20,8 @@ def test_common_api_uses_explicit_lengths_for_socket_and_file_input() -> None:
         assert forbidden not in source
     assert "recv(" in source
     assert "ReadFile(" in source
+    assert "DWORD_MAX" not in source
+    assert "MAXDWORD" in source
 
 
 def test_stage_trace_is_compile_time_optional_and_has_no_runtime_control_channel() -> None:
