@@ -14,8 +14,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime
 import html
+import io
 import os
 import re
 import socket
@@ -166,17 +168,14 @@ def get_listening_ports() -> list[dict]:
 def get_processes() -> list[dict]:
     raw = run_cmd('tasklist /V /FO CSV')
     procs = []
-    lines = raw.strip().splitlines()
-    if not lines:
+    reader = csv.reader(io.StringIO(raw))
+    headers = next(reader, None)
+    if not headers:
         return procs
-    headers_line = lines[0]
-    headers = [h.strip('"') for h in headers_line.split('","')]
-    for line in lines[1:]:
-        vals = [v.strip('"') for v in line.split('","')]
-        if len(vals) < len(headers):
+    for row in reader:
+        if len(row) < len(headers):
             continue
-        entry = dict(zip(headers, vals))
-        procs.append(entry)
+        procs.append(dict(zip(headers, row)))
     return procs
 
 
@@ -342,20 +341,7 @@ def classify_anomalies(
         binary = svc.get("binary", "")
         if not binary:
             continue
-        bin_path = binary.split('"')[1] if '"' in binary else binary.split()[0] if binary else ""
-        if bin_path and os.path.isfile(bin_path):
-            try:
-                import stat
-                st = os.stat(bin_path)
-                if st.st_mode & stat.S_IWOTH:
-                    findings.append({
-                        "severity": "CRITICAL",
-                        "category": "World-writable service binary",
-                        "detail": f"{svc.get('name', '?')}: {bin_path}",
-                    })
-            except (OSError, ValueError):
-                pass
-        if binary and not binary.lower().startswith(("c:\\windows\\", '"c:\\windows\\')):
+        if not binary.lower().startswith(("c:\\windows\\", '"c:\\windows\\')):
             if svc.get("state") == "RUNNING":
                 svc_name = svc.get("name", "")
                 if svc_name not in STANDARD_SERVICES:
@@ -364,10 +350,6 @@ def classify_anomalies(
                         "category": "Service binary outside Windows directory",
                         "detail": f"{svc_name}: {binary}",
                     })
-
-    dep_status = sysinfo.get("raw", "")
-    if "DEP" in dep_status:
-        pass
 
     severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "INFO": 3}
     findings.sort(key=lambda f: severity_order.get(f["severity"], 99))
@@ -392,6 +374,7 @@ def generate_html(
     shares: str,
     users: str,
     env_path: str,
+    scheduled_tasks: str = "",
 ) -> str:
     h = html.escape
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -554,6 +537,7 @@ def generate_html(
   <a href="#processes">Processes</a>
   <a href="#services">Services</a>
   <a href="#firewall">Firewall</a>
+  <a href="#tasks">Scheduled Tasks</a>
   <a href="#shares">Shares</a>
   <a href="#users">Users &amp; Groups</a>
   <a href="#network">Network Config</a>
@@ -593,6 +577,11 @@ def generate_html(
 <div class="section" id="firewall">
 <h2>Firewall Status</h2>
 <pre>{h(firewall)}</pre>
+</div>
+
+<div class="section" id="tasks">
+<h2>Scheduled Tasks</h2>
+<pre>{h(scheduled_tasks) if scheduled_tasks else "(skipped -- use full scan to include)"}</pre>
 </div>
 
 <div class="section" id="shares">
@@ -645,9 +634,12 @@ def main(argv: list[str] | None = None) -> int:
     print("[*] Enumerating services...")
     services = get_services()
 
+    scheduled_tasks = ""
     if not args.quick:
         print("[*] Querying service configurations (this may take a moment)...")
         services = get_service_configs(services)
+        print("[*] Enumerating scheduled tasks...")
+        scheduled_tasks = get_scheduled_tasks()
 
     print("[*] Checking firewall status...")
     firewall = get_firewall_status()
@@ -674,6 +666,7 @@ def main(argv: list[str] | None = None) -> int:
         shares=shares,
         users=users,
         env_path=env_path,
+        scheduled_tasks=scheduled_tasks,
     )
 
     Path(args.output).write_text(report, encoding="utf-8")

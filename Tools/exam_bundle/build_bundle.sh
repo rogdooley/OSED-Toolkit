@@ -26,6 +26,7 @@ echo "[*] Building OSED exam bundle..."
 
 PYVER="3.12.10"
 PYVER_SHORT="312"
+WARNINGS=0
 
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/wheels"
@@ -62,6 +63,7 @@ if download "$PYURL" "$BUNDLE/python/${PYZIP}"; then
     echo "    [+] ${PYZIP} ($(du -h "$BUNDLE/python/${PYZIP}" | cut -f1))"
 else
     echo "    [!] Could not download Python embed zip. Bundle will rely on system Python."
+    WARNINGS=$((WARNINGS+1))
 fi
 
 echo "[*] Downloading get-pip.py..."
@@ -69,6 +71,7 @@ if download "$GETPIP_URL" "$BUNDLE/python/get-pip.py"; then
     echo "    [+] get-pip.py"
 else
     echo "    [!] Could not download get-pip.py."
+    WARNINGS=$((WARNINGS+1))
 fi
 
 echo "[*] Downloading pip + setuptools wheels (for offline bootstrap)..."
@@ -79,7 +82,7 @@ $PIP download pip setuptools \
     --no-deps \
     -d "$BUNDLE/wheels/" 2>/dev/null && \
     echo "    [+] pip + setuptools wheels" || \
-    echo "    [!] Could not download pip wheels. get-pip.py will need internet."
+    echo "    [!] Could not download pip wheels. get-pip.py will need internet." && WARNINGS=$((WARNINGS+1))
 
 # ============================================================
 # 2. Keystone wheels for Windows x86
@@ -263,3 +266,8 @@ echo ""
 echo "[+] Transfer to exam box via SMB:"
 echo "    impacket-smbserver kalismb . -smb2support"
 echo "    (on Windows) copy \\\\<kali_ip>\\kalismb\\exam_bundle.zip C:\\exam\\"
+echo ""
+if [ "$WARNINGS" -gt 0 ]; then
+    echo "[!] WARNING: $WARNINGS download(s) failed. The bundle may be incomplete."
+    echo "    Review the [!] lines above and re-run with internet access if needed."
+fi

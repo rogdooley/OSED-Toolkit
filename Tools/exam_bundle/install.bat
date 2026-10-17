@@ -155,10 +155,10 @@ REM 2. Install keystone from local wheels
 REM ============================================================
 echo.
 echo [*] Installing keystone-engine from bundled wheels...
-"!PYTHON!" -m pip install --no-index --find-links=wheels keystone-engine 2>NUL
+"!PYTHON!" -m pip install --no-index --find-links="%BUNDLEDIR%\wheels" keystone-engine 2>NUL
 if !ERRORLEVEL! NEQ 0 (
     echo [-] Wheel install failed. Trying with --user flag...
-    "!PYTHON!" -m pip install --no-index --find-links=wheels --user keystone-engine 2>NUL
+    "!PYTHON!" -m pip install --no-index --find-links="%BUNDLEDIR%\wheels" --user keystone-engine 2>NUL
 )
 
 REM Verify keystone
