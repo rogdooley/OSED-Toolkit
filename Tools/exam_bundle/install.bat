@@ -209,6 +209,11 @@ echo ============================================================
 echo [+] Setup complete. Bundle contents:
 echo ============================================================
 echo.
+echo HOST ENUMERATION:
+echo   python tools\enum_host.py             Enumerate host, generate HTML report
+echo   python tools\enum_host.py --quick     Skip slow service config queries
+echo   start enum_report.html                Open report in browser
+echo.
 echo STATIC ANALYSIS:
 echo   tools\recon.exe pe ^<target.exe^>     PE mitigations, imports, sections
 echo   tools\recon.exe triage ^<target.exe^>  Function ranking by exploitability

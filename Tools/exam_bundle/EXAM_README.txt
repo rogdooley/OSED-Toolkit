@@ -25,6 +25,7 @@ BUNDLE LAYOUT
     tools\
       recon.exe           PE triage, function ranking, pseudocode
       tcp_stage_server.py TCP staging server (run on Kali)
+      enum_host.py        Windows host enumeration -> HTML report
     badchars\
       badchar_auto.py     Automated bad-char discovery via cdb
       badchar_bp.wds      WinDbg breakpoint script
@@ -45,6 +46,21 @@ BUNDLE LAYOUT
       opcode.py           API function name to ROR13 hash
     reference\
       (Markdown cheat sheets - open with any text editor)
+
+
+HOST ENUMERATION
+-----------------
+Run on the exam machine to discover services, ports, processes, and anomalies:
+
+  python tools\enum_host.py
+  python tools\enum_host.py -o my_report.html
+  python tools\enum_host.py --quick              (skip slow service config queries)
+
+Opens enum_report.html in the browser:
+  start enum_report.html
+
+The report highlights non-standard services, unusual listening ports, and
+non-baseline processes at the top. Use it to find your exploit targets.
 
 
 WORKFLOW (per target)

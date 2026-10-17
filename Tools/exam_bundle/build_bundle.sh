@@ -225,13 +225,20 @@ copy_ref "$REPO_ROOT/Documentation/x86-osed-assembly-reference/27-fast-reference
          "x86_Fast_Reference_Tables.md"
 
 # ============================================================
-# 10. Install script and README
+# 10. Host enumeration script
+# ============================================================
+echo "[*] Copying host enumeration script..."
+cp "$SCRIPT_DIR/enum_host.py" "$BUNDLE/tools/"
+echo "    [+] tools/enum_host.py"
+
+# ============================================================
+# 11. Install script and README
 # ============================================================
 cp "$SCRIPT_DIR/install.bat" "$BUNDLE/"
 cp "$SCRIPT_DIR/EXAM_README.txt" "$BUNDLE/"
 
 # ============================================================
-# 11. Package
+# 12. Package
 # ============================================================
 echo "[*] Creating zip..."
 cd "$SCRIPT_DIR/dist"
@@ -246,7 +253,7 @@ echo ""
 echo "[+] Contents:"
 echo "    python/          Python ${PYVER} embeddable (win32) + get-pip.py"
 echo "    wheels/          Keystone-engine wheels (offline pip install)"
-echo "    tools/           recon.exe, tcp_stage_server.py"
+echo "    tools/           recon.exe, tcp_stage_server.py, enum_host.py"
 echo "    badchars/        badchar_auto.py + WinDbg script + examples"
 echo "    templates/       Exploit templates (stack, SEH, DEP, egghunter, fmt, ASLR)"
 echo "    payloads/        Payload helpers (eip_check, vp_skeleton)"
