@@ -140,7 +140,7 @@ static int __declspec(noinline) handler_leak(SOCKET client) {
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
 static void __declspec(noinline) rop_target_marker(void) {
     puts("ROP target marker reached");
 }
@@ -187,7 +187,7 @@ static int __declspec(noinline) parse_v2_record(
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
 static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_t len) {
     char pivotbuf[300];
     uintptr_t saved_eip_address = (uintptr_t)_AddressOfReturnAddress();
@@ -253,7 +253,7 @@ static int __declspec(noinline) dispatch_packet(
         return handler_leak(client);
     }
 #endif
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
     case OP_ROP: {
         const uint8_t *record_data;
         uint32_t record_length;
@@ -265,7 +265,7 @@ static int __declspec(noinline) dispatch_packet(
                 &record_length) != 0) {
             return -1;
         }
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
         handler_rop_staged(record_data, record_length);
 #else
         handler_rop(record_data, record_length);
@@ -386,7 +386,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
     if (!helper_prepare_rop_runtime()) {
         return 1;
     }

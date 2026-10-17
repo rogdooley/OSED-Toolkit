@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
 #define OSED_STAGE_BYTES 8192u
 
 static unsigned char helper_rop_stage[OSED_STAGE_BYTES];
@@ -25,6 +25,13 @@ OSEDHELPER_API int __stdcall helper_stage_record(const unsigned char *data, DWOR
     if (length > OSED_STAGE_BYTES || (data == NULL && length != 0)) {
         return 0;
     }
+#if defined(OSED_PROFILE_DEP3)
+    for (DWORD i = 0; i < length; ++i) {
+        if (data[i] == 0x00) {
+            return 0;
+        }
+    }
+#endif
     memset(helper_rop_stage, 0, sizeof(helper_rop_stage));
     helper_proof_status = 0;
     if (length != 0) {

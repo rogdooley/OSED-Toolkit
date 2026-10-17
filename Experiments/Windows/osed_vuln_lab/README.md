@@ -99,6 +99,15 @@ cmake --build build_dep --config Release
 cmake -A Win32 -S . -B build_aslr_dep -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON
 cmake --build build_aslr_dep --config Release
 
+cmake -A Win32 -S . -B build_dep2 -DLAB_PROFILE=dep2 -DHELPER_ASLR=OFF
+cmake --build build_dep2 --config Release
+
+cmake -A Win32 -S . -B build_aslr_dep2 -DLAB_PROFILE=aslr_dep2 -DHELPER_ASLR=ON
+cmake --build build_aslr_dep2 --config Release
+
+cmake -A Win32 -S . -B build_dep3 -DLAB_PROFILE=dep3 -DHELPER_ASLR=OFF
+cmake --build build_dep3 --config Release
+
 cmake -A Win32 -S . -B build_seh -DLAB_PROFILE=seh -DHELPER_ASLR=OFF
 cmake --build build_seh --config Release
 ```
@@ -149,6 +158,24 @@ cmake -A Win32 -DLAB_PROFILE=aslr_dep -DHELPER_ASLR=ON ..
 cmake --build . --config Release
 popd
 
+if not exist build_dep2 mkdir build_dep2
+pushd build_dep2
+cmake -A Win32 -DLAB_PROFILE=dep2 -DHELPER_ASLR=OFF ..
+cmake --build . --config Release
+popd
+
+if not exist build_aslr_dep2 mkdir build_aslr_dep2
+pushd build_aslr_dep2
+cmake -A Win32 -DLAB_PROFILE=aslr_dep2 -DHELPER_ASLR=ON ..
+cmake --build . --config Release
+popd
+
+if not exist build_dep3 mkdir build_dep3
+pushd build_dep3
+cmake -A Win32 -DLAB_PROFILE=dep3 -DHELPER_ASLR=OFF ..
+cmake --build . --config Release
+popd
+
 if not exist build_seh mkdir build_seh
 pushd build_seh
 cmake -A Win32 -DLAB_PROFILE=seh -DHELPER_ASLR=OFF ..
@@ -167,6 +194,15 @@ popd
 - `aslr_dep`: `/GS- /DYNAMICBASE /NXCOMPAT`
   - Goal: DEP + ASLR, practice info leak + dynamic chain construction.
   - Helper: randomized ROP vocabulary recovered from leaked base plus RVAs.
+- `dep2`: `/GS- /DYNAMICBASE:NO /NXCOMPAT`
+  - Goal: fixed-base staged ROP and a required stack pivot.
+  - Helper: staged writable storage and cached API-pointer recovery.
+- `aslr_dep2`: `/GS- /DYNAMICBASE /NXCOMPAT`
+  - Goal: DEP-2 plus leak-derived helper-base recovery.
+  - Helper: staged ROP vocabulary at addresses recovered from the disclosure.
+- `dep3`: `/GS- /DYNAMICBASE:NO /NXCOMPAT`
+  - Goal: constrained staged ROP construction with paired-pop side effects.
+  - Helper: fixed DEP-3-only gadget vocabulary; no direct API wrapper.
 - `seh`: `/GS- /SAFESEH:NO`
   - Goal: deterministic exception handling path for SEH overwrite exercises.
   - Helper: fixed pop-pop-ret sequence only; no direct stack-transfer export.

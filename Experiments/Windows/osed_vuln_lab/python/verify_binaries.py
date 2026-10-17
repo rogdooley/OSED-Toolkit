@@ -174,10 +174,43 @@ SEQUENCES = {
     "helper_sequence_20": bytes.fromhex("FF E0"),
     "helper_sequence_21": bytes.fromhex("FF D4 C3"),
     "helper_sequence_22": bytes.fromhex("54 C3"),
+    "helper_sequence_30": bytes.fromhex("58 C3"),
+    "helper_sequence_31": bytes.fromhex("94 C3"),
+    "helper_sequence_32": bytes.fromhex("59 5D 5F 58 C3"),
+    "helper_sequence_33": bytes.fromhex("92 C3"),
+    "helper_sequence_34": bytes.fromhex("5B 5D 58 C3"),
+    "helper_sequence_35": bytes.fromhex("5D C3"),
+    "helper_sequence_36": bytes.fromhex("8B 40 10 C3"),
+    "helper_sequence_37": bytes.fromhex("96 C3"),
+    "helper_sequence_38": bytes.fromhex("83 C4 1C C3"),
+    "helper_sequence_39": bytes.fromhex("60 C3"),
+    "helper_sequence_40": bytes.fromhex("C3"),
+    "helper_sequence_41": bytes.fromhex("F7 D8 C3"),
+    "helper_sequence_42": bytes.fromhex("89 06 C3"),
+    "helper_sequence_43": bytes.fromhex("93 C3"),
 }
 
 ROP_SEQUENCES = {f"helper_sequence_{index:02d}" for index in range(1, 13)} | {
     f"helper_sequence_{index:02d}" for index in range(14, 21)
+}
+STAGED_ROP_SEQUENCES = ROP_SEQUENCES - {
+    "helper_sequence_19",
+    "helper_sequence_20",
+}
+DEP3_SEQUENCES = {f"helper_sequence_{index:02d}" for index in range(30, 44)}
+DEP3_FORBIDDEN_BYTES = {
+    bytes.fromhex("59 C3"): "pop ecx; ret",
+    bytes.fromhex("5A C3"): "pop edx; ret",
+    bytes.fromhex("5B C3"): "pop ebx; ret",
+    bytes.fromhex("5E C3"): "pop esi; ret",
+    bytes.fromhex("5F C3"): "pop edi; ret",
+    bytes.fromhex("FF D0"): "call eax",
+    bytes.fromhex("FF E0"): "jmp eax",
+    bytes.fromhex("FF E4"): "jmp esp",
+    bytes.fromhex("FF D4"): "call esp",
+    bytes.fromhex("54 C3"): "push esp; ret",
+    bytes.fromhex("8B 00 C3"): "mov eax, [eax]; ret",
+    bytes.fromhex("83 C4 10 C3"): "add esp, 0x10; ret",
 }
 
 PROFILE_EXPECTATIONS = {
@@ -221,6 +254,70 @@ PROFILE_EXPECTATIONS = {
         "markers": [b"ROP target marker reached", b"helper_get_anchor"],
         "absent_markers": [b"[seh]"],
     },
+    "dep2": {
+        "service_aslr": False,
+        "service_dep": True,
+        "helper_aslr": False,
+        "helper_dep": True,
+        "required": STAGED_ROP_SEQUENCES | {
+            "helper_memory_protect",
+            "helper_writable_slot",
+            "helper_prepare_rop_runtime",
+            "helper_stage_record",
+        },
+        "forbidden": {
+            "helper_sequence_13",
+            "helper_sequence_19",
+            "helper_sequence_20",
+            "helper_sequence_21",
+            "helper_sequence_22",
+            "helper_aslr_proof",
+        },
+        "markers": [b"ROP target marker reached"],
+        "absent_markers": [b"[seh]", b"helper_get_anchor"],
+    },
+    "aslr_dep2": {
+        "service_aslr": True,
+        "service_dep": True,
+        "helper_aslr": True,
+        "helper_dep": True,
+        "required": STAGED_ROP_SEQUENCES | {
+            "helper_memory_protect",
+            "helper_writable_slot",
+            "helper_prepare_rop_runtime",
+            "helper_stage_record",
+        },
+        "forbidden": {
+            "helper_sequence_13",
+            "helper_sequence_19",
+            "helper_sequence_20",
+            "helper_sequence_21",
+            "helper_sequence_22",
+            "helper_aslr_proof",
+        },
+        "markers": [b"ROP target marker reached", b"helper_get_anchor"],
+        "absent_markers": [b"[seh]"],
+    },
+    "dep3": {
+        "service_aslr": False,
+        "service_dep": True,
+        "helper_aslr": False,
+        "helper_dep": True,
+        "required": DEP3_SEQUENCES | {
+            "helper_prepare_rop_runtime",
+            "helper_stage_record",
+        },
+        "forbidden": ROP_SEQUENCES | {
+            "helper_sequence_13",
+            "helper_sequence_21",
+            "helper_sequence_22",
+            "helper_memory_protect",
+            "helper_writable_slot",
+            "helper_aslr_proof",
+        },
+        "markers": [b"ROP target marker reached"],
+        "absent_markers": [b"[seh]", b"helper_get_anchor"],
+    },
 }
 
 
@@ -253,6 +350,14 @@ def verify(profile: str, service_path: Path, helper_path: Path) -> list[str]:
                 f"SEH helper contains unintended direct-stack sequence {sequence.hex(' ')}",
                 errors,
             )
+    if profile == "dep3":
+        for pe, label in ((helper, "helper"), (service, "service")):
+            for sequence, mnemonic in DEP3_FORBIDDEN_BYTES.items():
+                check(
+                    not pe.executable_contains(sequence),
+                    f"DEP-3 {label} contains shortcut {mnemonic} ({sequence.hex(' ')})",
+                    errors,
+                )
 
     exports = helper.exports()
     for name in expected["required"]:
@@ -264,7 +369,7 @@ def verify(profile: str, service_path: Path, helper_path: Path) -> list[str]:
         actual = helper.bytes_at_export(name, len(SEQUENCES[name]))
         check(actual == SEQUENCES[name], f"{name} bytes are {actual.hex(' ')}", errors)
 
-    if profile in {"dep", "aslr_dep"}:
+    if profile in {"dep", "aslr_dep", "dep2", "aslr_dep2", "dep3"}:
         check(b"VirtualProtect\0" in helper.data, "helper has no VirtualProtect import", errors)
 
     check(b"memcpy\0" in service.data, "service has no visible vulnerable-copy import", errors)
