@@ -11,13 +11,16 @@ SETUP (run once per machine)
      cd C:\exam\exam_bundle
      install.bat
 
-   This installs keystone-engine from bundled wheels (offline).
+   This checks for Python 3.12+. If the system Python is older or
+   missing, it extracts the bundled Python 3.12 embeddable and sets
+   up pip. Then installs keystone-engine from bundled wheels (offline).
 
 
 BUNDLE LAYOUT
 --------------
   exam_bundle\
     install.bat           Setup script (run once)
+    python\               Python 3.12 embeddable (auto-extracted if needed)
     wheels\               Keystone wheels for offline pip install
     tools\
       recon.exe           PE triage, function ranking, pseudocode
@@ -152,6 +155,11 @@ EMITTER PAYLOAD TYPES (built on Kali)
 
 TROUBLESHOOTING
 ---------------
+Q: System Python is too old or missing?
+A: install.bat auto-extracts the bundled Python 3.12 embeddable into
+   the python\ folder. It creates py.bat as a shortcut. You can also
+   add python\ to your PATH:  set PATH=C:\exam\exam_bundle\python;%PATH%
+
 Q: Keystone install fails?
 A: Check Python version (python --version). The bundle includes wheels
    for Python 3.7 through 3.13. If your version is missing, you can

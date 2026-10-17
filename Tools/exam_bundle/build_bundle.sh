@@ -24,6 +24,9 @@ fi
 
 echo "[*] Building OSED exam bundle..."
 
+PYVER="3.12.10"
+PYVER_SHORT="312"
+
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/wheels"
 mkdir -p "$BUNDLE/tools"
@@ -32,9 +35,44 @@ mkdir -p "$BUNDLE/templates"
 mkdir -p "$BUNDLE/payloads"
 mkdir -p "$BUNDLE/convert"
 mkdir -p "$BUNDLE/reference"
+mkdir -p "$BUNDLE/python"
 
 # ============================================================
-# 1. Keystone wheels for Windows x86
+# 1. Python embeddable package (win32)
+# ============================================================
+PYZIP="python-${PYVER}-embed-win32.zip"
+PYURL="https://www.python.org/ftp/python/${PYVER}/${PYZIP}"
+GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
+
+download() {
+    local url="$1" dest="$2"
+    rm -f "$dest"
+    if command -v curl &>/dev/null; then
+        curl -fSL -o "$dest" "$url" 2>/dev/null && return 0
+    fi
+    if command -v wget &>/dev/null; then
+        wget -q -O "$dest" "$url" 2>/dev/null && return 0
+    fi
+    rm -f "$dest"
+    return 1
+}
+
+echo "[*] Downloading Python ${PYVER} embeddable (win32)..."
+if download "$PYURL" "$BUNDLE/python/${PYZIP}"; then
+    echo "    [+] ${PYZIP} ($(du -h "$BUNDLE/python/${PYZIP}" | cut -f1))"
+else
+    echo "    [!] Could not download Python embed zip. Bundle will rely on system Python."
+fi
+
+echo "[*] Downloading get-pip.py..."
+if download "$GETPIP_URL" "$BUNDLE/python/get-pip.py"; then
+    echo "    [+] get-pip.py"
+else
+    echo "    [!] Could not download get-pip.py."
+fi
+
+# ============================================================
+# 2. Keystone wheels for Windows x86
 # ============================================================
 echo "[*] Downloading keystone-engine wheels for win32..."
 for pyver in 37 38 39 310 311 312 313; do
@@ -52,7 +90,7 @@ echo "[*] Wheels downloaded:"
 ls -1 "$BUNDLE/wheels/" 2>/dev/null || echo "    (none)"
 
 # ============================================================
-# 2. Recon binary (Go, cross-compiled for Windows x86)
+# 3. Recon binary (Go, cross-compiled for Windows x86)
 # ============================================================
 echo "[*] Copying recon.exe..."
 if [ -f "$REPO_ROOT/Tools/recon/dist/recon.exe" ]; then
@@ -70,7 +108,7 @@ else
 fi
 
 # ============================================================
-# 3. Bad character automation
+# 4. Bad character automation
 # ============================================================
 echo "[*] Copying bad character tools..."
 cp "$REPO_ROOT/Tools/badchars/standalone/badchar_auto.py" "$BUNDLE/badchars/"
@@ -78,7 +116,7 @@ cp "$REPO_ROOT/Tools/badchars/standalone/examples/"*.py "$BUNDLE/badchars/exampl
 cp "$REPO_ROOT/Tools/badchars/scripts/badchar_bp.wds" "$BUNDLE/badchars/" 2>/dev/null || true
 
 # ============================================================
-# 4. Exploit templates (standalone, stdlib only)
+# 5. Exploit templates (standalone, stdlib only)
 # ============================================================
 echo "[*] Copying exploit templates..."
 for tmpl in stack_bof seh_exploit dep_bypass egghunter format_string aslr_leak badchars_ref; do
@@ -91,7 +129,7 @@ done
 cp "$REPO_ROOT/exam/templates/README.md" "$BUNDLE/templates/" 2>/dev/null || true
 
 # ============================================================
-# 5. Payload helpers (standalone ones)
+# 6. Payload helpers (standalone ones)
 # ============================================================
 echo "[*] Copying payload helpers..."
 for payload in eip_check vp_skeleton; do
@@ -103,7 +141,7 @@ for payload in eip_check vp_skeleton; do
 done
 
 # ============================================================
-# 6. Value conversion scripts (standalone, stdlib only)
+# 7. Value conversion scripts (standalone, stdlib only)
 # ============================================================
 echo "[*] Copying conversion tools..."
 cp "$REPO_ROOT/Tools/Value_Conversion_Scripts/string2hex.py" "$BUNDLE/convert/"
@@ -112,13 +150,13 @@ echo "    [+] convert/string2hex.py  (string/ip/sockaddr -> hex)"
 echo "    [+] convert/opcode.py      (API name -> ROR13 hash)"
 
 # ============================================================
-# 7. TCP stage server (runs on Kali, copy for reference)
+# 8. TCP stage server (runs on Kali, copy for reference)
 # ============================================================
 echo "[*] Copying staging tools..."
 cp "$REPO_ROOT/Tools/tcp_stage_server.py" "$BUNDLE/tools/"
 
 # ============================================================
-# 8. Reference documentation
+# 9. Reference documentation
 # ============================================================
 echo "[*] Copying reference documentation..."
 
@@ -177,13 +215,13 @@ copy_ref "$REPO_ROOT/Documentation/x86-osed-assembly-reference/27-fast-reference
          "x86_Fast_Reference_Tables.md"
 
 # ============================================================
-# 9. Install script and README
+# 10. Install script and README
 # ============================================================
 cp "$SCRIPT_DIR/install.bat" "$BUNDLE/"
 cp "$SCRIPT_DIR/EXAM_README.txt" "$BUNDLE/"
 
 # ============================================================
-# 10. Package
+# 11. Package
 # ============================================================
 echo "[*] Creating zip..."
 cd "$SCRIPT_DIR/dist"
@@ -196,6 +234,7 @@ echo ""
 echo "[+] Bundle ready: $SCRIPT_DIR/dist/exam_bundle.zip ($SIZE, $NFILES files)"
 echo ""
 echo "[+] Contents:"
+echo "    python/          Python ${PYVER} embeddable (win32) + get-pip.py"
 echo "    wheels/          Keystone-engine wheels (offline pip install)"
 echo "    tools/           recon.exe, tcp_stage_server.py"
 echo "    badchars/        badchar_auto.py + WinDbg script + examples"

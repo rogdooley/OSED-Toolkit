@@ -5,65 +5,203 @@ REM Run from the exam_bundle directory:
 REM   cd C:\exam\exam_bundle
 REM   install.bat
 REM
-REM This installs keystone-engine from the bundled wheels (no internet needed)
-REM and verifies the tools are accessible.
+REM Checks for Python 3.12+. If not found, extracts the bundled
+REM embeddable Python. Then installs keystone-engine from wheels.
+
+setlocal enabledelayedexpansion
 
 echo [*] OSED Exam Bundle Installer
 echo.
 
-REM Check Python is available
+set "BUNDLEDIR=%~dp0"
+set "BUNDLEDIR=%BUNDLEDIR:~0,-1%"
+set "LOCALPY=%BUNDLEDIR%\python\python.exe"
+set "USE_LOCAL=0"
+
+REM ============================================================
+REM 1. Find or set up Python 3.12+
+REM ============================================================
+
+REM Check system Python
+set "PYTHON="
 python --version >NUL 2>&1
-if %ERRORLEVEL% NEQ 0 (
+if %ERRORLEVEL% EQU 0 (
+    set "PYTHON=python"
+)
+if not defined PYTHON (
     python3 --version >NUL 2>&1
-    if %ERRORLEVEL% NEQ 0 (
-        echo [-] Python not found in PATH.
-        echo     Try: where python
-        echo     Or check C:\Python3* or C:\Users\*\AppData\Local\Programs\Python
-        exit /b 1
+    if %ERRORLEVEL% EQU 0 (
+        set "PYTHON=python3"
     )
-    set PYTHON=python3
-) else (
-    set PYTHON=python
 )
 
-echo [+] Found:
-%PYTHON% --version
+REM Check version if system Python exists
+set "NEED_LOCAL=1"
+if defined PYTHON (
+    echo [*] Found system Python:
+    %PYTHON% --version
+    for /f "tokens=2 delims= " %%V in ('%PYTHON% --version 2^>^&1') do set "PYVER=%%V"
+    for /f "tokens=1,2 delims=." %%A in ("!PYVER!") do (
+        set "PYMAJOR=%%A"
+        set "PYMINOR=%%B"
+    )
+    if !PYMAJOR! GEQ 3 (
+        if !PYMINOR! GEQ 12 (
+            echo [+] Python !PYVER! meets the 3.12+ requirement.
+            set "NEED_LOCAL=0"
+        ) else (
+            echo [-] Python !PYVER! is below 3.12.
+        )
+    ) else (
+        echo [-] Python !PYVER! is below 3.12.
+    )
+) else (
+    echo [-] No system Python found in PATH.
+)
 
-REM Install keystone from local wheels
+REM Set up local Python if needed
+if !NEED_LOCAL! EQU 1 (
+    echo.
+    echo [*] Setting up bundled Python 3.12...
+
+    REM Find the embed zip
+    set "EMBED_ZIP="
+    for %%F in ("%BUNDLEDIR%\python\python-3.12*-embed-win32.zip") do (
+        set "EMBED_ZIP=%%F"
+    )
+
+    if not defined EMBED_ZIP (
+        echo [-] No Python embeddable zip found in python\ folder.
+        echo     Expected: python\python-3.12.x-embed-win32.zip
+        if defined PYTHON (
+            echo [*] Falling back to system Python !PYVER! -- some features may not work.
+            goto :skip_local
+        )
+        echo [-] Cannot continue without Python. Exiting.
+        exit /b 1
+    )
+
+    if exist "!LOCALPY!" (
+        echo [+] Bundled Python already extracted.
+        goto :use_local
+    )
+
+    echo [*] Extracting !EMBED_ZIP!...
+    powershell -Command "Expand-Archive -Path '!EMBED_ZIP!' -DestinationPath '%BUNDLEDIR%\python' -Force" 2>NUL
+    if not exist "!LOCALPY!" (
+        echo [-] Extraction failed. Trying tar...
+        tar -xf "!EMBED_ZIP!" -C "%BUNDLEDIR%\python" 2>NUL
+    )
+
+    if not exist "!LOCALPY!" (
+        echo [-] Could not extract Python.
+        if defined PYTHON (
+            echo [*] Falling back to system Python !PYVER!.
+            goto :skip_local
+        )
+        echo [-] Cannot continue without Python. Exiting.
+        exit /b 1
+    )
+
+:use_local
+    echo [+] Using bundled Python at: !LOCALPY!
+    set "PYTHON=!LOCALPY!"
+    set "USE_LOCAL=1"
+
+    REM Patch the ._pth file to enable pip/site-packages
+    for %%P in ("%BUNDLEDIR%\python\python3*._pth") do (
+        set "PTHFILE=%%P"
+    )
+    if defined PTHFILE (
+        findstr /C:"import site" "!PTHFILE!" >NUL 2>&1
+        if !ERRORLEVEL! NEQ 0 (
+            echo import site>> "!PTHFILE!"
+            echo [+] Patched !PTHFILE! to enable site-packages.
+        ) else (
+            REM Uncomment if it's commented out
+            powershell -Command "(Get-Content '!PTHFILE!') -replace '^#import site','import site' | Set-Content '!PTHFILE!'" 2>NUL
+            echo [+] Ensured import site is enabled in !PTHFILE!.
+        )
+    )
+
+    REM Install pip if not present
+    "!PYTHON!" -m pip --version >NUL 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        if exist "%BUNDLEDIR%\python\get-pip.py" (
+            echo [*] Installing pip...
+            "!PYTHON!" "%BUNDLEDIR%\python\get-pip.py" --no-warn-script-location 2>&1
+            if !ERRORLEVEL! NEQ 0 (
+                echo [-] pip installation failed.
+            ) else (
+                echo [+] pip installed.
+            )
+        ) else (
+            echo [-] get-pip.py not found. Cannot install pip.
+        )
+    ) else (
+        echo [+] pip already available.
+    )
+)
+
+:skip_local
+
+REM Show which Python we are using
+echo.
+echo [*] Using: !PYTHON!
+"!PYTHON!" --version
+
+REM ============================================================
+REM 2. Install keystone from local wheels
+REM ============================================================
 echo.
 echo [*] Installing keystone-engine from bundled wheels...
-%PYTHON% -m pip install --no-index --find-links=wheels keystone-engine 2>NUL
-if %ERRORLEVEL% NEQ 0 (
+"!PYTHON!" -m pip install --no-index --find-links=wheels keystone-engine 2>NUL
+if !ERRORLEVEL! NEQ 0 (
     echo [-] Wheel install failed. Trying with --user flag...
-    %PYTHON% -m pip install --no-index --find-links=wheels --user keystone-engine
+    "!PYTHON!" -m pip install --no-index --find-links=wheels --user keystone-engine 2>NUL
 )
 
 REM Verify keystone
 echo.
 echo [*] Verifying keystone...
-%PYTHON% -c "from keystone import Ks, KS_ARCH_X86, KS_MODE_32; ks = Ks(KS_ARCH_X86, KS_MODE_32); enc, _ = ks.asm('nop'); print('[+] Keystone OK: nop =', bytes(enc).hex())"
-if %ERRORLEVEL% NEQ 0 (
+"!PYTHON!" -c "from keystone import Ks, KS_ARCH_X86, KS_MODE_32; ks = Ks(KS_ARCH_X86, KS_MODE_32); enc, _ = ks.asm('nop'); print('[+] Keystone OK: nop =', bytes(enc).hex())"
+if !ERRORLEVEL! NEQ 0 (
     echo [-] Keystone verification failed.
-    echo     The wheels may not match your Python version.
-    echo     Check: %PYTHON% --version
-    echo     Available wheels:
-    dir /b wheels\*.whl
-    echo.
     echo     You can still use pre-assembled shellcode.bin from the emitter.
 )
 
-REM Verify recon.exe
+REM ============================================================
+REM 3. Verify recon.exe
+REM ============================================================
 echo.
 echo [*] Verifying recon.exe...
 if exist tools\recon.exe (
     tools\recon.exe --help >NUL 2>&1
-    if %ERRORLEVEL% EQU 0 (
+    if !ERRORLEVEL! EQU 0 (
         echo [+] recon.exe OK
     ) else (
         echo [-] recon.exe found but failed to run
     )
 ) else (
     echo [-] recon.exe not found in tools\
+)
+
+REM ============================================================
+REM 4. Write a helper script so "python" uses the right one
+REM ============================================================
+if !USE_LOCAL! EQU 1 (
+    echo.
+    echo [*] Creating py.bat helper...
+    (
+        echo @echo off
+        echo "!PYTHON!" %%*
+    ) > "%BUNDLEDIR%\py.bat"
+    echo [+] Use "py.bat" instead of "python" to run scripts:
+    echo     py.bat templates\stack_bof.py
+    echo     py.bat convert\string2hex.py string "cmd.exe"
+    echo.
+    echo     Or add the python\ folder to your PATH:
+    echo     set PATH=%BUNDLEDIR%\python;%%PATH%%
 )
 
 echo.
@@ -111,3 +249,5 @@ echo   Markdown cheat sheets for WinDbg, DEP bypass, SEH, egghunters,
 echo   bad characters, shellcode, gadgets, and exam-day checklist.
 echo   Open with any text editor or Markdown viewer.
 echo.
+
+endlocal
