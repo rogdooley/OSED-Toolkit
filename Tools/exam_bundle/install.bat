@@ -128,8 +128,8 @@ if !NEED_LOCAL! EQU 1 (
     "!PYTHON!" -m pip --version >NUL 2>&1
     if !ERRORLEVEL! NEQ 0 (
         if exist "%BUNDLEDIR%\python\get-pip.py" (
-            echo [*] Installing pip...
-            "!PYTHON!" "%BUNDLEDIR%\python\get-pip.py" --no-warn-script-location 2>&1
+            echo [*] Installing pip from bundled wheels...
+            "!PYTHON!" "%BUNDLEDIR%\python\get-pip.py" --no-index --find-links="%BUNDLEDIR%\wheels" --no-warn-script-location 2>&1
             if !ERRORLEVEL! NEQ 0 (
                 echo [-] pip installation failed.
             ) else (

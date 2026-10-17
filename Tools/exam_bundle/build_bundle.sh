@@ -71,6 +71,16 @@ else
     echo "    [!] Could not download get-pip.py."
 fi
 
+echo "[*] Downloading pip + setuptools wheels (for offline bootstrap)..."
+$PIP download pip setuptools \
+    --platform win32 \
+    --python-version "3.12" \
+    --only-binary=:all: \
+    --no-deps \
+    -d "$BUNDLE/wheels/" 2>/dev/null && \
+    echo "    [+] pip + setuptools wheels" || \
+    echo "    [!] Could not download pip wheels. get-pip.py will need internet."
+
 # ============================================================
 # 2. Keystone wheels for Windows x86
 # ============================================================
