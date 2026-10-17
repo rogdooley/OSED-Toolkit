@@ -82,7 +82,7 @@ $PIP download pip setuptools \
     --no-deps \
     -d "$BUNDLE/wheels/" 2>/dev/null && \
     echo "    [+] pip + setuptools wheels" || \
-    echo "    [!] Could not download pip wheels. get-pip.py will need internet." && WARNINGS=$((WARNINGS+1))
+    { echo "    [!] Could not download pip wheels. get-pip.py will need internet."; WARNINGS=$((WARNINGS+1)); }
 
 # ============================================================
 # 2. Keystone wheels for Windows x86
