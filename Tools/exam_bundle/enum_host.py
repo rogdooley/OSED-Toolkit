@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """enum_host.py - Windows host enumeration with anomaly-first HTML report.
 
-Standalone, stdlib-only. Runs on the OSED exam box (Python 3.7+).
+Standalone, stdlib-only. Runs on the OSED exam box (Python 3.9+).
 Generates an HTML report highlighting deviations from a standard
 Windows workstation/server baseline.
 
@@ -81,6 +81,20 @@ SUSPICIOUS_PATHS = [
 ]
 
 
+SERVICE_QUERY_CONFIG = 0x0001
+SERVICE_CHANGE_CONFIG = 0x0002
+SERVICE_START = 0x0010
+SERVICE_STOP = 0x0020
+SC_MANAGER_CONNECT = 0x0001
+
+SERVICE_CAPABILITIES = {
+    "query_config": (SERVICE_QUERY_CONFIG, "query configuration"),
+    "start": (SERVICE_START, "start"),
+    "stop": (SERVICE_STOP, "stop"),
+    "change_config": (SERVICE_CHANGE_CONFIG, "change configuration"),
+}
+
+
 def run_cmd(cmd: str, timeout: int = 30) -> str:
     try:
         result = subprocess.run(
@@ -106,6 +120,40 @@ def get_system_info() -> dict:
     info["whoami"] = run_cmd("whoami").strip()
     info["ipconfig"] = run_cmd("ipconfig /all")
     return info
+
+
+def parse_whoami_privileges(raw: str) -> list[dict]:
+    """Parse `whoami /priv /fo csv /nh` without relying on English headers."""
+    privileges = []
+    for row in csv.reader(io.StringIO(raw)):
+        if len(row) < 3 or not row[0].startswith("Se"):
+            continue
+        privileges.append({"name": row[0], "state": row[-1]})
+    return privileges
+
+
+def is_token_elevated() -> str:
+    """Return whether the current token is elevated, without changing it."""
+    if os.name != "nt":
+        return "Unavailable (not Windows)"
+    try:
+        import ctypes
+
+        return "Yes" if ctypes.windll.shell32.IsUserAnAdmin() else "No"
+    except Exception as exc:
+        return f"Unavailable ({exc})"
+
+
+def get_security_context() -> dict:
+    privileges_raw = run_cmd("whoami /priv /fo csv /nh")
+    return {
+        "user": run_cmd("whoami").strip(),
+        "user_sid": run_cmd("whoami /user /fo csv /nh").strip(),
+        "groups": run_cmd("whoami /groups /fo csv /nh"),
+        "privileges": parse_whoami_privileges(privileges_raw),
+        "privileges_raw": privileges_raw,
+        "elevated": is_token_elevated(),
+    }
 
 
 def get_listening_ports() -> list[dict]:
@@ -225,6 +273,61 @@ def get_service_configs(services: list[dict]) -> list[dict]:
     return services
 
 
+def _can_open_service(service_name: str, desired_access: int) -> bool | None:
+    """Test one SCM access right using the current token; never alter a service."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        advapi32.OpenSCManagerW.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD)
+        advapi32.OpenSCManagerW.restype = wintypes.HANDLE
+        advapi32.OpenServiceW.argtypes = (wintypes.HANDLE, wintypes.LPCWSTR, wintypes.DWORD)
+        advapi32.OpenServiceW.restype = wintypes.HANDLE
+        advapi32.CloseServiceHandle.argtypes = (wintypes.HANDLE,)
+        advapi32.CloseServiceHandle.restype = wintypes.BOOL
+
+        manager = advapi32.OpenSCManagerW(None, None, SC_MANAGER_CONNECT)
+        if not manager:
+            return False
+        try:
+            service = advapi32.OpenServiceW(manager, service_name, desired_access)
+            if not service:
+                return False
+            advapi32.CloseServiceHandle(service)
+            return True
+        finally:
+            advapi32.CloseServiceHandle(manager)
+    except Exception:
+        return None
+
+
+def summarize_service_access(access: dict[str, bool | None]) -> str:
+    allowed = [label for key, (_, label) in SERVICE_CAPABILITIES.items() if access.get(key) is True]
+    if allowed:
+        return ", ".join(allowed)
+    if any(value is False for value in access.values()):
+        return "none"
+    return "unavailable"
+
+
+def get_service_access(services: list[dict]) -> list[dict]:
+    """Add current-token service rights to every service record."""
+    for svc in services:
+        name = svc.get("name", "")
+        if not name:
+            continue
+        access = {
+            key: _can_open_service(name, right)
+            for key, (right, _) in SERVICE_CAPABILITIES.items()
+        }
+        svc["access"] = access
+        svc["access_summary"] = summarize_service_access(access)
+    return services
+
+
 def get_scheduled_tasks() -> str:
     return run_cmd("schtasks /query /fo LIST /v", timeout=60)
 
@@ -277,8 +380,8 @@ def classify_anomalies(
         proc_name = pid_to_proc.get(pid, "unknown")
         if port not in STANDARD_LISTEN_PORTS and port < 49152:
             findings.append({
-                "severity": "HIGH",
-                "category": "Non-standard listening port",
+                "severity": "MEDIUM",
+                "category": "Non-baseline listening port (review)",
                 "detail": (
                     f"Port {port}/{entry['proto']} (PID {pid}: {proc_name}) "
                     f"on {entry['local_addr']} -- not in standard Windows baseline"
@@ -303,8 +406,8 @@ def classify_anomalies(
         name = p.get("Image Name", "").lower()
         if name and name not in STANDARD_PROCESSES:
             findings.append({
-                "severity": "MEDIUM",
-                "category": "Non-standard process",
+                "severity": "INFO",
+                "category": "Non-baseline process (review)",
                 "detail": (
                     f"{p.get('Image Name', '?')} (PID {p.get('PID', '?')}) "
                     f"User: {p.get('User Name', '?')} "
@@ -318,8 +421,8 @@ def classify_anomalies(
         if state == "RUNNING" and name not in STANDARD_SERVICES:
             binary = svc.get("binary", "")
             runas = svc.get("runas", "")
-            sev = "HIGH"
-            cat = "Non-standard service running"
+            sev = "INFO"
+            cat = "Non-baseline service (review)"
             detail = (
                 f"{name} ({svc.get('display', '')}) "
                 f"Binary: {binary} RunAs: {runas}"
@@ -346,7 +449,7 @@ def classify_anomalies(
                 svc_name = svc.get("name", "")
                 if svc_name not in STANDARD_SERVICES:
                     findings.append({
-                        "severity": "MEDIUM",
+                        "severity": "INFO",
                         "category": "Service binary outside Windows directory",
                         "detail": f"{svc_name}: {binary}",
                     })
@@ -375,6 +478,7 @@ def generate_html(
     users: str,
     env_path: str,
     scheduled_tasks: str = "",
+    security_context: dict | None = None,
 ) -> str:
     h = html.escape
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -460,7 +564,10 @@ def generate_html(
 
     running_svcs = [s for s in services if s.get("state") == "RUNNING"]
     running_svcs.sort(key=lambda s: s.get("name", "").lower())
-    svcs_html = "<table><tr><th>Name</th><th>Display</th><th>Binary</th><th>RunAs</th><th>Standard?</th></tr>\n"
+    svcs_html = (
+        "<table><tr><th>Name</th><th>Display</th><th>Binary</th><th>RunAs</th>"
+        "<th>Current-token service access</th><th>Baseline?</th></tr>\n"
+    )
     for s in running_svcs:
         name = s.get("name", "")
         is_std = name in STANDARD_SERVICES
@@ -471,7 +578,8 @@ def generate_html(
             f'<td>{h(s.get("display", ""))}</td>'
             f'<td class="detail">{h(s.get("binary", ""))}</td>'
             f'<td>{h(s.get("runas", ""))}</td>'
-            f'<td>{"yes" if is_std else "<b>NO</b>"}</td>'
+            f'<td>{h(s.get("access_summary", "not assessed"))}</td>'
+            f'<td>{"known reference" if is_std else "<b>review</b>"}</td>'
             f'</tr>\n'
         )
     svcs_html += "</table>"
@@ -488,6 +596,27 @@ def generate_html(
     sysinfo_html += f"<tr><td><b>Current User</b></td><td>{h(sysinfo.get('whoami', ''))}</td></tr>\n"
 
     ipconfig_html = h(sysinfo.get("ipconfig", ""))
+
+    security_context = security_context or {}
+    privilege_rows = ""
+    for privilege in security_context.get("privileges", []):
+        privilege_rows += (
+            f'<tr><td>{h(privilege.get("name", ""))}</td>'
+            f'<td>{h(privilege.get("state", ""))}</td></tr>\n'
+        )
+    if not privilege_rows:
+        privilege_rows = '<tr><td colspan="2">Unavailable.</td></tr>'
+    security_html = (
+        "<table>"
+        f'<tr><td><b>Current token elevated</b></td><td>{h(security_context.get("elevated", "Unavailable"))}</td></tr>'
+        f'<tr><td><b>User</b></td><td>{h(security_context.get("user", ""))}</td></tr>'
+        f'<tr><td><b>User SID</b></td><td>{h(security_context.get("user_sid", ""))}</td></tr>'
+        "</table>"
+        "<h3>Token privileges</h3>"
+        f"<table><tr><th>Privilege</th><th>State</th></tr>{privilege_rows}</table>"
+        "<h3>Token groups</h3>"
+        f'<pre>{h(security_context.get("groups", "Unavailable."))}</pre>'
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -532,6 +661,7 @@ def generate_html(
 <div class="toc">
   <a href="#findings">Findings</a>
   <a href="#sysinfo">System Info</a>
+  <a href="#security">Current Security Context</a>
   <a href="#ports">Listening Ports</a>
   <a href="#connections">Connections</a>
   <a href="#processes">Processes</a>
@@ -552,6 +682,12 @@ def generate_html(
 <div class="section" id="sysinfo">
 <h2>System Information</h2>
 <table>{sysinfo_html}</table>
+</div>
+
+<div class="section" id="security">
+<h2>Current Security Context</h2>
+<p>The service-access column is a read-only test of the current token. It does not start, stop, or change any service.</p>
+{security_html}
 </div>
 
 <div class="section" id="ports">
@@ -634,10 +770,15 @@ def main(argv: list[str] | None = None) -> int:
     print("[*] Enumerating services...")
     services = get_services()
 
+    print("[*] Reading current security context...")
+    security_context = get_security_context()
+
     scheduled_tasks = ""
     if not args.quick:
         print("[*] Querying service configurations (this may take a moment)...")
         services = get_service_configs(services)
+        print("[*] Testing current-token service access (read-only)...")
+        services = get_service_access(services)
         print("[*] Enumerating scheduled tasks...")
         scheduled_tasks = get_scheduled_tasks()
 
@@ -667,9 +808,12 @@ def main(argv: list[str] | None = None) -> int:
         users=users,
         env_path=env_path,
         scheduled_tasks=scheduled_tasks,
+        security_context=security_context,
     )
 
-    Path(args.output).write_text(report, encoding="utf-8")
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(report, encoding="utf-8")
 
     crit = sum(1 for f in findings if f["severity"] == "CRITICAL")
     high = sum(1 for f in findings if f["severity"] == "HIGH")

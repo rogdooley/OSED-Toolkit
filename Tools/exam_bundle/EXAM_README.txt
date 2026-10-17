@@ -50,7 +50,8 @@ BUNDLE LAYOUT
 
 HOST ENUMERATION
 -----------------
-Run on the exam machine to discover services, ports, processes, and anomalies:
+Run on the exam machine to discover services, ports, processes, token privileges,
+and deviations from a reference Windows client baseline:
 
   python tools\enum_host.py
   python tools\enum_host.py -o my_report.html
@@ -59,8 +60,18 @@ Run on the exam machine to discover services, ports, processes, and anomalies:
 Opens enum_report.html in the browser:
   start enum_report.html
 
-The report highlights non-standard services, unusual listening ports, and
-non-baseline processes at the top. Use it to find your exploit targets.
+The report separates observations from access. Its Current Security Context
+section records the active user, elevation state, group membership, and token
+privileges. In a full scan, each running service includes a read-only test of
+whether that exact token can query configuration, start, stop, or change the
+service configuration. The script never starts, stops, or reconfigures a
+service.
+
+Baseline mismatches are leads for investigation, not proof that something is
+malicious: installed software, endpoint protection, and the Windows release
+all change the normal process, service, and port inventory. The report labels
+such items for review and gives higher severity only to stronger contextual
+signals, such as a service executable in a temporary or public path.
 
 
 WORKFLOW (per target)
