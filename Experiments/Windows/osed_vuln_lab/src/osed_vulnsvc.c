@@ -495,9 +495,6 @@ static int __declspec(noinline) run_server(const char *port) {
         closesocket(client);
     }
 
-    closesocket(listen_sock);
-    WSACleanup();
-    return 0;
 }
 
 int main(int argc, char **argv) {

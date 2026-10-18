@@ -144,16 +144,6 @@ class PEFile:
             return False
         return self.u32(offset + 64) != 0 and self.u32(offset + 68) != 0
 
-    def security_cookie_enabled(self) -> bool:
-        if len(self.directories) <= 10 or self.directories[10][0] == 0:
-            return False
-        load_config_rva, load_config_size = self.directories[10]
-        if load_config_size < 64:
-            return False
-        offset = self.rva_offset(load_config_rva)
-        structure_size = self.u32(offset)
-        return structure_size >= 64 and self.u32(offset + 60) != 0
-
     def executable_contains(self, pattern: bytes) -> bool:
         for section in self.sections:
             if not section.characteristics & 0x20000000:
@@ -346,8 +336,6 @@ def verify(profile: str, service_path: Path, helper_path: Path) -> list[str]:
     if profile == "dep3":
         check(not service.guard_cf_enabled(), "service unexpectedly has CFG enabled", errors)
         check(not helper.guard_cf_enabled(), "helper unexpectedly has CFG enabled", errors)
-        check(not service.security_cookie_enabled(), "service unexpectedly has a /GS cookie", errors)
-        check(not helper.security_cookie_enabled(), "helper unexpectedly has a /GS cookie", errors)
         check(not service.safe_seh_enabled(), "service unexpectedly has SafeSEH enabled", errors)
         check(not helper.safe_seh_enabled(), "helper unexpectedly has SafeSEH enabled", errors)
 

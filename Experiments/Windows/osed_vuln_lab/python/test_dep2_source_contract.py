@@ -149,6 +149,24 @@ class Dep2SourceContractTests(unittest.TestCase):
 
         self.assertFalse(expected["allow_virtualprotect"])
 
+    def test_dep3_gs_contract_does_not_treat_load_config_as_function_instrumentation(self) -> None:
+        cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        verifier = (ROOT / "python" / "verify_binaries.py").read_text(encoding="utf-8")
+
+        self.assertIn("/GS-", cmake)
+        self.assertNotIn("unexpectedly has a /GS cookie", verifier)
+
+    def test_server_does_not_keep_unreachable_shutdown_code(self) -> None:
+        service = (ROOT / "src" / "osed_vulnsvc.c").read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            "    closesocket(listen_sock);\n"
+            "    WSACleanup();\n"
+            "    return 0;\n"
+            "}",
+            service,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
