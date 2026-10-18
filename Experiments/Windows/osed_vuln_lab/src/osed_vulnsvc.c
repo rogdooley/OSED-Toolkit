@@ -14,6 +14,56 @@
 
 #define DEFAULT_PORT "9999"
 #define MAX_PACKET 8192
+#if defined(OSED_PROFILE_DEP3)
+#define EVENT_ROUTE_STORAGE_BYTES 192u
+#define EVENT_ROUTE_PROTOCOL_MAX 320u
+typedef VOID(WINAPI *GET_PRECISE_TIME_FN)(LPFILETIME);
+
+typedef struct REQUEST_LOG_CONTEXT {
+    GET_PRECISE_TIME_FN get_precise_time;
+} REQUEST_LOG_CONTEXT;
+
+static REQUEST_LOG_CONTEXT request_log_context;
+
+static void request_log_initialize(void) {
+    HMODULE kernel32 = GetModuleHandleA("kernel32.dll");
+
+    request_log_context.get_precise_time = NULL;
+    if (kernel32 != NULL) {
+        request_log_context.get_precise_time = (GET_PRECISE_TIME_FN)GetProcAddress(
+            kernel32,
+            "GetSystemTimePreciseAsFileTime");
+    }
+}
+
+static void request_log_write(const OSED_PACKET_HEADER *header) {
+    FILETIME file_time;
+    SYSTEMTIME system_time;
+
+    if (request_log_context.get_precise_time != NULL) {
+        request_log_context.get_precise_time(&file_time);
+    } else {
+        GetSystemTimeAsFileTime(&file_time);
+    }
+
+    if (!FileTimeToSystemTime(&file_time, &system_time)) {
+        return;
+    }
+
+    printf(
+        "%04u-%02u-%02uT%02u:%02u:%02u.%03uZ request opcode=0x%04X length=%lu\n",
+        (unsigned int)system_time.wYear,
+        (unsigned int)system_time.wMonth,
+        (unsigned int)system_time.wDay,
+        (unsigned int)system_time.wHour,
+        (unsigned int)system_time.wMinute,
+        (unsigned int)system_time.wSecond,
+        (unsigned int)system_time.wMilliseconds,
+        (unsigned int)header->opcode,
+        (unsigned long)header->length);
+    fflush(stdout);
+}
+#endif
 
 static int __declspec(noinline) recv_exact(SOCKET s, char *buf, int need) {
     int got = 0;
@@ -120,7 +170,7 @@ static int __declspec(noinline) dispatch_seh_record(
 
 #if defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_ASLR_DEP2)
 static int __declspec(noinline) handler_leak(SOCKET client) {
-    void *fp = (void *)&helper_get_anchor;
+    void *fp = (void *)&event_runtime_get_info;
     uintptr_t leak = (uintptr_t)fp;
     OSED_PACKET_HEADER response_header;
     OSED_V2_RESULT result;
@@ -140,7 +190,7 @@ static int __declspec(noinline) handler_leak(SOCKET client) {
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 static void __declspec(noinline) rop_target_marker(void) {
     puts("ROP target marker reached");
 }
@@ -158,7 +208,9 @@ static void __declspec(noinline) handler_rop(const uint8_t *data, uint32_t len) 
         rop_target_marker();
     }
 }
+#endif
 
+#if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 static int __declspec(noinline) parse_v2_record(
     const OSED_PACKET_HEADER *packet,
     const uint8_t *body,
@@ -187,7 +239,7 @@ static int __declspec(noinline) parse_v2_record(
 }
 #endif
 
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
 static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_t len) {
     char pivotbuf[300];
     uintptr_t saved_eip_address = (uintptr_t)_AddressOfReturnAddress();
@@ -198,7 +250,7 @@ static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_
         return;
     }
     copy_length = (size_t)(saved_eip_address - pivotbuf_address) + 3 * sizeof(uint32_t);
-    if (len < copy_length || !helper_stage_record(data, len)) {
+    if (len < copy_length || !event_runtime_submit(data, len)) {
         return;
     }
 
@@ -208,6 +260,66 @@ static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_
     if (pivotbuf[2] == 'R') {
         rop_target_marker();
     }
+}
+#endif
+
+#if defined(OSED_PROFILE_DEP3)
+static volatile LONG event_record_count;
+static volatile LONG event_checksum_state;
+
+typedef struct EVENT_ROUTE_CONTEXT {
+    char route[EVENT_ROUTE_STORAGE_BYTES];
+    uint32_t checksum;
+    uint32_t body_length;
+} EVENT_ROUTE_CONTEXT;
+
+static int __declspec(noinline) process_routed_event(
+    const uint8_t *route,
+    uint32_t route_length,
+    const uint8_t *event_body,
+    uint32_t event_length) {
+    EVENT_ROUTE_CONTEXT context;
+
+    memset(&context, 0, sizeof(context));
+    memcpy(context.route, route, route_length);
+    context.checksum = (uint32_t)event_record_checksum(event_body, (int)event_length);
+    context.body_length = event_length;
+    InterlockedIncrement(&event_record_count);
+    InterlockedExchange(&event_checksum_state, (LONG)context.checksum);
+
+    return 0;
+}
+
+static int __declspec(noinline) dispatch_routed_event(
+    const OSED_PACKET_HEADER *packet,
+    const uint8_t *body) {
+    const OSED_V2_RECORD *record;
+    const uint8_t *route;
+    const uint8_t *event_body;
+    uint32_t route_length;
+
+    if (packet->control != OSED_CONTROL_V2_RECORD ||
+        packet->length < sizeof(OSED_V2_RECORD)) {
+        return -1;
+    }
+
+    record = (const OSED_V2_RECORD *)body;
+    if (record->kind != OSED_RECORD_DATA ||
+        record->options != 0 ||
+        record->data_offset < sizeof(OSED_V2_RECORD) ||
+        record->data_offset > packet->length ||
+        record->data_length != packet->length - record->data_offset) {
+        return -1;
+    }
+
+    route_length = record->data_offset - (uint32_t)sizeof(OSED_V2_RECORD);
+    if (route_length > EVENT_ROUTE_PROTOCOL_MAX) {
+        return -1;
+    }
+
+    route = body + sizeof(OSED_V2_RECORD);
+    event_body = body + record->data_offset;
+    return process_routed_event(route, route_length, event_body, record->data_length);
 }
 #endif
 
@@ -259,6 +371,9 @@ static int __declspec(noinline) dispatch_packet(
 #endif
 #if defined(OSED_PROFILE_DEP) || defined(OSED_PROFILE_ASLR_DEP) || defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
     case OP_ROP: {
+#if defined(OSED_PROFILE_DEP3)
+        return dispatch_routed_event(hdr, body);
+#else
         const uint8_t *record_data;
         uint32_t record_length;
         if (parse_v2_record(
@@ -269,12 +384,13 @@ static int __declspec(noinline) dispatch_packet(
                 &record_length) != 0) {
             return -1;
         }
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
         handler_rop_staged(record_data, record_length);
 #else
         handler_rop(record_data, record_length);
 #endif
         return 0;
+#endif
     }
 #endif
     default:
@@ -367,6 +483,10 @@ static int __declspec(noinline) run_server(const char *port) {
                 }
             }
 
+#if defined(OSED_PROFILE_DEP3)
+            request_log_write(&hdr);
+#endif
+
             if (dispatch_packet(client, &hdr, body) != 0) {
                 break;
             }
@@ -386,14 +506,18 @@ int main(int argc, char **argv) {
         port = argv[1];
     }
 
-    if (helper_probe(7) == 0) {
+    if (!event_runtime_check_compatibility(7)) {
         return 1;
     }
 
-#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2) || defined(OSED_PROFILE_DEP3)
-    if (!helper_prepare_rop_runtime()) {
+#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)
+    if (!event_runtime_initialize()) {
         return 1;
     }
+#endif
+
+#if defined(OSED_PROFILE_DEP3)
+    request_log_initialize();
 #endif
 
     return run_server(port);

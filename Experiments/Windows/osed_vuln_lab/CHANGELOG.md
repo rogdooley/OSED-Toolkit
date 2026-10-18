@@ -7,6 +7,12 @@ The format is based on Keep a Changelog.
 ## [Unreleased]
 
 ### Changed
+- Reworked DEP v3 as a routed-event application target. Removed its synthetic
+  gadget bank, dedicated staging storage, forced pivot path, cached
+  `VirtualProtect`, and protection wrapper; request logging now uses a
+  legitimately resolved high-resolution timestamp API with a standard fallback.
+- Replaced exploit-oriented public helper names with application-oriented
+  event-runtime APIs and made legacy training sequences internal symbols.
 - Split student and instructor material so protocol recovery is required before
   exploit construction.
 - Added a `student_bundle` build target containing only the service, helper DLL,

@@ -63,6 +63,12 @@ if(MSVC)
   else()
     set(HELPER_LINK_FLAGS "/BASE:0x62500000 /DYNAMICBASE:NO /FIXED /NXCOMPAT:NO /SAFESEH:NO")
   endif()
+
+  # Keep the intentionally useful instruction sequences in the image without
+  # publishing a training-oriented export catalog in the student binary.
+  if(NOT LAB_PROFILE STREQUAL "dep3")
+    string(APPEND HELPER_LINK_FLAGS " /OPT:NOREF /OPT:NOICF")
+  endif()
 endif()
 
 add_library(osedhelper SHARED
@@ -118,7 +124,7 @@ if(MSVC)
               --service "$<TARGET_FILE:osed_vulnsvc>"
               --helper "$<TARGET_FILE:osedhelper>"
       DEPENDS osed_vulnsvc osedhelper
-      COMMENT "Verifying PE mitigations and intentional training primitives"
+      COMMENT "Verifying PE mitigations and profile properties"
     )
     add_dependencies(student_bundle verify_lab)
   else()

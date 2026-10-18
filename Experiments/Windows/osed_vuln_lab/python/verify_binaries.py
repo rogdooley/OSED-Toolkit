@@ -12,6 +12,7 @@ IMAGE_FILE_MACHINE_I386 = 0x014C
 IMAGE_FILE_RELOCS_STRIPPED = 0x0001
 IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = 0x0040
 IMAGE_DLLCHARACTERISTICS_NX_COMPAT = 0x0100
+IMAGE_DLLCHARACTERISTICS_GUARD_CF = 0x4000
 
 
 class VerificationError(RuntimeError):
@@ -125,6 +126,9 @@ class PEFile:
     def nx_compatible(self) -> bool:
         return bool(self.dll_characteristics & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
 
+    def guard_cf_enabled(self) -> bool:
+        return bool(self.dll_characteristics & IMAGE_DLLCHARACTERISTICS_GUARD_CF)
+
     def relocations_stripped(self) -> bool:
         return bool(self.file_characteristics & IMAGE_FILE_RELOCS_STRIPPED)
 
@@ -139,6 +143,16 @@ class PEFile:
         if structure_size < 72:
             return False
         return self.u32(offset + 64) != 0 and self.u32(offset + 68) != 0
+
+    def security_cookie_enabled(self) -> bool:
+        if len(self.directories) <= 10 or self.directories[10][0] == 0:
+            return False
+        load_config_rva, load_config_size = self.directories[10]
+        if load_config_size < 64:
+            return False
+        offset = self.rva_offset(load_config_rva)
+        structure_size = self.u32(offset)
+        return structure_size >= 64 and self.u32(offset + 60) != 0
 
     def executable_contains(self, pattern: bytes) -> bool:
         for section in self.sections:
@@ -174,20 +188,6 @@ SEQUENCES = {
     "helper_sequence_20": bytes.fromhex("FF E0"),
     "helper_sequence_21": bytes.fromhex("FF D4 C3"),
     "helper_sequence_22": bytes.fromhex("54 C3"),
-    "helper_sequence_30": bytes.fromhex("58 C3"),
-    "helper_sequence_31": bytes.fromhex("94 C3"),
-    "helper_sequence_32": bytes.fromhex("59 5D 5F 58 C3"),
-    "helper_sequence_33": bytes.fromhex("92 C3"),
-    "helper_sequence_34": bytes.fromhex("5B 5D 58 C3"),
-    "helper_sequence_35": bytes.fromhex("5D C3"),
-    "helper_sequence_36": bytes.fromhex("8B 40 10 C3"),
-    "helper_sequence_37": bytes.fromhex("96 C3"),
-    "helper_sequence_38": bytes.fromhex("83 C4 1C C3"),
-    "helper_sequence_39": bytes.fromhex("60 C3"),
-    "helper_sequence_40": bytes.fromhex("C3"),
-    "helper_sequence_41": bytes.fromhex("F7 D8 C3"),
-    "helper_sequence_42": bytes.fromhex("89 06 C3"),
-    "helper_sequence_43": bytes.fromhex("93 C3"),
 }
 
 ROP_SEQUENCES = {f"helper_sequence_{index:02d}" for index in range(1, 13)} | {
@@ -197,16 +197,26 @@ STAGED_ROP_SEQUENCES = ROP_SEQUENCES - {
     "helper_sequence_19",
     "helper_sequence_20",
 }
-DEP3_SEQUENCES = {f"helper_sequence_{index:02d}" for index in range(30, 44)}
-DEP3_FORBIDDEN_BYTES = {
-    bytes.fromhex("5A C3"): "pop edx; ret",
-    bytes.fromhex("FF D0"): "call eax",
-    bytes.fromhex("FF E0"): "jmp eax",
-    bytes.fromhex("FF E4"): "jmp esp",
-    bytes.fromhex("FF D4"): "call esp",
-    bytes.fromhex("54 C3"): "push esp; ret",
-    bytes.fromhex("8B 00 C3"): "mov eax, [eax]; ret",
-    bytes.fromhex("83 C4 10 C3"): "add esp, 0x10; ret",
+BASE_APPLICATION_EXPORTS = {
+    "event_counter_add",
+    "event_record_checksum",
+    "event_runtime_check_compatibility",
+    "event_runtime_get_info",
+}
+STAGED_APPLICATION_EXPORTS = {
+    "event_runtime_initialize",
+    "event_runtime_submit",
+}
+SPOILER_EXPORT_NAMES = {
+    "helper_add",
+    "helper_xor_fold",
+    "helper_get_anchor",
+    "helper_probe",
+    "helper_aslr_proof",
+    "helper_prepare_rop_runtime",
+    "helper_stage_record",
+    "helper_memory_protect",
+    "helper_writable_slot",
 }
 
 PROFILE_EXPECTATIONS = {
@@ -215,8 +225,10 @@ PROFILE_EXPECTATIONS = {
         "service_dep": False,
         "helper_aslr": False,
         "helper_dep": False,
-        "required": {"helper_sequence_01", "helper_sequence_21", "helper_sequence_22"},
-        "forbidden": ROP_SEQUENCES - {"helper_sequence_01"} | {"helper_sequence_13"},
+        "allow_virtualprotect": False,
+        "required_exports": BASE_APPLICATION_EXPORTS,
+        "required_sequences": {"helper_sequence_01", "helper_sequence_21", "helper_sequence_22"},
+        "forbidden_sequences": ROP_SEQUENCES - {"helper_sequence_01"} | {"helper_sequence_13"},
         "markers": [b"request contained a leading NUL"],
         "absent_markers": [b"[seh]", b"ROP target marker", b"helper_get_anchor"],
     },
@@ -225,8 +237,10 @@ PROFILE_EXPECTATIONS = {
         "service_dep": False,
         "helper_aslr": False,
         "helper_dep": False,
-        "required": {"helper_sequence_13"},
-        "forbidden": ROP_SEQUENCES | {"helper_sequence_21", "helper_sequence_22"},
+        "allow_virtualprotect": False,
+        "required_exports": BASE_APPLICATION_EXPORTS,
+        "required_sequences": {"helper_sequence_13"},
+        "forbidden_sequences": ROP_SEQUENCES | {"helper_sequence_21", "helper_sequence_22"},
         "markers": [b"[seh] handler reached"],
         "absent_markers": [b"ROP target marker", b"helper_get_anchor"],
     },
@@ -235,8 +249,10 @@ PROFILE_EXPECTATIONS = {
         "service_dep": True,
         "helper_aslr": False,
         "helper_dep": True,
-        "required": ROP_SEQUENCES | {"helper_memory_protect", "helper_writable_slot"},
-        "forbidden": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
+        "allow_virtualprotect": True,
+        "required_exports": BASE_APPLICATION_EXPORTS,
+        "required_sequences": ROP_SEQUENCES,
+        "forbidden_sequences": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
         "markers": [b"ROP target marker reached"],
         "absent_markers": [b"[seh]", b"helper_get_anchor"],
     },
@@ -245,9 +261,11 @@ PROFILE_EXPECTATIONS = {
         "service_dep": True,
         "helper_aslr": True,
         "helper_dep": True,
-        "required": ROP_SEQUENCES | {"helper_memory_protect", "helper_writable_slot"},
-        "forbidden": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
-        "markers": [b"ROP target marker reached", b"helper_get_anchor"],
+        "allow_virtualprotect": True,
+        "required_exports": BASE_APPLICATION_EXPORTS | {"event_runtime_report_status"},
+        "required_sequences": ROP_SEQUENCES,
+        "forbidden_sequences": {"helper_sequence_13", "helper_sequence_21", "helper_sequence_22"},
+        "markers": [b"ROP target marker reached", b"event_runtime_get_info"],
         "absent_markers": [b"[seh]"],
     },
     "dep2": {
@@ -255,19 +273,15 @@ PROFILE_EXPECTATIONS = {
         "service_dep": True,
         "helper_aslr": False,
         "helper_dep": True,
-        "required": STAGED_ROP_SEQUENCES | {
-            "helper_memory_protect",
-            "helper_writable_slot",
-            "helper_prepare_rop_runtime",
-            "helper_stage_record",
-        },
-        "forbidden": {
+        "allow_virtualprotect": True,
+        "required_exports": BASE_APPLICATION_EXPORTS | STAGED_APPLICATION_EXPORTS,
+        "required_sequences": STAGED_ROP_SEQUENCES,
+        "forbidden_sequences": {
             "helper_sequence_13",
             "helper_sequence_19",
             "helper_sequence_20",
             "helper_sequence_21",
             "helper_sequence_22",
-            "helper_aslr_proof",
         },
         "markers": [b"ROP target marker reached"],
         "absent_markers": [b"[seh]", b"helper_get_anchor"],
@@ -277,21 +291,17 @@ PROFILE_EXPECTATIONS = {
         "service_dep": True,
         "helper_aslr": True,
         "helper_dep": True,
-        "required": STAGED_ROP_SEQUENCES | {
-            "helper_memory_protect",
-            "helper_writable_slot",
-            "helper_prepare_rop_runtime",
-            "helper_stage_record",
-        },
-        "forbidden": {
+        "allow_virtualprotect": True,
+        "required_exports": BASE_APPLICATION_EXPORTS | STAGED_APPLICATION_EXPORTS,
+        "required_sequences": STAGED_ROP_SEQUENCES,
+        "forbidden_sequences": {
             "helper_sequence_13",
             "helper_sequence_19",
             "helper_sequence_20",
             "helper_sequence_21",
             "helper_sequence_22",
-            "helper_aslr_proof",
         },
-        "markers": [b"ROP target marker reached", b"helper_get_anchor"],
+        "markers": [b"ROP target marker reached", b"event_runtime_get_info"],
         "absent_markers": [b"[seh]"],
     },
     "dep3": {
@@ -299,20 +309,18 @@ PROFILE_EXPECTATIONS = {
         "service_dep": True,
         "helper_aslr": False,
         "helper_dep": True,
-        "required": DEP3_SEQUENCES | {
-            "helper_prepare_rop_runtime",
-            "helper_stage_record",
-        },
-        "forbidden": ROP_SEQUENCES | {
-            "helper_sequence_13",
-            "helper_sequence_21",
-            "helper_sequence_22",
-            "helper_memory_protect",
-            "helper_writable_slot",
-            "helper_aslr_proof",
-        },
-        "markers": [b"ROP target marker reached"],
-        "absent_markers": [b"[seh]", b"helper_get_anchor"],
+        "allow_virtualprotect": False,
+        "required_exports": BASE_APPLICATION_EXPORTS,
+        "required_sequences": set(),
+        "forbidden_sequences": set(),
+        "markers": [b"GetSystemTimePreciseAsFileTime"],
+        "absent_markers": [
+            b"[seh]",
+            b"ROP target marker",
+            b"helper_get_anchor",
+            b"helper_prepare_rop_runtime",
+            b"helper_stage_record",
+        ],
     },
 }
 
@@ -335,6 +343,14 @@ def verify(profile: str, service_path: Path, helper_path: Path) -> list[str]:
     check(helper.dynamic_base() == expected["helper_aslr"], "helper ASLR flag mismatch", errors)
     check(helper.nx_compatible() == expected["helper_dep"], "helper DEP flag mismatch", errors)
 
+    if profile == "dep3":
+        check(not service.guard_cf_enabled(), "service unexpectedly has CFG enabled", errors)
+        check(not helper.guard_cf_enabled(), "helper unexpectedly has CFG enabled", errors)
+        check(not service.security_cookie_enabled(), "service unexpectedly has a /GS cookie", errors)
+        check(not helper.security_cookie_enabled(), "helper unexpectedly has a /GS cookie", errors)
+        check(not service.safe_seh_enabled(), "service unexpectedly has SafeSEH enabled", errors)
+        check(not helper.safe_seh_enabled(), "helper unexpectedly has SafeSEH enabled", errors)
+
     if not expected["helper_aslr"]:
         check(helper.image_base == 0x62500000, "helper preferred base is not 0x62500000", errors)
         check(helper.relocations_stripped(), "fixed helper still contains relocations", errors)
@@ -346,27 +362,39 @@ def verify(profile: str, service_path: Path, helper_path: Path) -> list[str]:
                 f"SEH helper contains unintended direct-stack sequence {sequence.hex(' ')}",
                 errors,
             )
-    if profile == "dep3":
-        for pe, label in ((helper, "helper"), (service, "service")):
-            for sequence, mnemonic in DEP3_FORBIDDEN_BYTES.items():
-                check(
-                    not pe.executable_contains(sequence),
-                    f"DEP-3 {label} contains shortcut {mnemonic} ({sequence.hex(' ')})",
-                    errors,
-                )
-
     exports = helper.exports()
-    for name in expected["required"]:
+    for name in expected["required_exports"]:
         check(name in exports, f"helper is missing required export {name}", errors)
-    for name in expected["forbidden"]:
-        check(name not in exports, f"helper exposes out-of-profile primitive {name}", errors)
+    for name in SPOILER_EXPORT_NAMES:
+        check(name not in exports, f"helper exposes training-oriented name {name}", errors)
+    for name in exports:
+        check(
+            not name.startswith("helper_sequence_"),
+            f"helper exposes training sequence name {name}",
+            errors,
+        )
 
-    for name in expected["required"] & SEQUENCES.keys():
-        actual = helper.bytes_at_export(name, len(SEQUENCES[name]))
-        check(actual == SEQUENCES[name], f"{name} bytes are {actual.hex(' ')}", errors)
+    for name in expected["required_sequences"]:
+        pattern = SEQUENCES[name]
+        check(
+            helper.executable_contains(pattern),
+            f"helper is missing required instruction sequence {name}",
+            errors,
+        )
 
-    if profile in {"dep", "aslr_dep", "dep2", "aslr_dep2", "dep3"}:
+    if expected["allow_virtualprotect"]:
         check(b"VirtualProtect\0" in helper.data, "helper has no VirtualProtect import", errors)
+    else:
+        check(b"VirtualProtect\0" not in helper.data, "helper contains VirtualProtect infrastructure", errors)
+        check(b"VirtualProtect\0" not in service.data, "service contains VirtualProtect infrastructure", errors)
+
+    if profile == "dep3":
+        check(b"GetProcAddress\0" in service.data, "service has no optional API resolution", errors)
+        check(
+            b"GetSystemTimePreciseAsFileTime\0" in service.data,
+            "service has no precise timestamp feature detection",
+            errors,
+        )
 
     check(b"memcpy\0" in service.data, "service has no visible vulnerable-copy import", errors)
     for marker in expected["markers"]:
@@ -387,7 +415,6 @@ def parse_args() -> argparse.Namespace:
 def print_report(profile: str, service_path: Path, helper_path: Path) -> None:
     service = PEFile(service_path)
     helper = PEFile(helper_path)
-    exports = helper.exports()
     print(
         f"[OK] service: ASLR={'on' if service.dynamic_base() else 'off'} "
         f"DEP={'on' if service.nx_compatible() else 'off'}"
@@ -398,22 +425,8 @@ def print_report(profile: str, service_path: Path, helper_path: Path) -> None:
         f"DEP={'on' if helper.nx_compatible() else 'off'} "
         f"SafeSEH={'on' if helper.safe_seh_enabled() else 'off'}"
     )
-    required = PROFILE_EXPECTATIONS[profile]["required"]
-    va_label = "preferred_VA" if helper.dynamic_base() else "VA"
-    for name in sorted(required & SEQUENCES.keys()):
-        rva = exports[name]
-        sequence = SEQUENCES[name]
-        print(
-            f"[OK] {name}: RVA=0x{rva:08X} "
-            f"{va_label}=0x{helper.image_base + rva:08X} bytes={sequence.hex(' ')}"
-        )
-    for name in ("helper_memory_protect", "helper_writable_slot"):
-        if name in required:
-            rva = exports[name]
-            print(
-                f"[OK] {name}: RVA=0x{rva:08X} "
-                f"{va_label}=0x{helper.image_base + rva:08X}"
-            )
+    required_sequences = PROFILE_EXPECTATIONS[profile]["required_sequences"]
+    print(f"[OK] required instruction sequences present: {len(required_sequences)}")
 
 
 def main() -> int:
@@ -428,7 +441,7 @@ def main() -> int:
             print(f"[FAIL] {error}")
         return 1
     print_report(args.profile, args.service, args.helper)
-    print(f"[PASS] {args.profile}: mitigations, profile isolation, and primitives verified")
+    print(f"[PASS] {args.profile}: mitigations, profile isolation, and properties verified")
     return 0
 
 

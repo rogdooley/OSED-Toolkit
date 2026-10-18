@@ -22,10 +22,47 @@ class Dep2SourceContractTests(unittest.TestCase):
         helper = (ROOT / "src" / "osedhelper.c").read_text(encoding="utf-8")
 
         self.assertIn("OSED_STAGE_BYTES", helper)
-        self.assertIn("helper_prepare_rop_runtime", helper)
-        self.assertIn("helper_stage_record", helper)
+        self.assertIn("event_runtime_initialize", helper)
+        self.assertIn("event_runtime_submit", helper)
         self.assertIn("GetProcAddress", helper)
         self.assertNotIn("VirtualProtect(", helper)
+
+    def test_public_header_uses_application_vocabulary(self) -> None:
+        header = (ROOT / "include" / "osedhelper.h").read_text(encoding="utf-8")
+        helper = (ROOT / "src" / "osedhelper.c").read_text(encoding="utf-8")
+
+        for name in (
+            "event_counter_add",
+            "event_record_checksum",
+            "event_runtime_get_info",
+            "event_runtime_check_compatibility",
+            "event_runtime_report_status",
+            "event_runtime_initialize",
+            "event_runtime_submit",
+        ):
+            self.assertIn(name, header)
+
+        for spoiler in (
+            "helper_probe",
+            "helper_prepare_rop_runtime",
+            "helper_stage_record",
+            "helper_get_anchor",
+            "helper_aslr_proof",
+        ):
+            self.assertNotIn(spoiler, header)
+
+        self.assertIn("return &event_runtime_info;", helper)
+        self.assertNotIn("return (void *)&event_runtime_get_info", helper)
+
+    def test_training_primitives_are_not_named_exports(self) -> None:
+        gadgets = (ROOT / "src" / "osedgadgets.c").read_text(encoding="utf-8")
+
+        self.assertNotIn("__declspec(dllexport) volatile DWORD helper_writable_slot", gadgets)
+        self.assertNotIn("__declspec(dllexport) BOOL __stdcall helper_memory_protect", gadgets)
+        self.assertNotIn(
+            "__declspec(dllexport) __declspec(naked) void helper_sequence_",
+            gadgets,
+        )
 
     def test_staged_handler_derives_boundary_from_return_address(self) -> None:
         service = (ROOT / "src" / "osed_vulnsvc.c").read_text(encoding="utf-8")
@@ -34,11 +71,11 @@ class Dep2SourceContractTests(unittest.TestCase):
         self.assertIn("_AddressOfReturnAddress", service)
         self.assertIn("3 * sizeof(uint32_t)", service)
 
-    def test_staged_profiles_do_not_include_the_legacy_aslr_proof_export(self) -> None:
+    def test_aslr_profile_uses_application_status_export(self) -> None:
         helper = (ROOT / "src" / "osedhelper.c").read_text(encoding="utf-8")
 
         self.assertIn("#if defined(OSED_PROFILE_ASLR_DEP)", helper)
-        self.assertIn("helper_aslr_proof", helper)
+        self.assertIn("event_runtime_report_status", helper)
 
     def test_verifier_recognizes_staged_profiles(self) -> None:
         self.assertIn("dep2", PROFILE_EXPECTATIONS)
@@ -47,49 +84,70 @@ class Dep2SourceContractTests(unittest.TestCase):
     def test_verifier_requires_staging_without_direct_dispatch(self) -> None:
         for profile in ("dep2", "aslr_dep2"):
             expected = PROFILE_EXPECTATIONS[profile]
-            self.assertIn("helper_prepare_rop_runtime", expected["required"])
-            self.assertIn("helper_stage_record", expected["required"])
-            self.assertIn("helper_sequence_19", expected["forbidden"])
-            self.assertIn("helper_sequence_20", expected["forbidden"])
+            self.assertIn("event_runtime_initialize", expected["required_exports"])
+            self.assertIn("event_runtime_submit", expected["required_exports"])
+            self.assertIn("helper_sequence_19", expected["forbidden_sequences"])
+            self.assertIn("helper_sequence_20", expected["forbidden_sequences"])
 
-    def test_dep3_has_a_distinct_constrained_staged_contract(self) -> None:
+    def test_verifier_rejects_exploit_oriented_export_names(self) -> None:
+        forbidden = getattr(verify_binaries, "SPOILER_EXPORT_NAMES", set())
+
+        for name in (
+            "helper_probe",
+            "helper_prepare_rop_runtime",
+            "helper_stage_record",
+            "helper_memory_protect",
+            "helper_writable_slot",
+        ):
+            self.assertIn(name, forbidden)
+
+    def test_dep3_uses_application_processing_without_synthetic_gadgets(self) -> None:
         cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         gadgets = (ROOT / "src" / "osedgadgets.c").read_text(encoding="utf-8")
+        service = (ROOT / "src" / "osed_vulnsvc.c").read_text(encoding="utf-8")
+        helper = (ROOT / "src" / "osedhelper.c").read_text(encoding="utf-8")
 
         self.assertIn("dep3", cmake)
         self.assertIn("OSED_PROFILE_DEP3", cmake)
-        self.assertIn("helper_sequence_30", gadgets)
-        self.assertIn("pop ecx", gadgets)
-        self.assertIn("pop ebp", gadgets)
-        self.assertIn("pop edi", gadgets)
-        self.assertIn("pop eax", gadgets)
-        self.assertIn("xchg eax, edx", gadgets)
-        self.assertIn("neg eax", gadgets)
-        self.assertIn("[eax + 0x10]", gadgets)
-        self.assertIn("add esp, 0x1C", gadgets)
-        self.assertIn("helper_sequence_41", gadgets)
-        self.assertIn("helper_sequence_42", gadgets)
+        self.assertNotIn("OSED_PROFILE_DEP3", gadgets)
+        self.assertNotIn("OSED_PROFILE_DEP3", helper)
+        self.assertIn("process_routed_event", service)
+        self.assertIn("EVENT_ROUTE_PROTOCOL_MAX", service)
+        self.assertIn(
+            "#if defined(OSED_PROFILE_DEP2) || defined(OSED_PROFILE_ASLR_DEP2)\n"
+            "static void __declspec(noinline) handler_rop_staged",
+            service,
+        )
 
-    def test_verifier_requires_dep3_side_effect_gadgets(self) -> None:
+    def test_request_logging_resolves_optional_timestamp_once(self) -> None:
+        service = (ROOT / "src" / "osed_vulnsvc.c").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "#if defined(OSED_PROFILE_DEP3)\n"
+            "#define EVENT_ROUTE_STORAGE_BYTES",
+            service,
+        )
+        self.assertIn("request_log_initialize", service)
+        self.assertIn("GetProcAddress", service)
+        self.assertIn('"GetSystemTimePreciseAsFileTime"', service)
+        self.assertIn("GetSystemTimeAsFileTime", service)
+        self.assertIn("request_log_write", service)
+        self.assertLess(service.index("request_log_initialize()"), service.index("run_server(port)"))
+
+    def test_verifier_requires_dep3_natural_capabilities_only(self) -> None:
         expected = PROFILE_EXPECTATIONS["dep3"]
 
         self.assertTrue(expected["service_dep"])
         self.assertFalse(expected["service_aslr"])
-        self.assertIn("helper_sequence_30", expected["required"])
-        self.assertIn("helper_sequence_32", expected["required"])
-        self.assertIn("helper_sequence_33", expected["required"])
-        self.assertIn("helper_sequence_34", expected["required"])
-        self.assertIn("helper_sequence_41", expected["required"])
-        self.assertIn("helper_sequence_42", expected["required"])
-        self.assertIn("helper_sequence_43", expected["required"])
-        self.assertIn("helper_sequence_01", expected["forbidden"])
-        self.assertIn("helper_memory_protect", expected["forbidden"])
+        self.assertEqual(expected["required_sequences"], set())
+        self.assertNotIn("event_runtime_initialize", expected["required_exports"])
+        self.assertNotIn("event_runtime_submit", expected["required_exports"])
+        self.assertNotIn("helper_memory_protect", expected["required_exports"])
 
-    def test_verifier_rejects_dep3_shortcut_gadgets(self) -> None:
-        forbidden = getattr(verify_binaries, "DEP3_FORBIDDEN_BYTES", {})
+    def test_verifier_rejects_dep3_virtualprotect_infrastructure(self) -> None:
+        expected = PROFILE_EXPECTATIONS["dep3"]
 
-        for sequence in (b"\x5A\xC3", b"\xFF\xD0", b"\xFF\xE0", b"\x8B\x00\xC3"):
-            self.assertIn(sequence, forbidden)
+        self.assertFalse(expected["allow_virtualprotect"])
 
 
 if __name__ == "__main__":

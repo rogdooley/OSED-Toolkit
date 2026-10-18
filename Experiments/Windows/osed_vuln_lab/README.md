@@ -9,8 +9,9 @@ This lab target is intentionally vulnerable and intended only for local Windows 
 ## Components
 
 - `osed_vulnsvc`: Win32 TCP service with opcode-based vulnerable handlers.
-- `osedhelper.dll`: Harmless helper DLL with deterministic x86 training
-  sequences, writable storage, and a VirtualProtect wrapper.
+- `osedhelper.dll`: Application support DLL. Earlier profiles retain their
+  deterministic training primitives; DEP v3 uses only ordinary event-runtime
+  functionality and compiler-generated code.
 - `student/`: spoiler-free brief and protocol-reversing worksheet.
 - `instructor/protocol_reference.md`: protocol solution and build-validation commands.
 - `instructor/profile_matrix.md`: profile architecture, mitigation matrix, and
@@ -201,8 +202,10 @@ popd
   - Goal: DEP-2 plus leak-derived helper-base recovery.
   - Helper: staged ROP vocabulary at addresses recovered from the disclosure.
 - `dep3`: `/GS- /DYNAMICBASE:NO /NXCOMPAT`
-  - Goal: constrained staged ROP construction with paired-pop side effects.
-  - Helper: fixed DEP-3-only gadget vocabulary; no direct API wrapper.
+  - Goal: reverse a realistic routed-event path, identify its memory-safety
+    defect, and assess a DEP bypass from the final compiled binaries.
+  - Helper: ordinary event-runtime APIs only; no training gadget bank, staged
+    storage, cached protection API, or direct protection wrapper.
 - `seh`: `/GS- /SAFESEH:NO`
   - Goal: deterministic exception handling path for SEH overwrite exercises.
   - Helper: fixed pop-pop-ret sequence only; no direct stack-transfer export.
@@ -220,8 +223,10 @@ Use the matching build directory for the selected profile, such as
 `build_aslr_dep\Release\osed_vulnsvc.exe 9999`. Keep `osedhelper.dll` in the
 same `Release` directory as the executable.
 
-Runtime output is intentionally sparse so the executable does not disclose the
-dispatcher map or helper-module address before the learner recovers them.
+DEP v3 adds ordinary timestamped request logging; the other profiles retain
+their existing sparse diagnostics. Runtime output does not disclose the
+dispatcher map, helper-module address, vulnerability location, or an intended
+exploitation technique.
 
 ## Instructor Validation
 

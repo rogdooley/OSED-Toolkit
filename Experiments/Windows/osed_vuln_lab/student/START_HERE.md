@@ -134,4 +134,33 @@ branch to the bytes ultimately passed to the vulnerable copy.
   recovered base, and complete the DEP exercise without fixed application
   addresses.
 
+### dep2
+
+- Recover the complete version-2 record layout and follow the data through the
+  service and helper DLL.
+- Determine where attacker-controlled data resides at each control transfer.
+- Demonstrate that the available initial stack control is insufficient for the
+  complete DEP bypass and validate the required transition in WinDbg.
+- Build and verify the protection-changing call frame one step at a time.
+
+### aslr_dep2
+
+- Complete the `dep2` analysis without relying on fixed helper addresses.
+- Establish the provenance of the disclosed pointer and derive the live helper
+  base from a statically verified RVA.
+- Recalculate every helper-relative address after each process launch.
+
+### dep3
+
+- Treat the target as an ordinary event-processing application rather than as
+  a catalog of training primitives.
+- Recover the routed-event data model, validation rules, and ownership of each
+  input region from the service disassembly.
+- Identify and characterize any memory-safety defect using a cyclic pattern and
+  WinDbg evidence.
+- Inventory capabilities from the actual compiled EXE, DLL, and their imported
+  dependencies. Do not assume that earlier profiles' helper primitives exist.
+- Assess whether a DEP bypass is feasible from the resulting memory layout and
+  available code. Record infeasibility evidence as carefully as success.
+
 Keep all proof behavior benign and confined to the lab VM.

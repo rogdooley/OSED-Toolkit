@@ -26,7 +26,7 @@ introducing an unrelated protocol.
 |---:|---|---|
 | `0x0000` | ping, easy stack commands | Raw command data (`OP_PING` requires zero length). |
 | `0x0001` | SEH | One SEH record followed by its data. |
-| `0x0201` | DEP/ASLR | One version-2 offset record and optional data. |
+| `0x0201` | DEP/ASLR profiles | One version-2 offset record and optional data. |
 
 The SEH record is:
 
@@ -66,7 +66,7 @@ Success is status zero, query kind, and a live pointer in `value`.
 | `0x1002` | `OP_SEH` | seh | SEH-overwrite training path. |
 | `0x1003` | `OP_SMALLBUF` | easy | Constrained overflow for staged-payload practice. |
 | `0x1004` | `OP_LEAK` | aslr_dep | Controlled helper-module pointer disclosure. |
-| `0x1005` | `OP_ROP` | dep, aslr_dep | DEP-aware stack-overflow path. |
+| `0x1005` | `OP_ROP` | dep, aslr_dep, dep2, aslr_dep2, dep3 | Version-2 profile-specific processing path. |
 
 ## Validation Clients
 
@@ -74,43 +74,47 @@ With the service running on `127.0.0.1:9999`:
 
 ```bat
 python python\protocol_smoketest.py --host 127.0.0.1 --port 9999
+python python\protocol_smoketest.py --host 127.0.0.1 --port 9999 --dep3-event
 python python\exploit_scaffold.py pattern --opcode stack --length 800
 ```
 
-Expected smoke-test output is `PONG`. Use these clients to validate a build or
-after the learner has independently recovered and documented the protocol.
+Expected smoke-test output is `PONG`; the DEP v3 mode reports that the event was
+accepted before the same-connection ping succeeds. Use these clients to
+validate a build or after the learner has independently recovered and
+documented the protocol.
 
 The scaffold also supports offset calculation, bad-character generation, raw
 payload files, and layouts made from learner-supplied return addresses and ROP
 bytes. It applies the command-specific body wrapper and rejects requests whose
 complete body exceeds the service limit.
 
-## Deterministic Helper Primitives
+## Legacy Deterministic Helper Primitives
 
-`osedhelper.dll` contains an intentional x86 gadget bank so every profile is
-solvable without relying on accidental compiler output. Exports use neutral
-sequence names; learners should inspect and classify them in IDA.
+The profiles before DEP v3 contain an intentional x86 gadget bank so those
+exercises do not rely on accidental compiler output. The sequence functions are
+internal implementation details rather than public DLL exports. Learners must
+inspect and classify the compiled instructions in IDA.
 
-| Export | Profiles | Sequence | Intended use |
+| Internal sequence | Profiles | Sequence | Intended use |
 |---|---|---|---|
-| `helper_sequence_01` | easy, dep, aslr_dep | `jmp esp` | easy EIP redirect and post-API return |
-| `helper_sequence_02` | dep, aslr_dep | `pop eax; ret` | register setup |
-| `helper_sequence_03` | dep, aslr_dep | `pop ecx; ret` | register setup |
-| `helper_sequence_04` | dep, aslr_dep | `pop edx; ret` | register setup |
-| `helper_sequence_05` | dep, aslr_dep | `pop ebx; ret` | register setup |
-| `helper_sequence_06` | dep, aslr_dep | `pop ebp; ret` | register setup |
-| `helper_sequence_07` | dep, aslr_dep | `pop esi; ret` | register setup |
-| `helper_sequence_08` | dep, aslr_dep | `pop edi; ret` | register setup |
-| `helper_sequence_09` | dep, aslr_dep | `neg eax; ret` | null-free constant construction |
-| `helper_sequence_10` | dep, aslr_dep | `xchg eax, ebx; ret` | PUSHAD chain setup |
-| `helper_sequence_11` | dep, aslr_dep | `pushad; ret` | VirtualProtect call-frame dispatch |
-| `helper_sequence_12` | dep, aslr_dep | `ret` | ROP NOP/trampoline |
+| `helper_sequence_01` | easy, dep, aslr_dep, dep2, aslr_dep2 | `jmp esp` | easy EIP redirect and post-API return |
+| `helper_sequence_02` | dep, aslr_dep, dep2, aslr_dep2 | `pop eax; ret` | register setup |
+| `helper_sequence_03` | dep, aslr_dep, dep2, aslr_dep2 | `pop ecx; ret` | register setup |
+| `helper_sequence_04` | dep, aslr_dep, dep2, aslr_dep2 | `pop edx; ret` | register setup |
+| `helper_sequence_05` | dep, aslr_dep, dep2, aslr_dep2 | `pop ebx; ret` | register setup |
+| `helper_sequence_06` | dep, aslr_dep, dep2, aslr_dep2 | `pop ebp; ret` | register setup |
+| `helper_sequence_07` | dep, aslr_dep, dep2, aslr_dep2 | `pop esi; ret` | register setup |
+| `helper_sequence_08` | dep, aslr_dep, dep2, aslr_dep2 | `pop edi; ret` | register setup |
+| `helper_sequence_09` | dep, aslr_dep, dep2, aslr_dep2 | `neg eax; ret` | null-free constant construction |
+| `helper_sequence_10` | dep, aslr_dep, dep2, aslr_dep2 | `xchg eax, ebx; ret` | PUSHAD chain setup |
+| `helper_sequence_11` | dep, aslr_dep, dep2, aslr_dep2 | `pushad; ret` | VirtualProtect call-frame dispatch |
+| `helper_sequence_12` | dep, aslr_dep, dep2, aslr_dep2 | `ret` | ROP NOP/trampoline |
 | `helper_sequence_13` | seh | `pop eax; pop ebx; ret` | SEH redirect |
-| `helper_sequence_14` | dep, aslr_dep | `xchg eax, esp; ret` | stack pivot |
-| `helper_sequence_15` | dep, aslr_dep | `mov eax, [eax]; ret` | pointer dereference |
-| `helper_sequence_16` | dep, aslr_dep | `xchg eax, esi; ret` | API target setup |
-| `helper_sequence_17` | dep, aslr_dep | `mov [esi], eax; ret` | controlled write |
-| `helper_sequence_18` | dep, aslr_dep | `add esp, 0x10; ret` | stack adjustment |
+| `helper_sequence_14` | dep, aslr_dep, dep2, aslr_dep2 | `xchg eax, esp; ret` | stack pivot |
+| `helper_sequence_15` | dep, aslr_dep, dep2, aslr_dep2 | `mov eax, [eax]; ret` | pointer dereference |
+| `helper_sequence_16` | dep, aslr_dep, dep2, aslr_dep2 | `xchg eax, esi; ret` | API target setup |
+| `helper_sequence_17` | dep, aslr_dep, dep2, aslr_dep2 | `mov [esi], eax; ret` | controlled write |
+| `helper_sequence_18` | dep, aslr_dep, dep2, aslr_dep2 | `add esp, 0x10; ret` | stack adjustment |
 | `helper_sequence_19` | dep, aslr_dep | `call eax; ret` | indirect call |
 | `helper_sequence_20` | dep, aslr_dep | `jmp eax` | indirect transfer |
 | `helper_sequence_21` | easy | `call esp; ret` | alternate easy redirect |
@@ -119,10 +123,18 @@ sequence names; learners should inspect and classify them in IDA.
 `helper_writable_slot` supplies writable storage, while
 `helper_memory_protect` guarantees a callable wrapper and a VirtualProtect
 import. In non-ASLR profiles the DLL uses preferred base `0x62500000` with
-relocation disabled. In `aslr_dep`, learners derive the live base and add the
-same gadget RVAs.
+relocation disabled. In `aslr_dep` and `aslr_dep2`, learners derive the live
+base and add the applicable gadget RVAs.
 
 The repository's `VirtualProtectChain` requires sequences 01-12 plus the
 writable slot and callable protection target. Serialize that chain and append
 the NOP sled and benign proof bytes directly; no shellcode pointer dword belongs
 after `pushad; ret`.
+
+DEP v3 intentionally does not include any of these sequences, the writable
+training slot, the protection wrapper, cached `VirtualProtect`, or a dedicated
+staging region. Its helper exposes only application-oriented event-runtime
+APIs. The service uses the same outer packet and version-2 record framing, but
+interprets the bytes before `data_offset` as routing metadata and the bytes at
+`data_offset` as the event body. Instructor feasibility work must use the
+actual MSVC Win32 Release binaries and remain separate from the student bundle.

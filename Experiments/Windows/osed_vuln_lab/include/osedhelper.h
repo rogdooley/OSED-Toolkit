@@ -12,13 +12,13 @@
 extern "C" {
 #endif
 
-OSEDHELPER_API int __stdcall helper_add(int a, int b);
-OSEDHELPER_API int __stdcall helper_xor_fold(const unsigned char *data, int len);
-OSEDHELPER_API void * __stdcall helper_get_anchor(void);
-OSEDHELPER_API int __stdcall helper_probe(int value);
-OSEDHELPER_API void __stdcall helper_aslr_proof(void);
-OSEDHELPER_API int __stdcall helper_prepare_rop_runtime(void);
-OSEDHELPER_API int __stdcall helper_stage_record(const unsigned char *data, DWORD length);
+OSEDHELPER_API int __stdcall event_counter_add(int current, int increment);
+OSEDHELPER_API int __stdcall event_record_checksum(const unsigned char *data, int len);
+OSEDHELPER_API const void * __stdcall event_runtime_get_info(void);
+OSEDHELPER_API int __stdcall event_runtime_check_compatibility(int version);
+OSEDHELPER_API void __stdcall event_runtime_report_status(void);
+OSEDHELPER_API int __stdcall event_runtime_initialize(void);
+OSEDHELPER_API int __stdcall event_runtime_submit(const unsigned char *data, DWORD length);
 
 #ifdef __cplusplus
 }
