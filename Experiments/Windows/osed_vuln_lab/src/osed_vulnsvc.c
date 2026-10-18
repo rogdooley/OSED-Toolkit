@@ -204,6 +204,10 @@ static void __declspec(noinline) handler_rop_staged(const uint8_t *data, uint32_
 
     /* INTENTIONAL VULNERABILITY: exactly saved EIP plus two post-EIP DWORDs. */
     memcpy(pivotbuf, data, copy_length);
+
+    if (pivotbuf[2] == 'R') {
+        rop_target_marker();
+    }
 }
 #endif
 

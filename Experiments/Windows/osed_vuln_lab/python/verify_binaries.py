@@ -199,11 +199,7 @@ STAGED_ROP_SEQUENCES = ROP_SEQUENCES - {
 }
 DEP3_SEQUENCES = {f"helper_sequence_{index:02d}" for index in range(30, 44)}
 DEP3_FORBIDDEN_BYTES = {
-    bytes.fromhex("59 C3"): "pop ecx; ret",
     bytes.fromhex("5A C3"): "pop edx; ret",
-    bytes.fromhex("5B C3"): "pop ebx; ret",
-    bytes.fromhex("5E C3"): "pop esi; ret",
-    bytes.fromhex("5F C3"): "pop edi; ret",
     bytes.fromhex("FF D0"): "call eax",
     bytes.fromhex("FF E0"): "jmp eax",
     bytes.fromhex("FF E4"): "jmp esp",

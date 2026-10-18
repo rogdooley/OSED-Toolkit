@@ -85,10 +85,10 @@ class Dep2SourceContractTests(unittest.TestCase):
         self.assertIn("helper_sequence_01", expected["forbidden"])
         self.assertIn("helper_memory_protect", expected["forbidden"])
 
-    def test_verifier_rejects_clean_dep3_register_loaders(self) -> None:
+    def test_verifier_rejects_dep3_shortcut_gadgets(self) -> None:
         forbidden = getattr(verify_binaries, "DEP3_FORBIDDEN_BYTES", {})
 
-        for sequence in (b"\x59\xC3", b"\x5B\xC3", b"\x5E\xC3", b"\x5F\xC3"):
+        for sequence in (b"\x5A\xC3", b"\xFF\xD0", b"\xFF\xE0", b"\x8B\x00\xC3"):
             self.assertIn(sequence, forbidden)
 
 
